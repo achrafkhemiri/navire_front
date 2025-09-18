@@ -1,0 +1,12 @@
+<button class="toggle-btn" (click)="toggleSidebar()">
+  <i class="fas" [ngClass]="{ 'fa-bars': !isOpen, 'fa-times': isOpen }"></i>
+</button>
+
+<nav class="sidebar" [class.closed]="!isOpen">
+  <ul>
+    <li><i class="fas fa-home"></i> <span>Accueil</span></li>
+    <li><i class="fas fa-user"></i> <span>Profil</span></li>
+    <li><i class="fas fa-cog"></i> <span>Paramètres</span></li>
+    <li><i class="fas fa-sign-out-alt"></i> <span>Déconnexion</span></li>
+  </ul>
+</nav>

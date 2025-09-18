@@ -1,0 +1,77 @@
+/* Bouton toggle */
+.toggle-btn {
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  background: #1e3c72;
+  color: #fff;
+  border: none;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  z-index: 1100;
+  transition: background 0.3s;
+}
+
+.toggle-btn:hover {
+  background: #2a5298;
+}
+
+/* Sidebar */
+/* Sidebar moderne et claire */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 220px;
+  background: #f8fafc;
+  color: #222;
+  padding-top: 60px;
+  transition: width 0.3s ease;
+  overflow: hidden;
+  box-shadow: 2px 0 16px rgba(30,60,114,0.08);
+  z-index: 1000;
+  font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+}
+
+/* Sidebar fermée */
+.sidebar.closed {
+  width: 70px;
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar ul li {
+  padding: 10px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 500;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+  border-radius: 6px;
+  margin: 4px 8px;
+  color: #222;
+  letter-spacing: 0.2px;
+}
+
+.sidebar ul li:hover {
+  background: #e3eafc;
+  color: #1976d2;
+  transform: translateX(5px);
+}
+
+.sidebar ul li i {
+  font-size: 22px;
+  color: #1976d2;
+}
+
+.sidebar.closed ul li span {
+  display: none;
+}

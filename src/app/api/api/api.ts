@@ -1,0 +1,15 @@
+export * from './camionController.service';
+import { CamionControllerService } from './camionController.service';
+export * from './chauffeurController.service';
+import { ChauffeurControllerService } from './chauffeurController.service';
+export * from './clientController.service';
+import { ClientControllerService } from './clientController.service';
+export * from './depotController.service';
+import { DepotControllerService } from './depotController.service';
+export * from './projetController.service';
+import { ProjetControllerService } from './projetController.service';
+export * from './userController.service';
+import { UserControllerService } from './userController.service';
+export * from './voyageController.service';
+import { VoyageControllerService } from './voyageController.service';
+export const APIS = [CamionControllerService, ChauffeurControllerService, ClientControllerService, DepotControllerService, ProjetControllerService, UserControllerService, VoyageControllerService];
