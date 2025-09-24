@@ -20,16 +20,48 @@ export class ProjetComponent {
 
   loadProjets() {
     this.projetService.getAllProjets('body').subscribe({
-      next: (data) => this.projets = data,
+      next: async (data) => {
+        if (data instanceof Blob) {
+          const text = await data.text();
+          try {
+            const json = JSON.parse(text);
+            if (Array.isArray(json)) {
+              this.projets = json;
+            } else {
+              this.projets = [];
+            }
+          } catch (e) {
+            this.error = 'Erreur parsing JSON: ' + e;
+            this.projets = [];
+          }
+        } else if (Array.isArray(data)) {
+          this.projets = data;
+        } else {
+          this.projets = [];
+        }
+      },
       error: (err) => this.error = 'Erreur chargement: ' + (err.error?.message || err.message)
     });
   }
 
   addProjet() {
     this.projetService.createProjet(this.newProjet, 'body').subscribe({
-      next: (created) => {
-        this.projets.push(created);
+      next: async (created) => {
+        let projetAjoute: ProjetDTO | undefined = created;
+        if (created instanceof Blob) {
+          const text = await created.text();
+          try {
+            projetAjoute = JSON.parse(text);
+          } catch (e) {
+            this.error = 'Erreur parsing JSON: ' + e;
+            projetAjoute = undefined;
+          }
+        }
+        if (projetAjoute) {
+          this.projets.push(projetAjoute);
+        }
         this.newProjet = { nom: '', nomProduit: '', quantiteTotale: 0, nomNavire: '', paysNavire: '', etat: '' };
+        this.loadProjets(); // Recharge la liste pour garantir la cohérence
       },
       error: (err) => this.error = 'Erreur ajout: ' + (err.error?.message || err.message)
     });

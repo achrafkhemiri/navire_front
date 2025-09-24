@@ -22,15 +22,28 @@ export class ClientComponent {
     this.clientService.createClient(this.newClient, 'body').subscribe({
       next: () => {
         this.newClient = { nom: '', numero: '' };
-        this.loadClients();
+        this.loadClients(); // Recharge la liste après ajout
       },
       error: (err) => this.error = 'Erreur ajout: ' + (err.error?.message || err.message)
     });
   }
   loadClients() {
     this.clientService.getAllClients('body').subscribe({
-      next: (data) => {
-        if (Array.isArray(data)) {
+      next: async (data) => {
+        if (data instanceof Blob) {
+          const text = await data.text();
+          try {
+            const json = JSON.parse(text);
+            if (Array.isArray(json)) {
+              this.clients = json;
+            } else {
+              this.clients = [];
+            }
+          } catch (e) {
+            this.error = 'Erreur parsing JSON: ' + e;
+            this.clients = [];
+          }
+        } else if (Array.isArray(data)) {
           this.clients = data;
         } else {
           this.clients = [];
@@ -47,7 +60,7 @@ export class ClientComponent {
 
   updateClient() {
     if (!this.selectedClient?.id) return;
-    this.clientService.createClient(this.selectedClient, 'body').subscribe({
+    this.clientService.updateClient(this.selectedClient.id, this.selectedClient, 'body').subscribe({
       next: () => {
         this.selectedClient = null;
         this.editMode = false;

@@ -35,14 +35,35 @@
 
 <!-- Ajout d'un voyage -->
 <div>
-	<h3>Ajouter un voyage</h3>
-	<input [(ngModel)]="newVoyage.numBonLivraison" placeholder="Bon Livraison" />
-	<input [(ngModel)]="newVoyage.numTicket" placeholder="Ticket" />
-	<input [(ngModel)]="newVoyage.reste" type="number" placeholder="Reste" />
-	<input [(ngModel)]="newVoyage.date" placeholder="Date" />
-	<input [(ngModel)]="newVoyage.poidsClient" type="number" placeholder="Poids Client" />
-	<input [(ngModel)]="newVoyage.poidsDepot" type="number" placeholder="Poids Dépôt" />
-	<button (click)="addVoyage()">Ajouter</button>
+		<h3>Ajouter un voyage</h3>
+		<input [(ngModel)]="newVoyage.numBonLivraison" placeholder="Bon Livraison" />
+		<input [(ngModel)]="newVoyage.numTicket" placeholder="Ticket" />
+		<input [(ngModel)]="newVoyage.reste" type="number" placeholder="Reste" />
+		<input [(ngModel)]="newVoyage.date" placeholder="Date" />
+		<input [(ngModel)]="newVoyage.poidsClient" type="number" placeholder="Poids Client" />
+		<input [(ngModel)]="newVoyage.poidsDepot" type="number" placeholder="Poids Dépôt" />
+		<select [(ngModel)]="newVoyage.chauffeurId">
+			<option [ngValue]="null">-- Chauffeur --</option>
+			<option *ngFor="let ch of chauffeurs" [ngValue]="ch.id">{{ ch.nom }}</option>
+		</select>
+		<select [(ngModel)]="newVoyage.camionId">
+			<option [ngValue]="null">-- Camion --</option>
+			<option *ngFor="let ca of camions" [ngValue]="ca.id">{{ ca.matricule }}</option>
+		</select>
+		<select [(ngModel)]="newVoyage.clientId">
+			<option [ngValue]="null">-- Client --</option>
+			<option *ngFor="let cl of clients" [ngValue]="cl.id">{{ cl.nom }}</option>
+		</select>
+		<select [(ngModel)]="newVoyage.depotId">
+			<option [ngValue]="null">-- Dépôt --</option>
+			<option *ngFor="let dp of depots" [ngValue]="dp.id">{{ dp.nom }}</option>
+		</select>
+		<select [(ngModel)]="newVoyage.projetId">
+			<option [ngValue]="null">-- Projet --</option>
+			<option *ngFor="let pr of projets" [ngValue]="pr.id">{{ pr.nom }}</option>
+		</select>
+		<input [(ngModel)]="newVoyage.userId" type="number" placeholder="User ID" />
+		<button (click)="addVoyage()">Ajouter</button>
 </div>
 
 <!-- Edition d'un voyage -->
