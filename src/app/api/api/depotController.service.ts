@@ -83,16 +83,15 @@ export class DepotControllerService extends BaseService {
         }
 
         let localVarPath = `/api/depots`;
-        const { basePath, withCredentials } = this.configuration;
+        const { basePath } = this.configuration;
         return this.httpClient.request<DepotDTO>('post', `${basePath}${localVarPath}`,
             {
                 context: localVarHttpContext,
                 body: depotDTO,
                 responseType: <any>responseType_,
-                ...(withCredentials ? { withCredentials } : {}),
+                withCredentials: true,
                 headers: localVarHeaders,
                 observe: observe,
-                // transferCache: localVarTransferCache,
                 reportProgress: reportProgress
             }
         );
@@ -144,7 +143,7 @@ export class DepotControllerService extends BaseService {
                 ...(withCredentials ? { withCredentials } : {}),
                 headers: localVarHeaders,
                 observe: observe,
-                // transferCache: localVarTransferCache,
+
                 reportProgress: reportProgress
             }
         );
@@ -193,7 +192,6 @@ export class DepotControllerService extends BaseService {
                 ...(withCredentials ? { withCredentials } : {}),
                 headers: localVarHeaders,
                 observe: observe,
-                // transferCache: localVarTransferCache,
                 reportProgress: reportProgress
             }
         );
@@ -246,7 +244,6 @@ export class DepotControllerService extends BaseService {
                 ...(withCredentials ? { withCredentials } : {}),
                 headers: localVarHeaders,
                 observe: observe,
-                // transferCache: localVarTransferCache,
                 reportProgress: reportProgress
             }
         );
@@ -313,7 +310,6 @@ export class DepotControllerService extends BaseService {
                 ...(withCredentials ? { withCredentials } : {}),
                 headers: localVarHeaders,
                 observe: observe,
-                // transferCache: localVarTransferCache,
                 reportProgress: reportProgress
             }
         );

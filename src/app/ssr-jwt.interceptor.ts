@@ -1,4 +1,4 @@
-import { Injectable, Inject, PLATFORM_ID } from '@angular/core';
+import { Injectable, Inject, PLATFORM_ID, Optional } from '@angular/core';
 import { HttpInterceptor, HttpRequest, HttpHandler, HttpEvent } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { isPlatformServer } from '@angular/common';
@@ -6,8 +6,10 @@ import { REQUEST } from '@nguniversal/express-engine/tokens';
 
 @Injectable()
 export class SsrJwtInterceptor implements HttpInterceptor {
-  constructor(@Inject(PLATFORM_ID) private platformId: Object,
-              @Inject(REQUEST) private request: any) {}
+  constructor(
+    @Inject(PLATFORM_ID) private platformId: Object,
+    @Optional() @Inject(REQUEST) private request: any
+  ) {}
 
   intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
     if (isPlatformServer(this.platformId)) {
@@ -26,6 +28,29 @@ export class SsrJwtInterceptor implements HttpInterceptor {
         }
       }
     }
-    return next.handle(req);
+    let modifiedReq = req;
+    // Ajoute le JWT côté client pour toutes les requêtes /api/
+    if (req.url.includes('/api/')) {
+      // Récupère le JWT du cookie côté client
+      let jwt = '';
+      if (typeof document !== 'undefined') {
+        const match = document.cookie.match(/jwt=([^;]+)/);
+        if (match) {
+          jwt = match[1];
+        }
+      }
+      if (jwt) {
+        modifiedReq = modifiedReq.clone({
+          setHeaders: {
+            Authorization: `Bearer ${jwt}`
+          },
+          withCredentials: true
+        });
+      } else {
+        modifiedReq = modifiedReq.clone({ withCredentials: true });
+      }
+    }
+    // ...autres traitements éventuels...
+    return next.handle(modifiedReq);
   }
 }

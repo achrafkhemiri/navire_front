@@ -11,7 +11,8 @@
 
 export interface ChauffeurDTO { 
     id?: number;
-    nom?: string;
-    numCin?: string;
+    nom: string;
+    numCin: string;
+    numBonLivraisonVoyages?: Set<string>;
 }
 

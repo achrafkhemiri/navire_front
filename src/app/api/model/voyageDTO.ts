@@ -17,10 +17,15 @@ export interface VoyageDTO {
     date?: string;
     poidsClient?: number;
     poidsDepot?: number;
-    chauffeurIds?: Set<number>;
-    camionIds?: Set<number>;
+    chauffeurId?: number;
+    chauffeurNom?: string;
+    camionId?: number;
+    camionNom?: string;
     clientId?: number;
+    clientNum?: string;
     depotId?: number;
+    depotNom?: string;
     projetId?: number;
+    userId?: number;
 }
 

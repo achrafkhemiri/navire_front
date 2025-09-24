@@ -1,0 +1,59 @@
+<h2>Projets</h2>
+
+<div *ngIf="error" class="error">{{ error }}</div>
+
+<!-- Liste des projets -->
+<table>
+	<thead>
+		<tr>
+			<th>ID</th>
+			<th>Nom</th>
+			<th>Produit</th>
+			<th>Quantité</th>
+			<th>Navire</th>
+			<th>Pays</th>
+			<th>Etat</th>
+			<th>Actions</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr *ngFor="let pr of projets">
+			<td>{{ pr.id }}</td>
+			<td>{{ pr.nom }}</td>
+			<td>{{ pr.nomProduit }}</td>
+			<td>{{ pr.quantiteTotale }}</td>
+			<td>{{ pr.nomNavire }}</td>
+			<td>{{ pr.paysNavire }}</td>
+			<td>{{ pr.etat }}</td>
+			<td>
+				<button (click)="selectProjet(pr)">Modifier</button>
+				<button (click)="deleteProjet(pr.id)">Supprimer</button>
+			</td>
+		</tr>
+	</tbody>
+</table>
+
+<!-- Ajout d'un projet -->
+<div>
+	<h3>Ajouter un projet</h3>
+	<input [(ngModel)]="newProjet.nom" placeholder="Nom" />
+	<input [(ngModel)]="newProjet.nomProduit" placeholder="Produit" />
+	<input [(ngModel)]="newProjet.quantiteTotale" type="number" placeholder="Quantité" />
+	<input [(ngModel)]="newProjet.nomNavire" placeholder="Navire" />
+	<input [(ngModel)]="newProjet.paysNavire" placeholder="Pays" />
+	<input [(ngModel)]="newProjet.etat" placeholder="Etat" />
+	<button (click)="addProjet()">Ajouter</button>
+</div>
+
+<!-- Edition d'un projet -->
+<div *ngIf="editMode && selectedProjet">
+	<h3>Modifier le projet</h3>
+	<input [(ngModel)]="selectedProjet!.nom" placeholder="Nom" />
+	<input [(ngModel)]="selectedProjet!.nomProduit" placeholder="Produit" />
+	<input [(ngModel)]="selectedProjet!.quantiteTotale" type="number" placeholder="Quantité" />
+	<input [(ngModel)]="selectedProjet!.nomNavire" placeholder="Navire" />
+	<input [(ngModel)]="selectedProjet!.paysNavire" placeholder="Pays" />
+	<input [(ngModel)]="selectedProjet!.etat" placeholder="Etat" />
+	<button (click)="updateProjet()">Enregistrer</button>
+	<button (click)="cancelEdit()">Annuler</button>
+</div>

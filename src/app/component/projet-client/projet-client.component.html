@@ -1,0 +1,50 @@
+<h2>Projet Client</h2>
+
+<!-- Add ProjetClient Form -->
+<form (ngSubmit)="addProjetClient()">
+	<label>Projet ID: <input [(ngModel)]="newProjetClient.projetId" name="projetId" required></label>
+	<label>Client ID: <input [(ngModel)]="newProjetClient.clientId" name="clientId" required></label>
+	<label>Quantité Autorisée: <input [(ngModel)]="newProjetClient.quantiteAutorisee" name="quantiteAutorisee" required></label>
+	<button type="submit">Ajouter</button>
+</form>
+
+<!-- ProjetClient List Table -->
+<table>
+	<thead>
+		<tr>
+			<th>ID</th>
+			<th>Projet ID</th>
+			<th>Client ID</th>
+			<th>Quantité Autorisée</th>
+			<th>Actions</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr *ngFor="let pc of projetClients">
+			<td>{{ pc.id }}</td>
+			<td>{{ pc.projetId }}</td>
+			<td>{{ pc.clientId }}</td>
+			<td>{{ pc.quantiteAutorisee }}</td>
+			<td>
+				<button (click)="editProjetClientStart(pc)">Edit</button>
+				<button (click)="deleteProjetClient(pc.id)">Delete</button>
+				<form (ngSubmit)="updateQuantiteAutorisee(pc.id, quantiteUpdate)">
+					<input [(ngModel)]="quantiteUpdate" name="quantiteUpdate{{pc.id}}" placeholder="Nouvelle quantité">
+					<button type="submit">Maj Quantité</button>
+				</form>
+			</td>
+		</tr>
+	</tbody>
+</table>
+
+<!-- Edit ProjetClient Form -->
+<div *ngIf="editProjetClient">
+	<h3>Edit ProjetClient</h3>
+	<form (ngSubmit)="updateProjetClient()">
+		<label>Projet ID: <input [(ngModel)]="editProjetClient.projetId" name="editProjetId" required></label>
+		<label>Client ID: <input [(ngModel)]="editProjetClient.clientId" name="editClientId" required></label>
+		<label>Quantité Autorisée: <input [(ngModel)]="editProjetClient.quantiteAutorisee" name="editQuantiteAutorisee" required></label>
+		<button type="submit">Update</button>
+		<button type="button" (click)="editProjetClient = null">Cancel</button>
+	</form>
+</div>

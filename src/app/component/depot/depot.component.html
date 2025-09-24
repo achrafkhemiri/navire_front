@@ -1,0 +1,39 @@
+<h2>Dépôts</h2>
+
+<div *ngIf="error" class="error">{{ error }}</div>
+
+<!-- Liste des dépôts -->
+<table>
+	<thead>
+		<tr>
+			<th>ID</th>
+			<th>Nom</th>
+			<th>Actions</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr *ngFor="let dep of depots">
+			<td>{{ dep.id }}</td>
+			<td>{{ dep.nom }}</td>
+			<td>
+				<button (click)="selectDepot(dep)">Modifier</button>
+				<button (click)="deleteDepot(dep.id)">Supprimer</button>
+			</td>
+		</tr>
+	</tbody>
+</table>
+
+<!-- Ajout d'un dépôt -->
+<div>
+	<h3>Ajouter un dépôt</h3>
+		<input [(ngModel)]="newDepot.nom" placeholder="Nom" />
+	<button (click)="addDepot()">Ajouter</button>
+</div>
+
+<!-- Edition d'un dépôt -->
+<div *ngIf="editMode && selectedDepot">
+	<h3>Modifier le dépôt</h3>
+		<input [(ngModel)]="selectedDepot!.nom" placeholder="Nom" />
+	<button (click)="updateDepot()">Enregistrer</button>
+	<button (click)="cancelEdit()">Annuler</button>
+</div>

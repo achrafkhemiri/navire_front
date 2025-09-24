@@ -8,6 +8,7 @@ api/camionController.service.ts
 api/chauffeurController.service.ts
 api/clientController.service.ts
 api/depotController.service.ts
+api/projetClientController.service.ts
 api/projetController.service.ts
 api/userController.service.ts
 api/voyageController.service.ts
@@ -21,6 +22,7 @@ model/clientDTO.ts
 model/depotDTO.ts
 model/loginDTO.ts
 model/models.ts
+model/projetClientDTO.ts
 model/projetDTO.ts
 model/voyageDTO.ts
 param.ts

@@ -66,7 +66,7 @@ export class Configuration {
      */
     credentials: {[ key: string ]: string | (() => string | undefined)};
 
-    constructor({ accessToken, apiKeys, basePath, credentials, encodeParam, encoder, password, username, withCredentials }: ConfigurationParameters = {}) {
+constructor({ accessToken, apiKeys, basePath, credentials, encodeParam, encoder, password, username, withCredentials }: ConfigurationParameters = {}) {
         if (apiKeys) {
             this.apiKeys = apiKeys;
         }
@@ -82,8 +82,9 @@ export class Configuration {
         if (basePath !== undefined) {
             this.basePath = basePath;
         }
-        // Toujours activer withCredentials pour utiliser les cookies
-        this.withCredentials = true;
+        if (withCredentials !== undefined) {
+            this.withCredentials = withCredentials;
+        }
         if (encoder) {
             this.encoder = encoder;
         }

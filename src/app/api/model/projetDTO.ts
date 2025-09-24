@@ -11,11 +11,11 @@
 
 export interface ProjetDTO { 
     id?: number;
-    nom?: string;
-    nomProduit?: string;
-    quantiteTotale?: number;
-    nomNavire?: string;
-    paysNavire?: string;
-    etat?: string;
+    nom: string;
+    nomProduit: string;
+    quantiteTotale: number;
+    nomNavire: string;
+    paysNavire: string;
+    etat: string;
 }
 

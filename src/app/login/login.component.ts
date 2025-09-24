@@ -19,9 +19,10 @@ export class LoginComponent {
       mail: this.email,
       password: this.password
     };
-    this.userService.login(loginData).subscribe({
+      this.userService.login(loginData).subscribe({
       next: (result: any) => {
-        console.log('Login success:', result);
+        // Le cookie JWT HttpOnly est envoyé par le backend
+        // SSR: le cookie sera lu par l'intercepteur SsrJwtInterceptor
         this.router.navigate(['/']); // Redirection vers la page d'accueil
       },
       error: (err: any) => {

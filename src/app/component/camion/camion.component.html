@@ -1,0 +1,47 @@
+<h2>Camions</h2>
+
+<div *ngIf="error" class="error">{{ error }}</div>
+
+<!-- Liste des camions -->
+<table>
+	<thead>
+		<tr>
+			<th>ID</th>
+			<th>Matricule</th>
+			<th>Société</th>
+			<th>Bon Livraison</th>
+			<th>Actions</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr *ngFor="let cam of camions">
+			<td>{{ cam.id }}</td>
+			<td>{{ cam.matricule }}</td>
+			<td>{{ cam.societe }}</td>
+			<td>{{ cam.numBonLivraison }}</td>
+			<td>
+				<button (click)="selectCamion(cam)">Modifier</button>
+				<button (click)="deleteCamion(cam.id)">Supprimer</button>
+			</td>
+		</tr>
+	</tbody>
+</table>
+
+<!-- Ajout d'un camion -->
+<div>
+	<h3>Ajouter un camion</h3>
+	<input [(ngModel)]="newCamion!.matricule" placeholder="Matricule" />
+	<input [(ngModel)]="newCamion!.societe" placeholder="Société" />
+	<input [(ngModel)]="newCamion!.numBonLivraison" placeholder="Bon Livraison" />
+	<button (click)="addCamion()">Ajouter</button>
+</div>
+
+<!-- Edition d'un camion -->
+<div *ngIf="editMode && selectedCamion">
+	<h3>Modifier le camion</h3>
+	<input [(ngModel)]="selectedCamion.matricule" placeholder="Matricule" />
+	<input [(ngModel)]="selectedCamion.societe" placeholder="Société" />
+	<input [(ngModel)]="selectedCamion.numBonLivraison" placeholder="Bon Livraison" />
+	<button (click)="updateCamion()">Enregistrer</button>
+	<button (click)="cancelEdit()">Annuler</button>
+</div>

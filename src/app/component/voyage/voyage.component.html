@@ -1,0 +1,59 @@
+<h2>Voyages</h2>
+
+<div *ngIf="error" class="error">{{ error }}</div>
+
+<!-- Liste des voyages -->
+<table>
+	<thead>
+		<tr>
+			<th>ID</th>
+			<th>Bon Livraison</th>
+			<th>Ticket</th>
+			<th>Reste</th>
+			<th>Date</th>
+			<th>Poids Client</th>
+			<th>Poids Dépôt</th>
+			<th>Actions</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr *ngFor="let vg of voyages">
+			<td>{{ vg.id }}</td>
+			<td>{{ vg.numBonLivraison }}</td>
+			<td>{{ vg.numTicket }}</td>
+			<td>{{ vg.reste }}</td>
+			<td>{{ vg.date }}</td>
+			<td>{{ vg.poidsClient }}</td>
+			<td>{{ vg.poidsDepot }}</td>
+			<td>
+				<button (click)="selectVoyage(vg)">Modifier</button>
+				<button (click)="deleteVoyage(vg.id)">Supprimer</button>
+			</td>
+		</tr>
+	</tbody>
+</table>
+
+<!-- Ajout d'un voyage -->
+<div>
+	<h3>Ajouter un voyage</h3>
+	<input [(ngModel)]="newVoyage.numBonLivraison" placeholder="Bon Livraison" />
+	<input [(ngModel)]="newVoyage.numTicket" placeholder="Ticket" />
+	<input [(ngModel)]="newVoyage.reste" type="number" placeholder="Reste" />
+	<input [(ngModel)]="newVoyage.date" placeholder="Date" />
+	<input [(ngModel)]="newVoyage.poidsClient" type="number" placeholder="Poids Client" />
+	<input [(ngModel)]="newVoyage.poidsDepot" type="number" placeholder="Poids Dépôt" />
+	<button (click)="addVoyage()">Ajouter</button>
+</div>
+
+<!-- Edition d'un voyage -->
+<div *ngIf="editMode && selectedVoyage">
+	<h3>Modifier le voyage</h3>
+	<input [(ngModel)]="selectedVoyage!.numBonLivraison" placeholder="Bon Livraison" />
+	<input [(ngModel)]="selectedVoyage!.numTicket" placeholder="Ticket" />
+	<input [(ngModel)]="selectedVoyage!.reste" type="number" placeholder="Reste" />
+	<input [(ngModel)]="selectedVoyage!.date" placeholder="Date" />
+	<input [(ngModel)]="selectedVoyage!.poidsClient" type="number" placeholder="Poids Client" />
+	<input [(ngModel)]="selectedVoyage!.poidsDepot" type="number" placeholder="Poids Dépôt" />
+	<button (click)="updateVoyage()">Enregistrer</button>
+	<button (click)="cancelEdit()">Annuler</button>
+</div>

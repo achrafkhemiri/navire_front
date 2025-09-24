@@ -11,8 +11,8 @@
 
 export interface CamionDTO { 
     id?: number;
-    matricule?: string;
-    societe?: string;
-    voyageIds?: Set<number>;
+    matricule: string;
+    societe: string;
+    numBonLivraison?: string;
 }
 

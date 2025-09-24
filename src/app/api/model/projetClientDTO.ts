@@ -9,9 +9,10 @@
  */
 
 
-export interface LoginDTO { 
+export interface ProjetClientDTO { 
     id?: number;
-    mail: string;
-    password: string;
+    projetId?: number;
+    clientId?: number;
+    quantiteAutorisee?: number;
 }
 

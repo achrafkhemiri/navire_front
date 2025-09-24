@@ -1,0 +1,43 @@
+<h2>Chauffeurs</h2>
+
+<div *ngIf="error" class="error">{{ error }}</div>
+
+<!-- Liste des chauffeurs -->
+<table>
+	<thead>
+		<tr>
+			<th>ID</th>
+			<th>Nom</th>
+			<th>CIN</th>
+			<th>Actions</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr *ngFor="let ch of chauffeurs">
+			<td>{{ ch.id }}</td>
+			<td>{{ ch.nom }}</td>
+			<td>{{ ch.numCin }}</td>
+			<td>
+				<button (click)="selectChauffeur(ch)">Modifier</button>
+				<button (click)="deleteChauffeur(ch.id)">Supprimer</button>
+			</td>
+		</tr>
+	</tbody>
+</table>
+
+<!-- Ajout d'un chauffeur -->
+<div>
+	<h3>Ajouter un chauffeur</h3>
+	<input [(ngModel)]="newChauffeur!.nom" placeholder="Nom" />
+	<input [(ngModel)]="newChauffeur!.numCin" placeholder="CIN" />
+	<button (click)="addChauffeur()">Ajouter</button>
+</div>
+
+<!-- Edition d'un chauffeur -->
+<div *ngIf="editMode && selectedChauffeur">
+	<h3>Modifier le chauffeur</h3>
+	<input [(ngModel)]="selectedChauffeur.nom" placeholder="Nom" />
+	<input [(ngModel)]="selectedChauffeur.numCin" placeholder="CIN" />
+	<button (click)="updateChauffeur()">Enregistrer</button>
+	<button (click)="cancelEdit()">Annuler</button>
+</div>

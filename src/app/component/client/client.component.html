@@ -1,0 +1,43 @@
+<h2>Clients</h2>
+
+<div *ngIf="error" class="error">{{ error }}</div>
+
+<!-- Liste des clients -->
+<table>
+	<thead>
+		<tr>
+			<th>ID</th>
+			<th>Nom</th>
+			<th>Numéro</th>
+			<th>Actions</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr *ngFor="let cl of clients">
+			<td>{{ cl.id }}</td>
+			<td>{{ cl.nom }}</td>
+			<td>{{ cl.numero }}</td>
+			<td>
+				<button (click)="selectClient(cl)">Modifier</button>
+				<button (click)="deleteClient(cl.id)">Supprimer</button>
+			</td>
+		</tr>
+	</tbody>
+</table>
+
+<!-- Ajout d'un client -->
+<div>
+	<h3>Ajouter un client</h3>
+	<input [(ngModel)]="newClient.nom" placeholder="Nom" />
+	<input [(ngModel)]="newClient.numero" placeholder="Numéro" />
+	<button (click)="addClient()">Ajouter</button>
+</div>
+
+<!-- Edition d'un client -->
+<div *ngIf="editMode && selectedClient">
+	<h3>Modifier le client</h3>
+		<input [(ngModel)]="selectedClient!.nom" placeholder="Nom" />
+		<input [(ngModel)]="selectedClient!.numero" placeholder="Numéro" />
+	<button (click)="updateClient()">Enregistrer</button>
+	<button (click)="cancelEdit()">Annuler</button>
+</div>
