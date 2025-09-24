@@ -63,13 +63,13 @@
 
 .sidebar ul li:hover {
   background: #e3eafc;
-  color: #1976d2;
+  color: #060057;
   transform: translateX(5px);
 }
 
 .sidebar ul li i {
   font-size: 22px;
-  color: #1976d2;
+  color: #060057;
 }
 
 .sidebar.closed ul li span {

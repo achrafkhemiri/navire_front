@@ -1,0 +1,95 @@
+<app-navbar
+  [isSidebarOpen]="isSidebarOpen"
+  [sidebarWidth]="220"
+  [sidebarClosedWidth]="70">
+</app-navbar>
+
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+  <app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+
+  <main class="content">
+    <h2 class="page-title">État Générale</h2>
+
+    <section class="table-section">
+      <div class="table-toolbar">
+  <mat-form-field appearance="outline" class="table-filter">
+    <mat-label>Filtrer</mat-label>
+    <input matInput (keyup)="applyFilter($event)" placeholder="Ex. Mia" #input>
+  </mat-form-field>
+
+  <button mat-stroked-button color="primary" class="add-row-btn" (click)="addRow()">
+    <img src="assets/ajouter.png" alt="Ajouter" width="20" height="20" style="vertical-align:middle; margin-right:6px;" />
+    Ajouter une ligne
+  </button>
+</div>
+
+
+      <div class="mat-elevation-z8">
+        <table mat-table [dataSource]="dataSource" matSort>
+          
+          <!-- ID -->
+          <ng-container matColumnDef="id">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header> ID </th>
+            <td mat-cell *matCellDef="let row">{{row.id}}</td>
+          </ng-container>
+
+          <!-- Progress -->
+          <ng-container matColumnDef="progress">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header> Progress </th>
+            <td mat-cell *matCellDef="let row">
+              <span class="progress-badge"
+                    [ngClass]="{
+                      'low': row.progress < 40,
+                      'medium': row.progress >= 40 && row.progress < 70,
+                      'high': row.progress >= 70
+                    }">
+                {{row.progress}}%
+              </span>
+            </td>
+          </ng-container>
+
+          <!-- Name -->
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header> Name </th>
+            <td mat-cell *matCellDef="let row">{{row.name}}</td>
+          </ng-container>
+
+          <!-- Fruit -->
+          <ng-container matColumnDef="fruit">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header> Fruit </th>
+            <td mat-cell *matCellDef="let row">{{row.fruit}}</td>
+          </ng-container>
+
+          <!-- Actions -->
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef> Actions </th>
+            <td mat-cell *matCellDef="let row">
+              <span class="actions-img-group">
+                <img src="assets/edit.png" alt="Edit" width="24" height="24" style="cursor:pointer; margin-right:8px;" (click)="editRow(row)" />
+                <img src="assets/delete.png" alt="Supprimer" width="24" height="24" style="cursor:pointer;" (click)="deleteRow(row)" />
+              </span>
+            </td>
+          </ng-container>
+
+          <!-- Header & Rows -->
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+
+          <!-- Pas de données -->
+          <tr class="mat-row" *matNoDataRow>
+            <td class="mat-cell" colspan="5">
+              Aucune donnée ne correspond au filtre "{{input.value}}"
+            </td>
+          </tr>
+        </table>
+
+       
+        <!-- Pagination -->
+        <mat-paginator #paginator [pageSizeOptions]="[5, 10, 25, 100]"
+                       showFirstLastButtons="true"
+                       aria-label="Sélectionner la page">
+        </mat-paginator>
+      </div>
+    </section>
+  </main>
+</div>

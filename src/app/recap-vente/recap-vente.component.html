@@ -1,0 +1,12 @@
+<app-navbar 
+  [isSidebarOpen]="isSidebarOpen" 
+  [sidebarWidth]="220" 
+  [sidebarClosedWidth]="70">
+</app-navbar>
+
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+  <app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+  <main class="content">
+    <h2>Bienvenue sur la page d'accueil</h2>
+  </main>
+</div>

@@ -1,0 +1,99 @@
+/* Wrapper du dialog */
+.custom-dialog-wrapper {
+  padding: 0;
+
+  .fields-row {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+/* Titre du dialog */
+.dialog-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e3c72;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e0e0e0;
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  background-color: #f5f6fa;
+}
+
+/* Contenu */
+.dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px 20px;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  overflow: hidden;
+  background-color: #fff;
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 18px;
+}
+
+/* Champs de formulaire */
+.dialog-field {
+  width: 100%;
+}
+
+mat-form-field {
+  width: 100%;
+  background: #fafbfc;
+  border-radius: 12px;
+}
+
+/* Actions du dialog */
+.dialog-actions {
+  margin-top: 20px;
+  padding: 16px 20px;
+  border-top: 1px solid #eee;
+  display: flex;
+  gap: 14px;
+}
+
+/* Tous les boutons prennent la même largeur */
+.dialog-actions button {
+  flex: 1;
+  text-transform: none;
+  font-weight: 600;
+  border-radius: 12px;
+  padding: 10px 0;
+  transition: all 0.25s ease;
+}
+
+/* Bouton Enregistrer */
+button[mat-raised-button] {
+  background: linear-gradient(135deg, #300497, #060057) !important;
+  color: #fff !important;
+  box-shadow: 0 6px 16px rgba(25,118,210,0.25);
+}
+button[mat-raised-button]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(25,118,210,0.35);
+}
+
+/* Bouton Annuler */
+button[mat-stroked-button] {
+  border-radius: 12px;
+  font-weight: 500;
+  color: #660a0a;
+  border-color: #db0000;
+}
+button[mat-stroked-button]:hover {
+  background: #ffeaea;
+}
+
+/* Dialog global : arrondi et ombre douce */
+:host ::ng-deep .mat-dialog-container {
+  border-radius: 18px !important;
+  box-shadow: 0 10px 36px rgba(30,60,114,0.15) !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
