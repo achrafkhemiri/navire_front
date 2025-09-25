@@ -12,5 +12,6 @@
 export interface DepotDTO { 
     id?: number;
     nom?: string;
+    projetId?: number;
 }
 

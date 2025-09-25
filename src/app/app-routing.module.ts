@@ -15,9 +15,11 @@ import { DepotComponent } from './component/depot/depot.component';
 import { ProjetComponent } from './component/projet/projet.component';
 import { VoyageComponent } from './component/voyage/voyage.component';
 import { ProjetClientComponent } from './component/projet-client/projet-client.component';
+import { ProjetListComponent } from './projet-list/projet-list.component';
 
 
 const routes: Routes = [
+  { path: 'projet-list', component: ProjetListComponent },
   { path: '', component: HomeComponent },
   { path: 'login', component: LoginComponent },
   { path: 'etat-generale', component: EtatGeneraleComponent },

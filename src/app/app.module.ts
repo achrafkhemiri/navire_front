@@ -1,4 +1,5 @@
 import { ProjetParametreComponent } from './component/projet/projet-parametre.component';
+import { ProjetListComponent } from './projet-list/projet-list.component';
 import { ProjetComponent } from './component/projet/projet.component';
 import { VoyageComponent } from './component/voyage/voyage.component';
 import { NgModule } from '@angular/core';
@@ -57,6 +58,7 @@ import { RouterModule } from '@angular/router';
   ClientComponent,
   // Ajout du composant projet-parametre
   ProjetParametreComponent,
+  ProjetListComponent,
   ],
   imports: [
     BrowserModule,

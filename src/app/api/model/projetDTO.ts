@@ -17,5 +17,8 @@ export interface ProjetDTO {
     nomNavire: string;
     paysNavire: string;
     etat: string;
+    dateDebut?: string;
+    dateFin?: string;
+    active?: boolean;
 }
 

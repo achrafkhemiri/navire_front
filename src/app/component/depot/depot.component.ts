@@ -10,6 +10,7 @@ import { DepotDTO } from '../../api/model/depotDTO';
 export class DepotComponent {
   depots: DepotDTO[] = [];
   filteredDepots: DepotDTO[] = [];
+  projetActifId: number | null = null;
   selectedDepot: DepotDTO | null = null;
   dialogDepot: DepotDTO = { nom: '' };
   editMode: boolean = false;
@@ -19,6 +20,15 @@ export class DepotComponent {
   depotFilter: string = '';
 
   constructor(private depotService: DepotControllerService) {
+    this.loadProjetActif();
+  }
+
+  loadProjetActif() {
+    // Récupère le projet actif depuis le localStorage ou via une API si besoin
+    const projetActif = window.sessionStorage.getItem('projetActifId');
+    if (projetActif) {
+      this.projetActifId = Number(projetActif);
+    }
     this.loadDepots();
   }
 
@@ -39,6 +49,10 @@ export class DepotComponent {
     if (!this.dialogDepot.nom) {
       this.error = 'Veuillez remplir le nom.';
       return;
+    }
+    // Associe le projet actif
+    if (this.projetActifId) {
+      this.dialogDepot.projetId = this.projetActifId;
     }
     this.depotService.createDepot(this.dialogDepot, 'body').subscribe({
       next: () => {
@@ -74,13 +88,18 @@ export class DepotComponent {
 
   applyFilter() {
     const filter = this.depotFilter.trim().toLowerCase();
-    if (!filter) {
-      this.filteredDepots = this.depots;
-    } else {
-      this.filteredDepots = this.depots.filter(d =>
+    let depotsFiltrés = this.depots;
+    // Filtre par projet actif
+    if (this.projetActifId) {
+      depotsFiltrés = depotsFiltrés.filter(d => d.projetId === this.projetActifId);
+    }
+    // Filtre par texte
+    if (filter) {
+      depotsFiltrés = depotsFiltrés.filter(d =>
         d.nom?.toLowerCase().includes(filter)
       );
     }
+    this.filteredDepots = depotsFiltrés;
   }
 
   deleteDepot(id?: number) {

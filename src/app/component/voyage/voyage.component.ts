@@ -20,6 +20,7 @@ import { ProjetDTO } from '../../api/model/projetDTO';
 export class VoyageComponent {
   voyages: VoyageDTO[] = [];
   filteredVoyages: VoyageDTO[] = [];
+  projetActifId: number | null = null;
   selectedVoyage: VoyageDTO | null = null;
   dialogVoyage: VoyageDTO & { _type?: 'client' | 'depot' } = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0, _type: undefined };
   editMode: boolean = false;
@@ -41,12 +42,11 @@ export class VoyageComponent {
     private depotService: DepotControllerService,
     private projetService: ProjetControllerService
   ) {
-    this.loadVoyages();
+    this.loadProjets();
     this.loadChauffeurs();
     this.loadCamions();
     this.loadClients();
     this.loadDepots();
-    this.loadProjets();
   }
 
   loadChauffeurs() {
@@ -136,18 +136,27 @@ export class VoyageComponent {
   loadProjets() {
     this.projetService.getAllProjets('body').subscribe({
       next: (data) => {
+        let projets: ProjetDTO[] = [];
         if (data instanceof Blob) {
           const reader = new FileReader();
           reader.onload = () => {
             try {
-              this.projets = JSON.parse(reader.result as string);
+              projets = JSON.parse(reader.result as string);
+              this.projets = projets;
+              const actif = projets.find(pr => pr.active);
+              this.projetActifId = actif?.id || null;
+              this.loadVoyages();
             } catch (e) {
               this.error = 'Erreur parsing projets: ' + e;
             }
           };
           reader.readAsText(data);
         } else {
-          this.projets = data;
+          projets = data;
+          this.projets = projets;
+          const actif = projets.find(pr => pr.active);
+          this.projetActifId = actif?.id || null;
+          this.loadVoyages();
         }
       },
       error: (err) => this.error = 'Erreur chargement projets: ' + (err.error?.message || err.message)
@@ -170,6 +179,11 @@ export class VoyageComponent {
   }
 
   addDialogVoyage() {
+    // Associe le projet actif et userId=1
+    if (this.projetActifId) {
+      this.dialogVoyage.projetId = this.projetActifId;
+    }
+    this.dialogVoyage.userId = 1;
     this.voyageService.createVoyage(this.dialogVoyage, 'body').subscribe({
       next: () => {
         this.dialogVoyage = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0 };
@@ -229,14 +243,19 @@ export class VoyageComponent {
 
   applyFilter() {
     const filter = this.voyageFilter.trim().toLowerCase();
-    if (!filter) {
-      this.filteredVoyages = this.voyages;
-    } else {
-      this.filteredVoyages = this.voyages.filter(vg =>
+    let voyagesFiltrés = this.voyages;
+    // Filtre par projet actif
+    if (this.projetActifId) {
+      voyagesFiltrés = voyagesFiltrés.filter(vg => vg.projetId === this.projetActifId);
+    }
+    // Filtre par texte
+    if (filter) {
+      voyagesFiltrés = voyagesFiltrés.filter(vg =>
         (vg.numBonLivraison?.toLowerCase().includes(filter) || false) ||
         (vg.numTicket?.toLowerCase().includes(filter) || false)
       );
     }
+    this.filteredVoyages = voyagesFiltrés;
   }
 
   loadVoyages() {

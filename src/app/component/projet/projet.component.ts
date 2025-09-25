@@ -36,9 +36,10 @@ export class ProjetComponent {
   }
   projets: ProjetDTO[] = [];
   selectedProjet: ProjetDTO | null = null;
-  newProjet: ProjetDTO = { nom: '', nomProduit: '', quantiteTotale: 0, nomNavire: '', paysNavire: '', etat: '' };
+  newProjet: ProjetDTO = { nom: '', nomProduit: '', quantiteTotale: 0, nomNavire: '', paysNavire: '', etat: '', dateDebut: '', dateFin: '', active: false };
   editMode: boolean = false;
   error: string = '';
+  projetActif: ProjetDTO | null = null;
 
   constructor(private projetService: ProjetControllerService) {
     this.loadProjets();
@@ -59,30 +60,40 @@ export class ProjetComponent {
   loadProjets() {
     this.projetService.getAllProjets('body').subscribe({
       next: async (data) => {
+        let projets: ProjetDTO[] = [];
         if (data instanceof Blob) {
           const text = await data.text();
           try {
             const json = JSON.parse(text);
             if (Array.isArray(json)) {
-              this.projets = json;
-            } else {
-              this.projets = [];
+              projets = json;
             }
           } catch (e) {
             this.error = 'Erreur parsing JSON: ' + e;
-            this.projets = [];
           }
         } else if (Array.isArray(data)) {
-          this.projets = data;
-        } else {
-          this.projets = [];
+          projets = data;
         }
+        this.projets = projets;
+        // Sélectionne automatiquement le projet actif
+        this.projetActif = this.projets.find(pr => pr.active) || null;
       },
       error: (err) => this.error = 'Erreur chargement: ' + (err.error?.message || err.message)
     });
   }
 
   addProjet() {
+    // Si le projet ajouté est actif, désactive les autres
+    if (this.newProjet.active) {
+      this.projets.forEach(pr => {
+        if (pr.active) {
+          pr.active = false;
+          if (pr.id) {
+            this.projetService.updateProjet(pr.id, pr, 'body').subscribe();
+          }
+        }
+      });
+    }
     this.projetService.createProjet(this.newProjet, 'body').subscribe({
       next: async (created) => {
         let projetAjoute: ProjetDTO | undefined = created;
@@ -98,7 +109,7 @@ export class ProjetComponent {
         if (projetAjoute) {
           this.projets.push(projetAjoute);
         }
-        this.newProjet = { nom: '', nomProduit: '', quantiteTotale: 0, nomNavire: '', paysNavire: '', etat: '' };
+        this.newProjet = { nom: '', nomProduit: '', quantiteTotale: 0, nomNavire: '', paysNavire: '', etat: '', dateDebut: '', dateFin: '', active: false };
         this.loadProjets(); // Recharge la liste pour garantir la cohérence
       },
       error: (err) => this.error = 'Erreur ajout: ' + (err.error?.message || err.message)
@@ -111,7 +122,18 @@ export class ProjetComponent {
   }
 
   updateProjet() {
-    if (!this.selectedProjet?.id) return;
+    if (!this.selectedProjet || !this.selectedProjet.id) return;
+    // Si le projet modifié est actif, désactive les autres
+    if (this.selectedProjet.active) {
+      this.projets.forEach(pr => {
+        if (pr.active && this.selectedProjet && pr.id !== this.selectedProjet.id) {
+          pr.active = false;
+          if (pr.id) {
+            this.projetService.updateProjet(pr.id, pr, 'body').subscribe();
+          }
+        }
+      });
+    }
     this.projetService.updateProjet(this.selectedProjet.id, this.selectedProjet, 'body').subscribe({
       next: (updated) => {
         this.loadProjets();

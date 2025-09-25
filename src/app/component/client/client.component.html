@@ -7,7 +7,7 @@
 		<section class="table-section">
 			<div class="table-toolbar">
 				<input class="table-filter" placeholder="Filtrer par nom ou numéro" [(ngModel)]="clientFilter" (input)="applyFilter()" />
-					<button class="add-row-btn" (click)="openAddDialog()">
+					<button class="add-row-btn" (click)="openAddDialog()" [disabled]="!isProjetActif()">
 						<img src="assets/ajouter.png" alt="Ajouter" width="20" height="20" style="vertical-align:middle; margin-right:6px;" />
 						Ajouter un client
 					</button>
@@ -30,8 +30,8 @@
 							<td class="mat-mdc-cell">{{ cl.numero }}</td>
 							<td class="mat-mdc-cell">
 								<span class="actions-img-group">
-									<img src="assets/edit.png" alt="Edit" width="24" height="24" style="cursor:pointer; margin-right:8px;" (click)="selectClient(cl)" />
-									<img src="assets/delete.png" alt="Supprimer" width="24" height="24" style="cursor:pointer;" (click)="deleteClient(cl.id)" />
+									<img src="assets/edit.png" alt="Edit" width="24" height="24" style="cursor:pointer; margin-right:8px;" (click)="selectClient(cl)" [class.disabled]="!isProjetActif()" />
+									<img src="assets/delete.png" alt="Supprimer" width="24" height="24" style="cursor:pointer;" (click)="deleteClient(cl.id)" [class.disabled]="!isProjetActif()" />
 								</span>
 							</td>
 						</tr>
@@ -50,8 +50,8 @@
 							  <input [(ngModel)]="dialogClient.nom" placeholder="Nom" class="table-filter" />
 							  <input [(ngModel)]="dialogClient.numero" placeholder="Numéro" class="table-filter" />
 							<div class="dialog-actions">
-								<button class="add-row-btn" *ngIf="!editMode" (click)="addDialogClient()">Ajouter</button>
-								<button class="add-row-btn" *ngIf="editMode" (click)="updateDialogClient()">Enregistrer</button>
+								<button class="add-row-btn" *ngIf="!editMode" (click)="addDialogClient()" [disabled]="!isProjetActif()">Ajouter</button>
+								<button class="add-row-btn" *ngIf="editMode" (click)="updateDialogClient()" [disabled]="!isProjetActif()">Enregistrer</button>
 								<button class="add-row-btn" (click)="closeDialog()">Annuler</button>
 							</div>
 						</div>

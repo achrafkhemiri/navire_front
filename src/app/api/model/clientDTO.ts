@@ -14,5 +14,6 @@ export interface ClientDTO {
     numero?: string;
     nom?: string;
     quantitesAutoriseesParProjet?: { [key: string]: number; };
+    projetId?: number;
 }
 
