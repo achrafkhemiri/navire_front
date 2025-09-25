@@ -1,39 +1,57 @@
-<h2>Dépôts</h2>
 
-<div *ngIf="error" class="error">{{ error }}</div>
+<app-navbar [isSidebarOpen]="isSidebarOpen" [sidebarWidth]="220" [sidebarClosedWidth]="70"></app-navbar>
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+	<app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+	<main class="content">
+		<h2 class="page-title">Dépôts</h2>
+		<section class="table-section">
+			<div class="table-toolbar">
+				<input class="table-filter" placeholder="Filtrer par nom" [(ngModel)]="depotFilter" (input)="applyFilter()" />
+				<button class="add-row-btn" (click)="openAddDialog()">
+					<img src="assets/ajouter.png" alt="Ajouter" width="20" height="20" style="vertical-align:middle; margin-right:6px;" />
+					Ajouter un dépôt
+				</button>
+			</div>
 
-<!-- Liste des dépôts -->
-<table>
-	<thead>
-		<tr>
-			<th>ID</th>
-			<th>Nom</th>
-			<th>Actions</th>
-		</tr>
-	</thead>
-	<tbody>
-		<tr *ngFor="let dep of depots">
-			<td>{{ dep.id }}</td>
-			<td>{{ dep.nom }}</td>
-			<td>
-				<button (click)="selectDepot(dep)">Modifier</button>
-				<button (click)="deleteDepot(dep.id)">Supprimer</button>
-			</td>
-		</tr>
-	</tbody>
-</table>
+			<div class="mat-elevation-z8">
+				<table class="mat-mdc-table">
+					<thead>
+						<tr>
+							<th class="mat-mdc-header-cell">ID</th>
+							<th class="mat-mdc-header-cell">Nom</th>
+							<th class="mat-mdc-header-cell">Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr *ngFor="let dep of filteredDepots" class="mat-mdc-row">
+							<td class="mat-mdc-cell">{{ dep.id }}</td>
+							<td class="mat-mdc-cell">{{ dep.nom }}</td>
+							<td class="mat-mdc-cell">
+								<span class="actions-img-group">
+									<img src="assets/edit.png" alt="Edit" width="24" height="24" style="cursor:pointer; margin-right:8px;" (click)="selectDepot(dep)" />
+									<img src="assets/delete.png" alt="Supprimer" width="24" height="24" style="cursor:pointer;" (click)="deleteDepot(dep.id)" />
+								</span>
+							</td>
+						</tr>
+						<tr *ngIf="filteredDepots.length === 0" class="mat-mdc-no-data-row">
+							<td class="mat-mdc-cell" colspan="3">Aucun dépôt trouvé.</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</section>
 
-<!-- Ajout d'un dépôt -->
-<div>
-	<h3>Ajouter un dépôt</h3>
-		<input [(ngModel)]="newDepot.nom" placeholder="Nom" />
-	<button (click)="addDepot()">Ajouter</button>
-</div>
-
-<!-- Edition d'un dépôt -->
-<div *ngIf="editMode && selectedDepot">
-	<h3>Modifier le dépôt</h3>
-		<input [(ngModel)]="selectedDepot!.nom" placeholder="Nom" />
-	<button (click)="updateDepot()">Enregistrer</button>
-	<button (click)="cancelEdit()">Annuler</button>
+		<!-- Dialog modal pour ajout ou modification dépôt -->
+		<div class="dialog-backdrop" *ngIf="showAddDialog || editMode">
+			<div class="dialog-modal">
+				<h3>{{ editMode ? 'Modifier le dépôt' : 'Ajouter un dépôt' }}</h3>
+				<input [(ngModel)]="dialogDepot.nom" placeholder="Nom" class="table-filter" />
+				<div class="dialog-actions">
+					<button class="add-row-btn" *ngIf="!editMode" (click)="addDialogDepot()">Ajouter</button>
+					<button class="add-row-btn" *ngIf="editMode" (click)="updateDialogDepot()">Enregistrer</button>
+					<button class="add-row-btn" (click)="closeDialog()">Annuler</button>
+				</div>
+			</div>
+		</div>
+	</main>
 </div>

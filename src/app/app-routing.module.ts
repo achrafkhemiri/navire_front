@@ -1,3 +1,4 @@
+import { ProjetParametreComponent } from './component/projet/projet-parametre.component';
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
 
@@ -27,6 +28,7 @@ const routes: Routes = [
   { path: 'client', component: ClientComponent },
   { path: 'depot', component: DepotComponent },
   { path: 'projet', component: ProjetComponent },
+  { path: 'projet/:id/parametre', component: ProjetParametreComponent },
   { path: 'voyage', component: VoyageComponent },
   { path: 'projet-client', component: ProjetClientComponent },
   { path: '**', redirectTo: '' } // Redirige toute route inconnue vers Home

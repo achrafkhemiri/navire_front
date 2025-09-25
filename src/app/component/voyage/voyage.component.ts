@@ -19,8 +19,9 @@ import { ProjetDTO } from '../../api/model/projetDTO';
 })
 export class VoyageComponent {
   voyages: VoyageDTO[] = [];
+  filteredVoyages: VoyageDTO[] = [];
   selectedVoyage: VoyageDTO | null = null;
-  newVoyage: VoyageDTO = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0 };
+  dialogVoyage: VoyageDTO & { _type?: 'client' | 'depot' } = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0, _type: undefined };
   editMode: boolean = false;
   error: string = '';
   chauffeurs: ChauffeurDTO[] = [];
@@ -28,6 +29,9 @@ export class VoyageComponent {
   clients: ClientDTO[] = [];
   depots: DepotDTO[] = [];
   projets: ProjetDTO[] = [];
+  isSidebarOpen: boolean = true;
+  showAddDialog: boolean = false;
+  voyageFilter: string = '';
 
   constructor(
     private voyageService: VoyageControllerService,
@@ -150,98 +154,121 @@ export class VoyageComponent {
     });
   }
 
-  loadVoyages() {
-      this.voyageService.getAllVoyages('body').subscribe({
-        next: (data) => {
-          if (data instanceof Blob) {
-            const reader = new FileReader();
-            reader.onload = () => {
-              try {
-                this.voyages = JSON.parse(reader.result as string);
-              } catch (e) {
-                this.error = 'Erreur parsing: ' + e;
-              }
-            };
-            reader.readAsText(data);
-          } else {
-            this.voyages = data;
-          }
-        },
-        error: (err) => this.error = 'Erreur chargement: ' + (err.error?.message || err.message)
-      });
-  }
 
-  addVoyage() {
-      this.voyageService.createVoyage(this.newVoyage, 'body').subscribe({
-        next: (created) => {
-          if (created instanceof Blob) {
-            const reader = new FileReader();
-            reader.onload = () => {
-              try {
-                const voyage = JSON.parse(reader.result as string);
-                this.voyages.push(voyage);
-              } catch (e) {
-                this.error = 'Erreur parsing: ' + e;
-              }
-            };
-            reader.readAsText(created);
-          } else {
-            this.voyages.push(created);
-          }
-          this.newVoyage = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0 };
-        },
-        error: (err) => this.error = 'Erreur ajout: ' + (err.error?.message || err.message)
-      });
+
+  openAddDialog() {
+  this.dialogVoyage = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0, _type: undefined };
+    this.showAddDialog = true;
+    this.editMode = false;
   }
 
   selectVoyage(vg: VoyageDTO) {
-    this.selectedVoyage = { ...vg };
+    this.dialogVoyage = { ...vg };
+    this.selectedVoyage = vg;
     this.editMode = true;
+    this.showAddDialog = false;
   }
 
-  updateVoyage() {
-    if (!this.selectedVoyage?.id) return;
-      this.voyageService.createVoyage(this.selectedVoyage, 'body').subscribe({
-        next: (updated: any) => {
-          let voyage = updated;
-          if (updated instanceof Blob) {
-            const reader = new FileReader();
-            reader.onload = () => {
-              try {
-                voyage = JSON.parse(reader.result as string);
-                const idx = this.voyages.findIndex((v: VoyageDTO) => v.id === voyage.id);
-                if (idx > -1) this.voyages[idx] = voyage;
-                this.selectedVoyage = null;
-                this.editMode = false;
-              } catch (e) {
-                this.error = 'Erreur parsing: ' + e;
-              }
-            };
-            reader.readAsText(updated);
-          } else {
-            const idx = this.voyages.findIndex((v: VoyageDTO) => v.id === voyage.id);
-            if (idx > -1) this.voyages[idx] = voyage;
-            this.selectedVoyage = null;
-            this.editMode = false;
-          }
-        },
-        error: (err) => this.error = 'Erreur modification: ' + (err.error?.message || err.message)
-      });
+  addDialogVoyage() {
+    this.voyageService.createVoyage(this.dialogVoyage, 'body').subscribe({
+      next: () => {
+        this.dialogVoyage = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0 };
+        this.loadVoyages();
+        this.closeDialog();
+      },
+      error: (err) => this.error = 'Erreur ajout: ' + (err.error?.message || err.message)
+    });
+  }
+
+  updateDialogVoyage() {
+    if (!this.dialogVoyage?.id) return;
+    const requiredFields = ['camionId', 'chauffeurId', 'clientId', 'depotId', 'projetId', 'userId'];
+    for (const field of requiredFields) {
+      if (this.dialogVoyage[field as keyof VoyageDTO] == null) {
+        this.error = `Le champ ${field} est obligatoire.`;
+        return;
+      }
+    }
+    console.log(this.dialogVoyage);
+    if (!this.dialogVoyage?.id) {
+      this.error = "L'id du voyage à modifier est manquant.";
+      return;
+    }
+    this.voyageService.updateVoyage(this.dialogVoyage.id, this.dialogVoyage, 'body').subscribe({
+      next: () => {
+        this.dialogVoyage = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0 };
+        this.selectedVoyage = null;
+        this.editMode = false;
+        this.loadVoyages();
+        this.closeDialog();
+      },
+      error: (err) => {
+        console.error('Erreur backend:', err);
+        if (err.error instanceof Blob) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            this.error = 'Erreur modification: ' + reader.result;
+          };
+          reader.readAsText(err.error);
+        } else if (err.error) {
+          this.error = 'Erreur modification: ' + err.error;
+        } else {
+          this.error = 'Erreur modification: ' + (err.message || '');
+        }
+      }
+    });
+  }
+
+  closeDialog() {
+    this.showAddDialog = false;
+    this.editMode = false;
+    this.dialogVoyage = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0 };
+    this.selectedVoyage = null;
+    this.error = '';
+  }
+
+  applyFilter() {
+    const filter = this.voyageFilter.trim().toLowerCase();
+    if (!filter) {
+      this.filteredVoyages = this.voyages;
+    } else {
+      this.filteredVoyages = this.voyages.filter(vg =>
+        (vg.numBonLivraison?.toLowerCase().includes(filter) || false) ||
+        (vg.numTicket?.toLowerCase().includes(filter) || false)
+      );
+    }
+  }
+
+  loadVoyages() {
+    this.voyageService.getAllVoyages('body').subscribe({
+      next: (data) => {
+        if (data instanceof Blob) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              this.voyages = JSON.parse(reader.result as string);
+            } catch (e) {
+              this.error = 'Erreur parsing: ' + e;
+            }
+            this.applyFilter();
+          };
+          reader.readAsText(data);
+        } else {
+          this.voyages = data;
+          this.applyFilter();
+        }
+      },
+      error: (err) => this.error = 'Erreur chargement: ' + (err.error?.message || err.message)
+    });
   }
 
   deleteVoyage(id?: number) {
     if (id === undefined) return;
-      this.voyageService.deleteVoyage(id, 'body').subscribe({
-        next: (res: any) => {
-          this.voyages = this.voyages.filter(v => v.id !== id);
-          this.loadVoyages();
-        },
-        error: (err) => this.error = 'Erreur suppression: ' + (err.error?.message || err.message)
-      });
-  }
-
-  cancelEdit() {
-    this.selectedVoyage = null;
-    this.editMode = false;
+    this.voyageService.deleteVoyage(id, 'body').subscribe({
+      next: () => {
+        this.loadVoyages();
+      },
+      error: (err) => this.error = 'Erreur suppression: ' + (err.error?.message || err.message)
+    });
   }
 }

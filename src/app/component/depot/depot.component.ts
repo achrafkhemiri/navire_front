@@ -9,55 +9,90 @@ import { DepotDTO } from '../../api/model/depotDTO';
 })
 export class DepotComponent {
   depots: DepotDTO[] = [];
+  filteredDepots: DepotDTO[] = [];
   selectedDepot: DepotDTO | null = null;
-  newDepot: DepotDTO = { nom: '' };
+  dialogDepot: DepotDTO = { nom: '' };
   editMode: boolean = false;
   error: string = '';
+  isSidebarOpen: boolean = true;
+  showAddDialog: boolean = false;
+  depotFilter: string = '';
 
   constructor(private depotService: DepotControllerService) {
     this.loadDepots();
   }
-    selectDepot(dep: DepotDTO) {
-      this.selectedDepot = { ...dep };
-      this.editMode = true;
-    }
 
-    updateDepot() {
-      if (!this.selectedDepot?.id) return;
-      this.depotService.createDepot(this.selectedDepot, 'body').subscribe({
-        next: () => {
-          this.selectedDepot = null;
-          this.editMode = false;
-          this.loadDepots();
-        },
-        error: (err) => this.error = 'Erreur modification: ' + (err.error?.message || err.message)
-      });
-    }
+  openAddDialog() {
+    this.dialogDepot = { nom: '' };
+    this.showAddDialog = true;
+    this.editMode = false;
+  }
 
-    deleteDepot(id?: number) {
-      if (id === undefined) return;
-      this.depotService.deleteDepot(id, 'body').subscribe({
-        next: () => {
-          this.loadDepots();
-        },
-        error: (err) => this.error = 'Erreur suppression: ' + (err.error?.message || err.message)
-      });
-    }
+  selectDepot(dep: DepotDTO) {
+    this.dialogDepot = { ...dep };
+    this.selectedDepot = dep;
+    this.editMode = true;
+    this.showAddDialog = false;
+  }
 
-    cancelEdit() {
-      this.selectedDepot = null;
-      this.editMode = false;
+  addDialogDepot() {
+    if (!this.dialogDepot.nom) {
+      this.error = 'Veuillez remplir le nom.';
+      return;
     }
-
-  addDepot() {
-    this.depotService.createDepot(this.newDepot, 'body').subscribe({
+    this.depotService.createDepot(this.dialogDepot, 'body').subscribe({
       next: () => {
-        this.newDepot = { nom: '' };
+        this.dialogDepot = { nom: '' };
         this.loadDepots();
+        this.closeDialog();
       },
       error: (err) => this.error = 'Erreur ajout: ' + (err.error?.message || err.message)
     });
   }
+
+  updateDialogDepot() {
+    if (!this.dialogDepot?.id) return;
+    this.depotService.createDepot(this.dialogDepot, 'body').subscribe({
+      next: () => {
+        this.dialogDepot = { nom: '' };
+        this.selectedDepot = null;
+        this.editMode = false;
+        this.loadDepots();
+        this.closeDialog();
+      },
+      error: (err) => this.error = 'Erreur modification: ' + (err.error?.message || err.message)
+    });
+  }
+
+  closeDialog() {
+    this.showAddDialog = false;
+    this.editMode = false;
+    this.dialogDepot = { nom: '' };
+    this.selectedDepot = null;
+    this.error = '';
+  }
+
+  applyFilter() {
+    const filter = this.depotFilter.trim().toLowerCase();
+    if (!filter) {
+      this.filteredDepots = this.depots;
+    } else {
+      this.filteredDepots = this.depots.filter(d =>
+        d.nom?.toLowerCase().includes(filter)
+      );
+    }
+  }
+
+  deleteDepot(id?: number) {
+    if (id === undefined) return;
+    this.depotService.deleteDepot(id, 'body').subscribe({
+      next: () => {
+        this.loadDepots();
+      },
+      error: (err) => this.error = 'Erreur suppression: ' + (err.error?.message || err.message)
+    });
+  }
+
   loadDepots() {
     this.depotService.getAllDepots('body').subscribe({
       next: async (data) => {
@@ -79,8 +114,9 @@ export class DepotComponent {
         } else {
           this.depots = [];
         }
+        this.applyFilter();
       },
       error: (err) => this.error = 'Erreur chargement: ' + (err.error?.message || err.message)
     });
   }
-  }
+}

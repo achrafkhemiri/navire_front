@@ -1,0 +1,42 @@
+.container {
+  max-width: 900px;
+}
+.card {
+  border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(30,60,114,0.08);
+}
+.card-title {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+/* Layout moderne et claire */
+.layout {
+  display: flex;
+  margin-top: 60px; /* espace pour la navbar */
+  transition: all 0.3s ease;
+  background: #f5f7fa;
+}
+
+/* Contenu principal */
+.content {
+  flex: 1;
+  padding: 32px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 2px 16px rgba(30,60,114,0.06);
+  transition: margin-left 0.3s ease;
+  min-height: calc(100vh - 60px);
+  margin: 24px;
+  font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+}
+
+/* Quand la sidebar est ouverte */
+.layout:not(.sidebar-closed) .content {
+  margin-left: 220px;
+}
+
+/* Quand la sidebar est fermée */
+.layout.sidebar-closed .content {
+  margin-left: 70px;
+}
+

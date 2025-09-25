@@ -1,3 +1,4 @@
+// ...existing code...
 import { Component } from '@angular/core';
 import { ProjetControllerService } from '../../api/api/projetController.service';
 import { ProjetDTO } from '../../api/model/projetDTO';
@@ -8,6 +9,31 @@ import { ProjetDTO } from '../../api/model/projetDTO';
   styleUrls: ['./projet.component.css']
 })
 export class ProjetComponent {
+  openSettingsModal(pr: ProjetDTO) {
+    setTimeout(() => {
+      const modal = document.getElementById('settingsProjetModal');
+      if (modal) {
+        const modalInstance = (window as any).bootstrap?.Modal?.getOrCreateInstance(modal);
+        if (modalInstance) {
+          modalInstance.show();
+        }
+      }
+    }, 0);
+  }
+  isSidebarOpen: boolean = true;
+  openEditProjetModal(pr: ProjetDTO) {
+    this.selectedProjet = { ...pr };
+    this.editMode = true;
+    setTimeout(() => {
+      const modal = document.getElementById('editProjetModal');
+      if (modal) {
+        const modalInstance = (window as any).bootstrap?.Modal?.getOrCreateInstance(modal);
+        if (modalInstance) {
+          modalInstance.show();
+        }
+      }
+    }, 0);
+  }
   projets: ProjetDTO[] = [];
   selectedProjet: ProjetDTO | null = null;
   newProjet: ProjetDTO = { nom: '', nomProduit: '', quantiteTotale: 0, nomNavire: '', paysNavire: '', etat: '' };
@@ -16,6 +42,18 @@ export class ProjetComponent {
 
   constructor(private projetService: ProjetControllerService) {
     this.loadProjets();
+  }
+
+  openAddProjetModal() {
+    setTimeout(() => {
+      const modal = document.getElementById('addProjetModal');
+      if (modal) {
+        const modalInstance = (window as any).bootstrap?.Modal?.getOrCreateInstance(modal);
+        if (modalInstance) {
+          modalInstance.show();
+        }
+      }
+    }, 0);
   }
 
   loadProjets() {
@@ -74,15 +112,37 @@ export class ProjetComponent {
 
   updateProjet() {
     if (!this.selectedProjet?.id) return;
-    this.projetService.createProjet(this.selectedProjet, 'body').subscribe({
+    this.projetService.updateProjet(this.selectedProjet.id, this.selectedProjet, 'body').subscribe({
       next: (updated) => {
-        const idx = this.projets.findIndex(p => p.id === updated.id);
-        if (idx > -1) this.projets[idx] = updated;
+        this.loadProjets();
         this.selectedProjet = null;
         this.editMode = false;
       },
       error: (err) => this.error = 'Erreur modification: ' + (err.error?.message || err.message)
     });
+  }
+
+
+  closeAddProjetModal() {
+    const modal = document.getElementById('addProjetModal');
+    if (modal) {
+      const modalInstance = (window as any).bootstrap?.Modal?.getOrCreateInstance(modal);
+      if (modalInstance) {
+        modalInstance.hide();
+      }
+    }
+  }
+
+  closeEditProjetModal() {
+    const modal = document.getElementById('editProjetModal');
+    if (modal) {
+      const modalInstance = (window as any).bootstrap?.Modal?.getOrCreateInstance(modal);
+      if (modalInstance) {
+        modalInstance.hide();
+      }
+    }
+    this.selectedProjet = null;
+    this.editMode = false;
   }
 
   deleteProjet(id?: number) {

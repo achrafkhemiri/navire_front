@@ -1,59 +1,149 @@
-<h2>Projets</h2>
 
-<div *ngIf="error" class="error">{{ error }}</div>
 
-<!-- Liste des projets -->
-<table>
-	<thead>
-		<tr>
-			<th>ID</th>
-			<th>Nom</th>
-			<th>Produit</th>
-			<th>Quantité</th>
-			<th>Navire</th>
-			<th>Pays</th>
-			<th>Etat</th>
-			<th>Actions</th>
-		</tr>
-	</thead>
-	<tbody>
-		<tr *ngFor="let pr of projets">
-			<td>{{ pr.id }}</td>
-			<td>{{ pr.nom }}</td>
-			<td>{{ pr.nomProduit }}</td>
-			<td>{{ pr.quantiteTotale }}</td>
-			<td>{{ pr.nomNavire }}</td>
-			<td>{{ pr.paysNavire }}</td>
-			<td>{{ pr.etat }}</td>
-			<td>
-				<button (click)="selectProjet(pr)">Modifier</button>
-				<button (click)="deleteProjet(pr.id)">Supprimer</button>
-			</td>
-		</tr>
-	</tbody>
-</table>
 
-<!-- Ajout d'un projet -->
-<div>
-	<h3>Ajouter un projet</h3>
-	<input [(ngModel)]="newProjet.nom" placeholder="Nom" />
-	<input [(ngModel)]="newProjet.nomProduit" placeholder="Produit" />
-	<input [(ngModel)]="newProjet.quantiteTotale" type="number" placeholder="Quantité" />
-	<input [(ngModel)]="newProjet.nomNavire" placeholder="Navire" />
-	<input [(ngModel)]="newProjet.paysNavire" placeholder="Pays" />
-	<input [(ngModel)]="newProjet.etat" placeholder="Etat" />
-	<button (click)="addProjet()">Ajouter</button>
-</div>
 
-<!-- Edition d'un projet -->
-<div *ngIf="editMode && selectedProjet">
-	<h3>Modifier le projet</h3>
-	<input [(ngModel)]="selectedProjet!.nom" placeholder="Nom" />
-	<input [(ngModel)]="selectedProjet!.nomProduit" placeholder="Produit" />
-	<input [(ngModel)]="selectedProjet!.quantiteTotale" type="number" placeholder="Quantité" />
-	<input [(ngModel)]="selectedProjet!.nomNavire" placeholder="Navire" />
-	<input [(ngModel)]="selectedProjet!.paysNavire" placeholder="Pays" />
-	<input [(ngModel)]="selectedProjet!.etat" placeholder="Etat" />
-	<button (click)="updateProjet()">Enregistrer</button>
-	<button (click)="cancelEdit()">Annuler</button>
+<app-navbar 
+	[isSidebarOpen]="isSidebarOpen" 
+	[sidebarWidth]="220" 
+	[sidebarClosedWidth]="70">
+</app-navbar>
+
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+	<app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+	<main class="content">
+		<h2 class="page-title">Projets</h2>
+		<div *ngIf="error" class="alert alert-danger">{{ error }}</div>
+
+		<!-- Bouton Ajouter en haut -->
+		<div class="d-flex justify-content-end mb-4">
+			<button class="btn btn-success btn-lg px-4 py-2 shadow" (click)="openAddProjetModal()">
+				<i class="bi bi-plus-lg"></i> Ajouter un projet
+			</button>
+		</div>
+
+		<!-- Liste des projets en cards -->
+		<div class="row g-4">
+			<div *ngFor="let pr of projets" class="col-md-6 col-lg-4">
+						<div class="card h-100 border-0 shadow-lg rounded-4 position-relative">
+							<!-- Icône paramètre en haut à droite -->
+										<a class="btn btn-light position-absolute top-0 end-0 m-2 p-2" [routerLink]="['/projet', pr.id, 'parametre']" title="Paramètres">
+											<i class="bi bi-gear fs-5"></i>
+										</a>
+							<div class="card-body">
+								<h5 class="card-title fw-bold text-primary">{{ pr.nom }}</h5>
+								<h6 class="card-subtitle mb-2 text-muted">{{ pr.nomProduit }}</h6>
+								<ul class="list-group list-group-flush mb-2">
+									<li class="list-group-item"><strong>Quantité:</strong> {{ pr.quantiteTotale }}</li>
+									<li class="list-group-item"><strong>Navire:</strong> {{ pr.nomNavire }}</li>
+									<li class="list-group-item"><strong>Pays:</strong> {{ pr.paysNavire }}</li>
+									<li class="list-group-item">
+										<strong>Etat:</strong>
+										<span class="badge px-3 py-2 fs-6"
+											[ngClass]="{
+												'bg-secondary': pr.etat === 'En attente',
+												'bg-warning': pr.etat === 'En cours',
+												'bg-success': pr.etat === 'Terminé'
+											}">{{ pr.etat }}</span>
+									</li>
+								</ul>
+								<div class="d-flex justify-content-between mt-3">
+									<button class="btn btn-outline-primary btn-sm rounded-pill px-3" (click)="openEditProjetModal(pr)"><i class="bi bi-pencil"></i> Modifier</button>
+									<button class="btn btn-outline-danger btn-sm rounded-pill px-3" (click)="deleteProjet(pr.id)"><i class="bi bi-trash"></i> Supprimer</button>
+								</div>
+							</div>
+						</div>
+			</div>
+			<div *ngIf="projets.length === 0" class="col-12">
+				<div class="alert alert-info text-center py-4">Aucun projet trouvé.</div>
+			</div>
+		</div>
+
+		<!-- Modal Ajout Projet -->
+		<div class="modal fade" id="addProjetModal" tabindex="-1" aria-labelledby="addProjetModalLabel" aria-hidden="true">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header bg-success text-white">
+						<h5 class="modal-title" id="addProjetModalLabel">Ajouter un projet</h5>
+						<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+					</div>
+					<div class="modal-body">
+						<form (ngSubmit)="addProjet(); closeAddProjetModal()" #addProjetForm="ngForm">
+							<div class="mb-3">
+								<label for="nom" class="form-label">Nom</label>
+								<input [(ngModel)]="newProjet.nom" name="nom" id="nom" class="form-control" required />
+							</div>
+							<div class="mb-3">
+								<label for="nomProduit" class="form-label">Produit</label>
+								<input [(ngModel)]="newProjet.nomProduit" name="nomProduit" id="nomProduit" class="form-control" required />
+							</div>
+							<div class="mb-3">
+								<label for="quantiteTotale" class="form-label">Quantité</label>
+								<input [(ngModel)]="newProjet.quantiteTotale" name="quantiteTotale" id="quantiteTotale" type="number" class="form-control" required />
+							</div>
+							<div class="mb-3">
+								<label for="nomNavire" class="form-label">Navire</label>
+								<input [(ngModel)]="newProjet.nomNavire" name="nomNavire" id="nomNavire" class="form-control" />
+							</div>
+							<div class="mb-3">
+								<label for="paysNavire" class="form-label">Pays</label>
+								<input [(ngModel)]="newProjet.paysNavire" name="paysNavire" id="paysNavire" class="form-control" />
+							</div>
+							<div class="mb-3">
+								<label for="etat" class="form-label">Etat</label>
+								<input [(ngModel)]="newProjet.etat" name="etat" id="etat" class="form-control" />
+							</div>
+							<div class="modal-footer">
+								<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+								<button type="submit" class="btn btn-success">Ajouter</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Modal Edition Projet -->
+		<div class="modal fade" id="editProjetModal" tabindex="-1" aria-labelledby="editProjetModalLabel" aria-hidden="true">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header bg-primary text-white">
+						<h5 class="modal-title" id="editProjetModalLabel">Modifier le projet</h5>
+						<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+					</div>
+					<div class="modal-body">
+						<form (ngSubmit)="updateProjet(); closeEditProjetModal()" *ngIf="selectedProjet" #editProjetForm="ngForm">
+							<div class="mb-3">
+								<label for="editNom" class="form-label">Nom</label>
+								<input [(ngModel)]="selectedProjet.nom" name="editNom" id="editNom" class="form-control" required />
+							</div>
+							<div class="mb-3">
+								<label for="editNomProduit" class="form-label">Produit</label>
+								<input [(ngModel)]="selectedProjet.nomProduit" name="editNomProduit" id="editNomProduit" class="form-control" required />
+							</div>
+							<div class="mb-3">
+								<label for="editQuantiteTotale" class="form-label">Quantité</label>
+								<input [(ngModel)]="selectedProjet.quantiteTotale" name="editQuantiteTotale" id="editQuantiteTotale" type="number" class="form-control" required />
+							</div>
+							<div class="mb-3">
+								<label for="editNomNavire" class="form-label">Navire</label>
+								<input [(ngModel)]="selectedProjet.nomNavire" name="editNomNavire" id="editNomNavire" class="form-control" />
+							</div>
+							<div class="mb-3">
+								<label for="editPaysNavire" class="form-label">Pays</label>
+								<input [(ngModel)]="selectedProjet.paysNavire" name="editPaysNavire" id="editPaysNavire" class="form-control" />
+							</div>
+							<div class="mb-3">
+								<label for="editEtat" class="form-label">Etat</label>
+								<input [(ngModel)]="selectedProjet.etat" name="editEtat" id="editEtat" class="form-control" />
+							</div>
+							<div class="modal-footer">
+								<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+								<button type="submit" class="btn btn-primary">Enregistrer</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			</div>
+		</div>
+	</main>
 </div>

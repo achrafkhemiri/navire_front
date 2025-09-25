@@ -1,1 +1,114 @@
-/* Style du composant Projet */
+/* Layout moderne et claire */
+.layout {
+  display: flex;
+  margin-top: 60px; /* espace pour la navbar */
+  transition: all 0.3s ease;
+  background: #f5f7fa;
+}
+
+/* Contenu principal */
+.content {
+  flex: 1;
+  padding: 32px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 2px 16px rgba(30,60,114,0.06);
+  transition: margin-left 0.3s ease;
+  min-height: calc(100vh - 60px);
+  margin: 24px;
+  font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+}
+
+/* Quand la sidebar est ouverte */
+.layout:not(.sidebar-closed) .content {
+  margin-left: 220px;
+}
+
+/* Quand la sidebar est fermée */
+.layout.sidebar-closed .content {
+  margin-left: 70px;
+}
+/* === Style global cohérent avec ton tableau === */
+
+/* Cards */
+.card {
+  border: none !important;
+  border-radius: 16px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background: #fff !important;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.card-title {
+  font-weight: 600;
+  color: #1e2a78;
+}
+
+.card-subtitle {
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
+/* Badges (états/progress) */
+.badge {
+  border-radius: 20px !important;
+  font-size: 0.85rem;
+}
+
+/* Boutons */
+.btn {
+  border-radius: 25px !important;
+  padding: 6px 16px;
+  font-weight: 500;
+}
+
+.btn-outline-primary {
+  border-color: #1e2a78 !important;
+  color: #1e2a78 !important;
+}
+.btn-outline-primary:hover {
+  background: #1e2a78 !important;
+  color: #fff !important;
+}
+
+.btn-outline-danger {
+  border-color: #d63384 !important;
+  color: #d63384 !important;
+}
+.btn-outline-danger:hover {
+  background: #d63384 !important;
+  color: #fff !important;
+}
+
+/* === Dialogs (modals Bootstrap) === */
+.modal-content {
+  border-radius: 18px !important;
+  border: none !important;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+  border-top-left-radius: 18px !important;
+  border-top-right-radius: 18px !important;
+}
+
+.modal-footer {
+  border-top: none !important;
+}
+
+/* Inputs */
+.form-control {
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  border: 1px solid #dee2e6 !important;
+}
+
+.form-control:focus {
+  border-color: #1e2a78 !important;
+  box-shadow: 0 0 0 0.25rem rgba(30, 42, 120, 0.15) !important;
+}

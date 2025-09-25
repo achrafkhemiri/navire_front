@@ -1,3 +1,4 @@
+import { ProjetParametreComponent } from './component/projet/projet-parametre.component';
 import { ProjetComponent } from './component/projet/projet.component';
 import { VoyageComponent } from './component/voyage/voyage.component';
 import { NgModule } from '@angular/core';
@@ -33,6 +34,7 @@ import { DepotComponent } from './component/depot/depot.component';
 // DepotComponent est déjà importé correctement
 import { ProjetClientComponent } from './component/projet-client/projet-client.component';
 import { ClientComponent } from './component/client/client.component';
+import { RouterModule } from '@angular/router';
 
 @NgModule({ 
   declarations: [
@@ -53,6 +55,8 @@ import { ClientComponent } from './component/client/client.component';
   ProjetClientComponent,
   // Ajout du composant client
   ClientComponent,
+  // Ajout du composant projet-parametre
+  ProjetParametreComponent,
   ],
   imports: [
     BrowserModule,
@@ -68,6 +72,7 @@ import { ClientComponent } from './component/client/client.component';
     MatIconModule,
     MatDialogModule,
     MatSelectModule,
+    RouterModule
   ],
   providers: [
     {
