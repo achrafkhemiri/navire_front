@@ -9,9 +9,14 @@ import { ChauffeurDTO } from '../../api/model/chauffeurDTO';
 })
 export class ChauffeurComponent {
   chauffeurs: ChauffeurDTO[] = [];
+  filteredChauffeurs: ChauffeurDTO[] = [];
   selectedChauffeur: ChauffeurDTO | null = null;
   newChauffeur: ChauffeurDTO = { nom: '', numCin: '', numBonLivraisonVoyages: new Set<string>() };
+  dialogChauffeur: ChauffeurDTO = { nom: '', numCin: '', numBonLivraisonVoyages: new Set<string>() };
   editMode: boolean = false;
+  showAddDialog: boolean = false;
+  isSidebarOpen: boolean = true;
+  chauffeurFilter: string = '';
   error: string = '';
 
   constructor(private chauffeurService: ChauffeurControllerService) {
@@ -27,8 +32,10 @@ export class ChauffeurComponent {
             const json = JSON.parse(text);
             if (Array.isArray(json)) {
               this.chauffeurs = json;
+              this.filteredChauffeurs = [...this.chauffeurs];
             } else {
               this.chauffeurs = [];
+              this.filteredChauffeurs = [];
             }
           } catch (e) {
             this.error = 'Erreur parsing JSON: ' + e;
@@ -36,8 +43,10 @@ export class ChauffeurComponent {
           }
         } else if (Array.isArray(data)) {
           this.chauffeurs = data;
+          this.filteredChauffeurs = [...this.chauffeurs];
         } else {
           this.chauffeurs = [];
+          this.filteredChauffeurs = [];
         }
       },
       error: (err) => this.error = 'Erreur chargement: ' + (err.error?.message || err.message)
@@ -89,5 +98,49 @@ export class ChauffeurComponent {
   cancelEdit() {
     this.selectedChauffeur = null;
     this.editMode = false;
+  }
+
+  filterChauffeurs() {
+    if (!this.chauffeurFilter.trim()) {
+      this.filteredChauffeurs = [...this.chauffeurs];
+    } else {
+      const filter = this.chauffeurFilter.toLowerCase();
+      this.filteredChauffeurs = this.chauffeurs.filter(ch => 
+        ch.nom?.toLowerCase().includes(filter) ||
+        ch.numCin?.toLowerCase().includes(filter)
+      );
+    }
+  }
+
+  openAddDialog() {
+    this.dialogChauffeur = { nom: '', numCin: '', numBonLivraisonVoyages: new Set<string>() };
+    this.editMode = false;
+    this.showAddDialog = true;
+  }
+
+  editChauffeur(chauffeur: ChauffeurDTO) {
+    this.dialogChauffeur = { ...chauffeur };
+    this.editMode = true;
+    this.showAddDialog = true;
+  }
+
+  saveChauffeur() {
+    const payload = {
+      nom: this.dialogChauffeur.nom,
+      numCin: this.dialogChauffeur.numCin
+    };
+    this.chauffeurService.createChauffeur(payload as any, 'body').subscribe({
+      next: () => {
+        this.showAddDialog = false;
+        this.loadChauffeurs();
+      },
+      error: (err) => this.error = 'Erreur ajout: ' + (err.error?.message || err.message)
+    });
+  }
+
+  cancel() {
+    this.showAddDialog = false;
+    this.editMode = false;
+    this.dialogChauffeur = { nom: '', numCin: '', numBonLivraisonVoyages: new Set<string>() };
   }
 }

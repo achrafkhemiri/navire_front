@@ -1,0 +1,66 @@
+<app-navbar [isSidebarOpen]="isSidebarOpen" [sidebarWidth]="220" [sidebarClosedWidth]="70"></app-navbar>
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+	<app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+	<main class="content">
+		<h2 class="page-title">Tous les Clients</h2>
+		<section class="table-section">
+			<div class="table-toolbar">
+				<input class="table-filter" placeholder="Filtrer par nom ou numéro" [(ngModel)]="clientFilter" (input)="filterClients()" />
+				<button class="add-row-btn" (click)="addClient()">
+					<img src="assets/ajouter.png" alt="Ajouter" width="20" height="20" style="vertical-align:middle; margin-right:6px;" />
+					Ajouter un client
+				</button>
+			</div>
+
+			<div class="mat-elevation-z8">
+				<table class="mat-mdc-table">
+					<thead>
+						<tr>
+							<th class="mat-mdc-header-cell">ID</th>
+							<th class="mat-mdc-header-cell">Nom</th>
+							<th class="mat-mdc-header-cell">Numéro</th>
+							<th class="mat-mdc-header-cell">Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr *ngFor="let cl of filteredClients" class="mat-mdc-row">
+							<td class="mat-mdc-cell">{{ cl.id }}</td>
+							<td class="mat-mdc-cell">{{ cl.nom }}</td>
+							<td class="mat-mdc-cell">{{ cl.numero }}</td>
+							<td class="mat-mdc-cell">
+								<span class="actions-img-group">
+									<img src="assets/edit.png" alt="Edit" width="24" height="24" style="cursor:pointer; margin-right:8px;" (click)="editClient(cl)" />
+									<img src="assets/delete.png" alt="Supprimer" width="24" height="24" style="cursor:pointer;" (click)="deleteClient(cl)" />
+								</span>
+							</td>
+						</tr>
+						<tr *ngIf="filteredClients.length === 0" class="mat-mdc-no-data-row">
+							<td class="mat-mdc-cell" colspan="4">Aucun client trouvé.</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		<!-- Dialog modal pour ajout ou modification client -->
+		<div class="dialog-backdrop" *ngIf="showAddClient">
+			<div class="dialog-modal">
+				<h3>{{ editMode ? 'Modifier le client' : 'Ajouter un client' }}</h3>
+				<form (ngSubmit)="editMode ? updateClient() : saveClient()">
+					<div class="form-group">
+						<label for="nom">Nom:</label>
+						<input type="text" id="nom" [(ngModel)]="dialogClient.nom" name="nom" required />
+					</div>
+					<div class="form-group">
+						<label for="numero">Numéro:</label>
+						<input type="text" id="numero" [(ngModel)]="dialogClient.numero" name="numero" required />
+					</div>
+					<div class="dialog-actions">
+						<button type="button" (click)="cancel()">Annuler</button>
+						<button type="submit">{{ editMode ? 'Modifier' : 'Ajouter' }}</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</main>
+</div>

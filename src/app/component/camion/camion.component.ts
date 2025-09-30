@@ -9,9 +9,14 @@ import { CamionDTO } from '../../api/model/camionDTO';
 })
 export class CamionComponent {
   camions: CamionDTO[] = [];
+  filteredCamions: CamionDTO[] = [];
   selectedCamion: CamionDTO | null = null;
   newCamion: CamionDTO = { matricule: '', societe: '', numBonLivraison: '' };
+  dialogCamion: CamionDTO = { matricule: '', societe: '', numBonLivraison: '' };
   editMode: boolean = false;
+  showAddDialog: boolean = false;
+  isSidebarOpen: boolean = true;
+  camionFilter: string = '';
   error: string = '';
 
   constructor(private camionService: CamionControllerService) {
@@ -28,8 +33,10 @@ export class CamionComponent {
             const json = JSON.parse(text);
             if (Array.isArray(json)) {
               this.camions = json;
+              this.filteredCamions = [...this.camions];
             } else {
               this.camions = [];
+              this.filteredCamions = [];
             }
           } catch (e) {
             this.error = 'Erreur parsing JSON: ' + e;
@@ -37,8 +44,10 @@ export class CamionComponent {
           }
         } else if (Array.isArray(data)) {
           this.camions = data;
+          this.filteredCamions = [...this.camions];
         } else {
           this.camions = [];
+          this.filteredCamions = [];
         }
       },
       error: (err) => this.error = 'Erreur chargement: ' + (err.error?.message || err.message)
@@ -86,5 +95,45 @@ export class CamionComponent {
   cancelEdit() {
     this.selectedCamion = null;
     this.editMode = false;
+  }
+
+  filterCamions() {
+    if (!this.camionFilter.trim()) {
+      this.filteredCamions = [...this.camions];
+    } else {
+      const filter = this.camionFilter.toLowerCase();
+      this.filteredCamions = this.camions.filter(cam => 
+        cam.matricule?.toLowerCase().includes(filter) ||
+        cam.societe?.toLowerCase().includes(filter)
+      );
+    }
+  }
+
+  openAddDialog() {
+    this.dialogCamion = { matricule: '', societe: '', numBonLivraison: '' };
+    this.editMode = false;
+    this.showAddDialog = true;
+  }
+
+  editCamion(camion: CamionDTO) {
+    this.dialogCamion = { ...camion };
+    this.editMode = true;
+    this.showAddDialog = true;
+  }
+
+  saveCamion() {
+    this.camionService.createCamion(this.dialogCamion, 'body').subscribe({
+      next: () => {
+        this.showAddDialog = false;
+        this.loadCamions();
+      },
+      error: (err) => this.error = 'Erreur ajout: ' + (err.error?.message || err.message)
+    });
+  }
+
+  cancel() {
+    this.showAddDialog = false;
+    this.editMode = false;
+    this.dialogCamion = { matricule: '', societe: '', numBonLivraison: '' };
   }
 }

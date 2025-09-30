@@ -59,6 +59,45 @@
   transform: translateY(-2px);
 }
 
+/* Actions */
+.actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.toggle-btn, .logout-btn {
+  background: #060057;
+  color: #fff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  transition: background .2s, transform .2s;
+}
+
+.toggle-btn:hover, .logout-btn:hover {
+  background: #1a1f7a;
+  transform: translateY(-2px);
+}
+
+.toggle-btn:active, .logout-btn:active {
+  transform: translateY(0);
+}
+
+.logout-btn {
+  background: #b8002f;
+}
+
+.logout-btn:hover {
+  background: #d1003a;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .navbar {

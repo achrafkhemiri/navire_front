@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { ClientControllerService } from '../../api/api/clientController.service';
 import { ProjetClientControllerService } from '../../api/api/projetClientController.service';
 import { ProjetActifService } from '../../service/projet-actif.service';
+import { ProjetControllerService } from '../../api/api/projetController.service';
 import { ClientDTO } from '../../api/model/clientDTO';
 
 @Component({
@@ -31,7 +32,8 @@ export class ClientComponent {
   constructor(
     private clientService: ClientControllerService,
     private projetClientService: ProjetClientControllerService,
-    private projetActifService: ProjetActifService
+    private projetActifService: ProjetActifService,
+    private projetService: ProjetControllerService
   ) {
     this.loadProjetActif();
   }
@@ -48,6 +50,7 @@ export class ClientComponent {
         this.projetActifId = Number(projetActif);
       }
     }
+    console.log('loadProjetActif() - projetActifId:', this.projetActifId);
     this.loadClients();
   }
 
@@ -73,20 +76,24 @@ export class ClientComponent {
     if (this.projetActifId) {
       this.dialogClient.projetId = this.projetActifId;
     }
+    console.log('Creating client - payload:', this.dialogClient, 'projetActifId:', this.projetActifId);
     this.clientService.createClient(this.dialogClient, 'body').subscribe({
       next: (createdClient) => {
+        console.log('createClient response (raw):', createdClient);
         let clientId: number | undefined;
         if (createdClient instanceof Blob) {
           createdClient.text().then(text => {
             try {
               const client = JSON.parse(text);
+              console.log('createClient parsed blob:', client);
               clientId = client.id;
-              this.createProjetClientRelation(clientId);
-            } catch {}
+              this.askQuantiteAndAssociate(clientId);
+            } catch (e) { console.error(e); }
           });
         } else {
           clientId = createdClient.id;
-          this.createProjetClientRelation(clientId);
+          console.log('createClient json result:', createdClient);
+          this.askQuantiteAndAssociate(clientId);
         }
         this.dialogClient = { nom: '', numero: '' };
         this.loadClients();
@@ -96,19 +103,25 @@ export class ClientComponent {
     });
   }
 
-  createProjetClientRelation(clientId?: number) {
-    if (clientId && this.projetActifId) {
-      const relation = { clientId, projetId: this.projetActifId };
-      this.projetClientService.createProjetClient(relation, 'body').subscribe({
-        next: (res) => {
-          console.log('Relation projet-client créée:', res);
-        },
-        error: (err) => {
-          this.error = 'Erreur association projet-client: ' + (err.error?.message || err.message);
-          console.error('Erreur association projet-client:', err);
-        }
-      });
+  // Ask user for quantiteAutorisee and then associate using ProjetController endpoint
+  askQuantiteAndAssociate(clientId?: number) {
+    console.log('askQuantiteAndAssociate - clientId:', clientId, 'projetActifId:', this.projetActifId);
+    if (!clientId || !this.projetActifId) return;
+    // Simple prompt to get quantity; replace with a proper modal if desired
+    const input = window.prompt('Quantité autorisée pour ce client sur le projet actif (laisser vide = 0):', '0');
+    let quantite = 0;
+    if (input !== null && input !== undefined && input !== '') {
+      const parsed = Number(input);
+      if (!isNaN(parsed)) quantite = parsed;
     }
+    const body = { quantiteAutorisee: quantite };
+    this.projetService.addClientToProjet(this.projetActifId, clientId, body).subscribe({
+      next: (res) => console.log('Client associé au projet avec quantite:', res),
+      error: (err) => {
+        this.error = 'Erreur association client-projet: ' + (err.error?.message || err.message);
+        console.error('Erreur association client-projet:', err);
+      }
+    });
   }
 
   updateDialogClient() {
@@ -134,30 +147,91 @@ export class ClientComponent {
   }
 
   loadClients() {
-    this.clientService.getAllClients('body').subscribe({
-      next: async (data) => {
-        if (data instanceof Blob) {
-          const text = await data.text();
-          try {
-            const json = JSON.parse(text);
-            if (Array.isArray(json)) {
-              this.clients = json;
-            } else {
+    console.log('loadClients() - projetActifId:', this.projetActifId);
+    // If we have an active project id, prefer the backend endpoint that returns clients for that project
+    if (this.projetActifId) {
+      this.clientService.getClientsByProjet(this.projetActifId, 'body').subscribe({
+        next: async (data) => {
+          if (data instanceof Blob) {
+            const text = await data.text();
+            console.log('getClientsByProjet - blob text:', text);
+            try {
+              const json = JSON.parse(text);
+              console.log('getClientsByProjet - parsed json:', json);
+              if (Array.isArray(json)) {
+                this.clients = json;
+              } else {
+                this.clients = [];
+              }
+            } catch (e) {
+              this.error = 'Erreur parsing JSON: ' + e;
               this.clients = [];
             }
-          } catch (e) {
-            this.error = 'Erreur parsing JSON: ' + e;
+          } else if (Array.isArray(data)) {
+            console.log('getClientsByProjet - json array, length:', data.length);
+            this.clients = data;
+          } else {
+            console.log('getClientsByProjet - unexpected response:', data);
             this.clients = [];
           }
-        } else if (Array.isArray(data)) {
-          this.clients = data;
-        } else {
-          this.clients = [];
+          this.applyFilter();
+        },
+        error: (err) => {
+          // fallback to fetching all and filtering client-side
+          console.warn('getClientsByProjet failed, falling back to getAllClients', err);
+          this.clientService.getAllClients('body').subscribe({
+            next: async (data2) => {
+              if (data2 instanceof Blob) {
+                const text = await data2.text();
+                try {
+                  const json = JSON.parse(text);
+                  if (Array.isArray(json)) {
+                    this.clients = json.filter((c: any) => c.projetId === this.projetActifId);
+                  } else {
+                    this.clients = [];
+                  }
+                } catch (e) {
+                  this.error = 'Erreur parsing JSON: ' + e;
+                  this.clients = [];
+                }
+              } else if (Array.isArray(data2)) {
+                this.clients = data2.filter(c => c.projetId === this.projetActifId);
+              } else {
+                this.clients = [];
+              }
+              this.applyFilter();
+            },
+            error: (err2) => this.error = 'Erreur chargement: ' + (err2.error?.message || err2.message)
+          });
         }
-        this.applyFilter();
-      },
-      error: (err) => this.error = 'Erreur chargement: ' + (err.error?.message || err.message)
-    });
+      });
+    } else {
+      // No active project: fetch all clients
+      this.clientService.getAllClients('body').subscribe({
+        next: async (data) => {
+          if (data instanceof Blob) {
+            const text = await data.text();
+            try {
+              const json = JSON.parse(text);
+              if (Array.isArray(json)) {
+                this.clients = json;
+              } else {
+                this.clients = [];
+              }
+            } catch (e) {
+              this.error = 'Erreur parsing JSON: ' + e;
+              this.clients = [];
+            }
+          } else if (Array.isArray(data)) {
+            this.clients = data;
+          } else {
+            this.clients = [];
+          }
+          this.applyFilter();
+        },
+        error: (err) => this.error = 'Erreur chargement: ' + (err.error?.message || err.message)
+      });
+    }
   }
 
   applyFilter() {
@@ -165,7 +239,10 @@ export class ClientComponent {
     let clientsFiltrés = this.clients;
     // Filtre par projet actif
     if (this.projetActifId) {
-      clientsFiltrés = clientsFiltrés.filter(c => c.projetId === this.projetActifId);
+      // Les clients retournés par getClientsByProjet peuvent ne pas avoir 'projetId' directement.
+      // On conserve donc tous les clients si on a utilisé l'endpoint projet-spécifique (absence de projetId)
+      // ou on filtre ceux qui ont explicitement le bon projetId.
+      clientsFiltrés = clientsFiltrés.filter((c: any) => c.projetId === this.projetActifId || c.projetId === undefined);
     }
     // Filtre par texte
     if (filter) {
@@ -190,5 +267,15 @@ export class ClientComponent {
   cancelEdit() {
     this.selectedClient = null;
     this.editMode = false;
+  }
+
+  // Récupère la quantité autorisée pour le projet actif depuis la map renvoyée par le backend
+  getQuantitePourProjet(client: any): number | undefined {
+    if (!this.projetActifId || !client) return undefined;
+    if (client.quantitesAutoriseesParProjet) {
+      return client.quantitesAutoriseesParProjet[this.projetActifId];
+    }
+    // fallback si jamais la structure change
+    return (client.quantiteAutorisee !== undefined) ? client.quantiteAutorisee : undefined;
   }
 }

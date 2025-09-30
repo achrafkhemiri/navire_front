@@ -1,47 +1,72 @@
-<h2>Camions</h2>
+<app-navbar [isSidebarOpen]="isSidebarOpen" [sidebarWidth]="220" [sidebarClosedWidth]="70"></app-navbar>
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+	<app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+	<main class="content">
+		<h2 class="page-title">Tous les Camions</h2>
+		<div *ngIf="error" class="error">{{ error }}</div>
+		
+		<section class="table-section">
+			<div class="table-toolbar">
+				<input class="table-filter" placeholder="Filtrer par matricule ou société" [(ngModel)]="camionFilter" (input)="filterCamions()" />
+				<button class="add-row-btn" (click)="openAddDialog()">
+					<img src="assets/ajouter.png" alt="Ajouter" width="20" height="20" style="vertical-align:middle; margin-right:6px;" />
+					Ajouter un camion
+				</button>
+			</div>
 
-<div *ngIf="error" class="error">{{ error }}</div>
+			<div class="mat-elevation-z8">
+				<table class="mat-mdc-table">
+					<thead>
+						<tr>
+							<th class="mat-mdc-header-cell">ID</th>
+							<th class="mat-mdc-header-cell">Matricule</th>
+							<th class="mat-mdc-header-cell">Société</th>
+							<th class="mat-mdc-header-cell">Bon Livraison</th>
+							<th class="mat-mdc-header-cell">Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr *ngFor="let cam of filteredCamions" class="mat-mdc-row">
+							<td class="mat-mdc-cell">{{ cam.id }}</td>
+							<td class="mat-mdc-cell">{{ cam.matricule }}</td>
+							<td class="mat-mdc-cell">{{ cam.societe }}</td>
+							<td class="mat-mdc-cell">{{ cam.numBonLivraison }}</td>
+							<td class="mat-mdc-cell">
+								<span class="actions-img-group">
+									<img src="assets/edit.png" alt="Edit" width="24" height="24" style="cursor:pointer; margin-right:8px;" (click)="editCamion(cam)" />
+									<img src="assets/delete.png" alt="Supprimer" width="24" height="24" style="cursor:pointer;" (click)="deleteCamion(cam.id)" />
+								</span>
+							</td>
+						</tr>
+						<tr *ngIf="filteredCamions.length === 0" class="mat-mdc-no-data-row">
+							<td class="mat-mdc-cell" colspan="5">Aucun camion trouvé.</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</section>
 
-<!-- Liste des camions -->
-<table>
-	<thead>
-		<tr>
-			<th>ID</th>
-			<th>Matricule</th>
-			<th>Société</th>
-			<th>Bon Livraison</th>
-			<th>Actions</th>
-		</tr>
-	</thead>
-	<tbody>
-		<tr *ngFor="let cam of camions">
-			<td>{{ cam.id }}</td>
-			<td>{{ cam.matricule }}</td>
-			<td>{{ cam.societe }}</td>
-			<td>{{ cam.numBonLivraison }}</td>
-			<td>
-				<button (click)="selectCamion(cam)">Modifier</button>
-				<button (click)="deleteCamion(cam.id)">Supprimer</button>
-			</td>
-		</tr>
-	</tbody>
-</table>
-
-<!-- Ajout d'un camion -->
-<div>
-	<h3>Ajouter un camion</h3>
-	<input [(ngModel)]="newCamion!.matricule" placeholder="Matricule" />
-	<input [(ngModel)]="newCamion!.societe" placeholder="Société" />
-	<input [(ngModel)]="newCamion!.numBonLivraison" placeholder="Bon Livraison" />
-	<button (click)="addCamion()">Ajouter</button>
-</div>
-
-<!-- Edition d'un camion -->
-<div *ngIf="editMode && selectedCamion">
-	<h3>Modifier le camion</h3>
-	<input [(ngModel)]="selectedCamion.matricule" placeholder="Matricule" />
-	<input [(ngModel)]="selectedCamion.societe" placeholder="Société" />
-	<input [(ngModel)]="selectedCamion.numBonLivraison" placeholder="Bon Livraison" />
-	<button (click)="updateCamion()">Enregistrer</button>
-	<button (click)="cancelEdit()">Annuler</button>
+		<!-- Dialog modal pour ajout ou modification camion -->
+		<div class="dialog-backdrop" *ngIf="showAddDialog">
+			<div class="dialog-modal">
+				<h3>{{ editMode ? 'Modifier le camion' : 'Ajouter un camion' }}</h3>
+				<div class="form-group">
+					<label for="matricule">Matricule:</label>
+					<input type="text" id="matricule" [(ngModel)]="dialogCamion.matricule" name="matricule" required />
+				</div>
+				<div class="form-group">
+					<label for="societe">Société:</label>
+					<input type="text" id="societe" [(ngModel)]="dialogCamion.societe" name="societe" required />
+				</div>
+				<div class="form-group">
+					<label for="numBonLivraison">Bon Livraison:</label>
+					<input type="text" id="numBonLivraison" [(ngModel)]="dialogCamion.numBonLivraison" name="numBonLivraison" required />
+				</div>
+				<div class="dialog-actions">
+					<button type="button" (click)="cancel()">Annuler</button>
+					<button type="submit" (click)="editMode ? updateCamion() : saveCamion()">{{ editMode ? 'Modifier' : 'Ajouter' }}</button>
+				</div>
+			</div>
+		</div>
+	</main>
 </div>

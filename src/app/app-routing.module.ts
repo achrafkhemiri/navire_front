@@ -16,6 +16,8 @@ import { ProjetComponent } from './component/projet/projet.component';
 import { VoyageComponent } from './component/voyage/voyage.component';
 import { ProjetClientComponent } from './component/projet-client/projet-client.component';
 import { ProjetListComponent } from './projet-list/projet-list.component';
+import { ClientsComponent } from './component/clients/clients.component';
+import { DepotsComponent } from './component/depots/depots.component';
 
 
 const routes: Routes = [
@@ -29,6 +31,8 @@ const routes: Routes = [
   { path: 'camion', component: CamionComponent },
   { path: 'client', component: ClientComponent },
   { path: 'depot', component: DepotComponent },
+  { path: 'clients', component: ClientsComponent },
+  { path: 'depots', component: DepotsComponent },
   { path: 'projet', component: ProjetComponent },
   { path: 'projet/:id/parametre', component: ProjetParametreComponent },
   { path: 'voyage', component: VoyageComponent },

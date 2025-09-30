@@ -4,6 +4,7 @@ import { ProjetComponent } from './component/projet/projet.component';
 import { VoyageComponent } from './component/voyage/voyage.component';
 import { NgModule } from '@angular/core';
 import { HTTP_INTERCEPTORS } from '@angular/common/http';
+import { BASE_PATH } from './api/variables';
 import { SsrJwtInterceptor } from './ssr-jwt.interceptor';
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
@@ -35,6 +36,8 @@ import { DepotComponent } from './component/depot/depot.component';
 // DepotComponent est déjà importé correctement
 import { ProjetClientComponent } from './component/projet-client/projet-client.component';
 import { ClientComponent } from './component/client/client.component';
+import { ClientsComponent } from './component/clients/clients.component';
+import { DepotsComponent } from './component/depots/depots.component';
 import { RouterModule } from '@angular/router';
 
 @NgModule({ 
@@ -56,6 +59,8 @@ import { RouterModule } from '@angular/router';
   ProjetClientComponent,
   // Ajout du composant client
   ClientComponent,
+  ClientsComponent,
+  DepotsComponent,
   // Ajout du composant projet-parametre
   ProjetParametreComponent,
   ProjetListComponent,
@@ -82,6 +87,7 @@ import { RouterModule } from '@angular/router';
       useClass: SsrJwtInterceptor,
       multi: true
     }
+    , { provide: BASE_PATH, useValue: 'http://localhost:8086' }
   ],
   bootstrap: [AppComponent]
 })

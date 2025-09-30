@@ -1,17 +1,14 @@
-<button routerLink="/projet-list" class="btn btn-primary">Liste des projets</button>
-<header 
-  class="navbar"
-  [ngStyle]="{'left.px': isSidebarOpen ? sidebarWidth : sidebarClosedWidth}"
->
+<header class="navbar" [ngStyle]="{'left.px': isSidebarOpen ? sidebarWidth : sidebarClosedWidth}">
   <div class="logo">
     <i class="fas fa-layer-group"></i>
-    <span>Mon Application</span>
+    <span>{{ getProjectDisplay() }}</span>
   </div>
 
-  <nav class="nav-links">
-    <a routerLink="/etat-generale"><i class="fas fa-chart-bar"></i> Etat Générale</a>
-    <a routerLink="/etat-vente"><i class="fas fa-shopping-cart"></i> Etat Vente</a>
-    <a routerLink="/recap-vente"><i class="fas fa-receipt"></i> Recap Vente</a>
-    <a href="#"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
-  </nav>
+  <div class="actions">
+    <button class="toggle-btn" (click)="toggleViewMode()">{{ getButtonText() }}</button>
+    <button class="logout-btn" (click)="logout()">
+      <i class="fas fa-sign-out-alt"></i>
+      Déconnexion
+    </button>
+  </div>
 </header>

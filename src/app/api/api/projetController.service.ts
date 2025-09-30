@@ -41,10 +41,11 @@ export class ProjetControllerService extends BaseService {
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
      */
-    public addClientToProjet(projetId: number, clientId: number, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: '*/*', context?: HttpContext, transferCache?: boolean}): Observable<object>;
-    public addClientToProjet(projetId: number, clientId: number, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: '*/*', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<object>>;
-    public addClientToProjet(projetId: number, clientId: number, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: '*/*', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<object>>;
-    public addClientToProjet(projetId: number, clientId: number, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: '*/*', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    // Support optional JSON body (e.g. { "quantiteAutorisee": 100.0 }) when adding client to projet
+    public addClientToProjet(projetId: number, clientId: number, body?: any, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: '*/*', context?: HttpContext, transferCache?: boolean}): Observable<object>;
+    public addClientToProjet(projetId: number, clientId: number, body?: any, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: '*/*', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<object>>;
+    public addClientToProjet(projetId: number, clientId: number, body?: any, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: '*/*', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<object>>;
+    public addClientToProjet(projetId: number, clientId: number, body: any = undefined, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: '*/*', context?: HttpContext, transferCache?: boolean}): Observable<any> {
         if (projetId === null || projetId === undefined) {
             throw new Error('Required parameter projetId was null or undefined when calling addClientToProjet.');
         }
@@ -52,7 +53,7 @@ export class ProjetControllerService extends BaseService {
             throw new Error('Required parameter clientId was null or undefined when calling addClientToProjet.');
         }
 
-        let localVarHeaders = this.defaultHeaders;
+    let localVarHeaders = this.defaultHeaders;
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
             '*/*'
@@ -65,6 +66,15 @@ export class ProjetControllerService extends BaseService {
 
     // const localVarTransferCache: boolean = options?.transferCache ?? true;
 
+
+        // to determine the Content-Type header when body is present
+        if (body !== undefined && body !== null) {
+            const consumes: string[] = [ 'application/json' ];
+            const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
+            if (httpContentTypeSelected !== undefined) {
+                localVarHeaders = localVarHeaders.set('Content-Type', httpContentTypeSelected);
+            }
+        }
 
         let responseType_: 'text' | 'json' | 'blob' = 'json';
         if (localVarHttpHeaderAcceptSelected) {
@@ -82,6 +92,7 @@ export class ProjetControllerService extends BaseService {
         return this.httpClient.request<object>('post', `${basePath}${localVarPath}`,
             {
                 context: localVarHttpContext,
+                body: body,
                 responseType: <any>responseType_,
                 ...(withCredentials ? { withCredentials } : {}),
                 headers: localVarHeaders,
@@ -140,7 +151,8 @@ export class ProjetControllerService extends BaseService {
             {
                 context: localVarHttpContext,
                 responseType: <any>responseType_,
-                ...(withCredentials ? { withCredentials } : {}),
+                // Ensure cookies (JWT) are sent with this request
+                withCredentials: true,
                 headers: localVarHeaders,
                 observe: observe,
 
