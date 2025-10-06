@@ -1,49 +1,175 @@
 
-<app-navbar [isSidebarOpen]="isSidebarOpen" [sidebarWidth]="220" [sidebarClosedWidth]="70"></app-navbar>
+<app-navbar [isSidebarOpen]="isSidebarOpen" [sidebarWidth]="280" [sidebarClosedWidth]="75"></app-navbar>
+
+<!-- Modal d'alerte moderne -->
+<div class="alert-modal-backdrop" *ngIf="showAlert" [@fadeIn] (click)="closeAlert()">
+	<div class="alert-modal" [@slideIn] (click)="$event.stopPropagation()" [ngClass]="{
+		'alert-modal-success': alertType === 'success',
+		'alert-modal-danger': alertType === 'danger',
+		'alert-modal-warning': alertType === 'warning',
+		'alert-modal-info': alertType === 'info'
+	}">
+		<div class="alert-modal-icon">
+			<i class="bi" [ngClass]="{
+				'bi-check-circle-fill': alertType === 'success',
+				'bi-exclamation-triangle-fill': alertType === 'danger',
+				'bi-exclamation-circle-fill': alertType === 'warning',
+				'bi-info-circle-fill': alertType === 'info'
+			}"></i>
+		</div>
+		<h3 class="alert-modal-title">{{ getAlertTitle() }}</h3>
+		<p class="alert-modal-message">{{ alertMessage }}</p>
+		<button class="alert-modal-btn" (click)="closeAlert()">
+			<i class="bi bi-check-lg"></i> D'accord
+		</button>
+	</div>
+</div>
+
 <div class="layout" [class.sidebar-closed]="!isSidebarOpen">
 	<app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
 	<main class="content">
-		<h2 class="page-title">Clients</h2>
-		<section class="table-section">
-			<div class="table-toolbar">
-				<input class="table-filter" placeholder="Filtrer par nom ou numéro" [(ngModel)]="clientFilter" (input)="applyFilter()" />
-					<button class="add-row-btn" (click)="openAddDialog()" [disabled]="!isProjetActif()">
-						<img src="assets/ajouter.png" alt="Ajouter" width="20" height="20" style="vertical-align:middle; margin-right:6px;" />
-						Ajouter un client
-					</button>
+		<!-- Breadcrumb Navigation -->
+		<app-breadcrumb [items]="breadcrumbItems" [showBackButton]="true"></app-breadcrumb>
+		
+		<!-- Header moderne -->
+		<div class="page-header">
+			<div class="header-left">
+				<div class="header-icon">
+					<i class="bi bi-people-fill"></i>
+				</div>
+				<div>
+					<h1 class="page-title">Gestion des Clients</h1>
+					<p class="page-subtitle">{{ filteredClients.length }} client(s) trouvé(s)</p>
+				</div>
 			</div>
+			<button class="add-btn" (click)="openAddDialog()" [disabled]="!canAddData()" [title]="!canAddData() ? 'Ce projet n\'est pas actif' : 'Ajouter un nouveau client'">
+				<i class="bi bi-plus-circle"></i>
+				<span>Nouveau Client</span>
+			</button>
+		</div>
 
-			<div class="mat-elevation-z8">
-				<table class="mat-mdc-table">
-					<thead>
-						<tr>
-							<th class="mat-mdc-header-cell">ID</th>
-							<th class="mat-mdc-header-cell">Nom</th>
-							<th class="mat-mdc-header-cell">Numéro</th>
-							<th class="mat-mdc-header-cell" *ngIf="projetActifId">Quantité autorisée (Projet)</th>
-							<th class="mat-mdc-header-cell">Actions</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr *ngFor="let cl of filteredClients" class="mat-mdc-row">
-							<td class="mat-mdc-cell">{{ cl.id }}</td>
-							<td class="mat-mdc-cell">{{ cl.nom }}</td>
-							<td class="mat-mdc-cell">{{ cl.numero }}</td>
-							<td class="mat-mdc-cell" *ngIf="projetActifId">{{ getQuantitePourProjet(cl) || 0 }}</td>
-							<td class="mat-mdc-cell">
-								<span class="actions-img-group">
-									<img src="assets/edit.png" alt="Edit" width="24" height="24" style="cursor:pointer; margin-right:8px;" (click)="selectClient(cl)" [class.disabled]="!isProjetActif()" />
-									<img src="assets/delete.png" alt="Supprimer" width="24" height="24" style="cursor:pointer;" (click)="deleteClient(cl.id)" [class.disabled]="!isProjetActif()" />
-								</span>
-							</td>
-						</tr>
-						<tr *ngIf="filteredClients.length === 0" class="mat-mdc-no-data-row">
-							<td class="mat-mdc-cell" colspan="4">Aucun client trouvé.</td>
-						</tr>
-					</tbody>
-				</table>
+		<!-- Toolbar avec recherche et options -->
+		<div class="toolbar-section">
+			<div class="search-box">
+				<i class="bi bi-search"></i>
+				<input 
+					type="text" 
+					class="search-input" 
+					placeholder="Rechercher par nom ou numéro..." 
+					[(ngModel)]="clientFilter" 
+					(input)="applyFilter()" 
+				/>
 			</div>
-		</section>
+			<div class="toolbar-right">
+				<span class="results-count">{{ filteredClients.length }} résultat(s)</span>
+				<div class="page-size-selector">
+					<label>Afficher</label>
+					<select [(ngModel)]="pageSize" (change)="onPageSizeChange()" class="page-size-select">
+						<option *ngFor="let size of pageSizes" [value]="size">{{ size }}</option>
+					</select>
+					<label>lignes</label>
+				</div>
+			</div>
+		</div>
+
+		<!-- Table moderne -->
+		<div class="table-container">
+			<table class="modern-table">
+				<thead>
+					<tr>
+						<th (click)="sortBy('nom')" class="sortable">
+							<div class="th-content">
+								<span>Nom</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-up': sortColumn === 'nom' && sortDirection === 'asc',
+									'bi-chevron-down': sortColumn === 'nom' && sortDirection === 'desc',
+									'bi-chevron-expand': sortColumn !== 'nom'
+								}"></i>
+							</div>
+						</th>
+						<th (click)="sortBy('numero')" class="sortable">
+							<div class="th-content">
+								<span>Numéro</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-up': sortColumn === 'numero' && sortDirection === 'asc',
+									'bi-chevron-down': sortColumn === 'numero' && sortDirection === 'desc',
+									'bi-chevron-expand': sortColumn !== 'numero'
+								}"></i>
+							</div>
+						</th>
+						<th *ngIf="projetActifId" (click)="sortBy('quantite')" class="sortable">
+							<div class="th-content">
+								<span>Quantité autorisée</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-up': sortColumn === 'quantite' && sortDirection === 'asc',
+									'bi-chevron-down': sortColumn === 'quantite' && sortDirection === 'desc',
+									'bi-chevron-expand': sortColumn !== 'quantite'
+								}"></i>
+							</div>
+						</th>
+						<th class="actions-header text-center">Actions</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr *ngFor="let cl of paginatedClients" class="table-row">
+						<td class="name-cell">
+							<div class="client-name">
+								<i class="bi bi-person-circle"></i>
+								<span>{{ cl.nom }}</span>
+							</div>
+						</td>
+						<td class="numero-cell">{{ cl.numero }}</td>
+						<td *ngIf="projetActifId" class="quantite-cell">
+							<span class="badge">{{ getQuantitePourProjet(cl) || 0 }}</span>
+						</td>
+						<td class="actions-cell">
+							<button class="action-btn edit-btn" (click)="selectClient(cl)" [disabled]="!isProjetActif()" title="Modifier">
+								<i class="bi bi-pencil-square"></i>
+							</button>
+							<button class="action-btn delete-btn" (click)="deleteClient(cl.id)" [disabled]="!isProjetActif()" title="Supprimer">
+								<i class="bi bi-trash3"></i>
+							</button>
+						</td>
+					</tr>
+					<tr *ngIf="paginatedClients.length === 0" class="no-data-row">
+						<td [attr.colspan]="projetActifId ? 4 : 3">
+							<div class="no-data">
+								<i class="bi bi-inbox"></i>
+								<p>Aucun client trouvé</p>
+							</div>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+
+		<!-- Pagination -->
+		<div class="pagination-container" *ngIf="filteredClients.length > 0">
+			<div class="pagination-info">
+				Affichage de {{ (currentPage - 1) * pageSize + 1 }} à {{ Math.min(currentPage * pageSize, filteredClients.length) }} sur {{ filteredClients.length }} client(s)
+			</div>
+			<div class="pagination-controls">
+				<button class="page-btn" (click)="goToPage(1)" [disabled]="currentPage === 1">
+					<i class="bi bi-chevron-double-left"></i>
+				</button>
+				<button class="page-btn" (click)="goToPage(currentPage - 1)" [disabled]="currentPage === 1">
+					<i class="bi bi-chevron-left"></i>
+				</button>
+				<button 
+					*ngFor="let page of getPageNumbers()" 
+					class="page-btn"
+					[class.active]="page === currentPage"
+					(click)="goToPage(page)">
+					{{ page }}
+				</button>
+				<button class="page-btn" (click)="goToPage(currentPage + 1)" [disabled]="currentPage === totalPages">
+					<i class="bi bi-chevron-right"></i>
+				</button>
+				<button class="page-btn" (click)="goToPage(totalPages)" [disabled]="currentPage === totalPages">
+					<i class="bi bi-chevron-double-right"></i>
+				</button>
+			</div>
+		</div>
 
 					<!-- Dialog modal pour ajout ou modification client -->
 					<div class="dialog-backdrop" *ngIf="showAddClient || editMode">
@@ -55,6 +181,52 @@
 								<button class="add-row-btn" *ngIf="!editMode" (click)="addDialogClient()" [disabled]="!isProjetActif()">Ajouter</button>
 								<button class="add-row-btn" *ngIf="editMode" (click)="updateDialogClient()" [disabled]="!isProjetActif()">Enregistrer</button>
 								<button class="add-row-btn" (click)="closeDialog()">Annuler</button>
+							</div>
+						</div>
+					</div>
+
+					<!-- Modal pour la quantité autorisée -->
+					<div class="dialog-backdrop" *ngIf="showQuantiteModal" [@fadeIn] (click)="cancelQuantiteModal()">
+						<div class="quantite-modal" [@slideIn] (click)="$event.stopPropagation()">
+							<div class="quantite-modal-header">
+								<div class="quantite-modal-icon">
+									<i class="bi bi-calculator"></i>
+								</div>
+								<h3 class="quantite-modal-title">Quantité autorisée</h3>
+								<p class="quantite-modal-subtitle">
+									Définir la quantité autorisée pour ce client sur le projet actif
+									<strong *ngIf="contextProjet || projetActif">
+										"{{ (contextProjet || projetActif).nom }}"
+									</strong>
+								</p>
+							</div>
+							
+							<div class="quantite-modal-body">
+								<label class="quantite-label">
+									<i class="bi bi-box-seam"></i> Quantité autorisée
+								</label>
+								<input 
+									type="number" 
+									[(ngModel)]="quantiteAutorisee" 
+									placeholder="Entrer la quantité (0 pour aucune limite)"
+									class="quantite-input"
+									min="0"
+									step="0.01"
+									autofocus
+								/>
+								<p class="quantite-hint">
+									<i class="bi bi-info-circle"></i> 
+									Laisser 0 si vous ne souhaitez pas définir de limite pour ce client
+								</p>
+							</div>
+							
+							<div class="quantite-modal-actions">
+								<button class="btn-cancel" (click)="cancelQuantiteModal()">
+									<i class="bi bi-x-lg"></i> Annuler
+								</button>
+								<button class="btn-confirm" (click)="confirmQuantiteAndAssociate()">
+									<i class="bi bi-check-lg"></i> Confirmer
+								</button>
 							</div>
 						</div>
 					</div>

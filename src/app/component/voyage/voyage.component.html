@@ -1,118 +1,344 @@
-
 <app-navbar [isSidebarOpen]="isSidebarOpen" [sidebarWidth]="220" [sidebarClosedWidth]="70"></app-navbar>
 <div class="layout" [class.sidebar-closed]="!isSidebarOpen">
-	<app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
-	<main class="content">
-		<h2 class="page-title">Voyages</h2>
-		<section class="table-section">
-			<div class="table-toolbar">
-				<input class="table-filter" placeholder="Filtrer par bon livraison ou ticket" [(ngModel)]="voyageFilter" (input)="applyFilter()" />
-				<button class="add-row-btn" (click)="openAddDialog()">
-					<img src="assets/ajouter.png" alt="Ajouter" width="20" height="20" style="vertical-align:middle; margin-right:6px;" />
-					Ajouter un voyage
-				</button>
-			</div>
+  <app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+  <main class="content">
+    <!-- Breadcrumb Navigation -->
+    <app-breadcrumb [items]="breadcrumbItems" [showBackButton]="true"></app-breadcrumb>
+    
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="header-left">
+        <div class="header-icon">
+          <i class="bi bi-geo-alt"></i>
+        </div>
+        <div>
+          <h1 class="page-title">Voyages</h1>
+          <p class="page-subtitle">{{ filteredVoyages.length }} voyage(s) trouvé(s)</p>
+        </div>
+      </div>
+      <button class="add-btn" (click)="openAddDialog()" [disabled]="!canAddData()" [title]="!canAddData() ? 'Ce projet n\'est pas actif' : 'Ajouter un nouveau voyage'">
+        <i class="bi bi-plus-lg"></i>
+        <span>Ajouter un voyage</span>
+      </button>
+    </div>
 
-			<div class="mat-elevation-z8">
-				<table class="mat-mdc-table">
-					<thead>
-						<tr>
-							<th class="mat-mdc-header-cell">Bon Livraison</th>
-							<th class="mat-mdc-header-cell">Ticket</th>
-							<th class="mat-mdc-header-cell">Reste</th>
-							<th class="mat-mdc-header-cell">Date</th>
-							<th class="mat-mdc-header-cell">Poids Client</th>
-							<th class="mat-mdc-header-cell">Poids Dépôt</th>
-							<th class="mat-mdc-header-cell">Chauffeur</th>
-							<th class="mat-mdc-header-cell">Camion</th>
-							<th class="mat-mdc-header-cell">Client</th>
-							<th class="mat-mdc-header-cell">Dépôt</th>
-							<th class="mat-mdc-header-cell">Projet</th>
-							<th class="mat-mdc-header-cell">Actions</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr *ngFor="let vg of filteredVoyages" class="mat-mdc-row">
-							<td class="mat-mdc-cell">{{ vg.numBonLivraison }}</td>
-							<td class="mat-mdc-cell">{{ vg.numTicket }}</td>
-							<td class="mat-mdc-cell">{{ vg.reste }}</td>
-							<td class="mat-mdc-cell">{{ vg.date }}</td>
-							<td class="mat-mdc-cell">{{ vg.poidsClient }}</td>
-							<td class="mat-mdc-cell">{{ vg.poidsDepot }}</td>
-							<td class="mat-mdc-cell">{{ vg.chauffeurNom || vg.chauffeurId }}</td>
-							<td class="mat-mdc-cell">{{ vg.camionNom || vg.camionId }}</td>
-							<td class="mat-mdc-cell">{{ vg.clientNum || vg.clientId }}</td>
-							<td class="mat-mdc-cell">{{ vg.depotNom || vg.depotId }}</td>
-							<td class="mat-mdc-cell">{{ vg.projetId }}</td>
-							<td class="mat-mdc-cell">
-								<span class="actions-img-group">
-									<img src="assets/edit.png" alt="Edit" width="24" height="24" style="cursor:pointer; margin-right:8px;" (click)="selectVoyage(vg)" />
-									<img src="assets/delete.png" alt="Supprimer" width="24" height="24" style="cursor:pointer;" (click)="deleteVoyage(vg.id)" />
-								</span>
-							</td>
-						</tr>
-						<tr *ngIf="filteredVoyages.length === 0" class="mat-mdc-no-data-row">
-							<td class="mat-mdc-cell" colspan="8">Aucun voyage trouvé.</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
-		</section>
+    <!-- Toolbar -->
+    <div class="toolbar-section">
+      <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input 
+          type="text" 
+          class="search-input" 
+          placeholder="Rechercher par bon de livraison ou ticket..." 
+          [(ngModel)]="voyageFilter" 
+          (input)="applyFilter()"
+        />
+      </div>
+      <div class="toolbar-right">
+        <span class="results-count">{{ filteredVoyages.length }} résultat(s)</span>
+        <div class="page-size-selector">
+          <span>Afficher</span>
+          <select [(ngModel)]="pageSize" (change)="onPageSizeChange()" class="page-size-select">
+            <option *ngFor="let size of pageSizes" [value]="size">{{ size }}</option>
+          </select>
+          <span>lignes</span>
+        </div>
+      </div>
+    </div>
 
-		<!-- Dialog modal pour ajout ou modification voyage -->
-		<div class="dialog-backdrop" *ngIf="showAddDialog || editMode">
-			<div class="dialog-modal" style="padding:18px 16px 12px 16px; min-width:280px; gap:10px;">
-				<h3>{{ editMode ? 'Modifier le voyage' : 'Ajouter un voyage' }}</h3>
-				<div *ngIf="error" class="dialog-error">{{ error }}</div>
-				<label class="form-label">Bon Livraison</label>
-				<input [(ngModel)]="dialogVoyage.numBonLivraison" placeholder="Bon Livraison" class="table-filter" style="margin-bottom:6px;" />
-				<label class="form-label">Ticket</label>
-				<input [(ngModel)]="dialogVoyage.numTicket" placeholder="Ticket" class="table-filter" style="margin-bottom:6px;" />
-				<label class="form-label">Reste</label>
-				<input [(ngModel)]="dialogVoyage.reste" type="number" placeholder="Reste" class="table-filter" style="margin-bottom:6px;" />
-				<label class="form-label">Date</label>
-				<input [(ngModel)]="dialogVoyage.date" placeholder="Date" class="table-filter" style="margin-bottom:6px;" />
-				<div style="display:flex; gap:10px; margin-bottom:10px;">
-						<button class="add-row-btn active-btn" [class.active-btn]="dialogVoyage._type === 'client'" (click)="dialogVoyage._type = 'client'; dialogVoyage.depotId = undefined; dialogVoyage.poidsDepot = undefined;">Client</button>
-						<button class="add-row-btn active-btn" [class.active-btn]="dialogVoyage._type === 'depot'" (click)="dialogVoyage._type = 'depot'; dialogVoyage.clientId = undefined; dialogVoyage.poidsClient = undefined;">Dépôt</button>
-				</div>
-								<ng-container *ngIf="dialogVoyage._type === 'client'">
-									<label class="form-label">Client</label>
-									<select [(ngModel)]="dialogVoyage.clientId" class="table-filter" style="margin-bottom:6px;">
-											<option [ngValue]="null">-- Client --</option>
-											<option *ngFor="let cl of clients" [ngValue]="cl.id">{{ cl.nom }}</option>
-									</select>
-									<label *ngIf="dialogVoyage.clientId != null" class="form-label">Poids Client</label>
-									<input *ngIf="dialogVoyage.clientId != null" [(ngModel)]="dialogVoyage.poidsClient" type="number" placeholder="Poids Client" class="table-filter" style="margin-bottom:6px;" />
-								</ng-container>
-								<ng-container *ngIf="dialogVoyage._type === 'depot'">
-									<label class="form-label">Dépôt</label>
-									<select [(ngModel)]="dialogVoyage.depotId" class="table-filter" style="margin-bottom:6px;">
-											<option [ngValue]="null">-- Dépôt --</option>
-											<option *ngFor="let dp of depots" [ngValue]="dp.id">{{ dp.nom }}</option>
-									</select>
-									<label *ngIf="dialogVoyage.depotId != null" class="form-label">Poids Dépôt</label>
-									<input *ngIf="dialogVoyage.depotId != null" [(ngModel)]="dialogVoyage.poidsDepot" type="number" placeholder="Poids Dépôt" class="table-filter" style="margin-bottom:6px;" />
-								</ng-container>
-				<select [(ngModel)]="dialogVoyage.chauffeurId" class="table-filter" style="margin-bottom:6px;">
-					<option [ngValue]="null">-- Chauffeur --</option>
-					<option *ngFor="let ch of chauffeurs" [ngValue]="ch.id">{{ ch.nom }}</option>
-				</select>
-				<select [(ngModel)]="dialogVoyage.camionId" class="table-filter" style="margin-bottom:6px;">
-					<option [ngValue]="null">-- Camion --</option>
-					<option *ngFor="let ca of camions" [ngValue]="ca.id">{{ ca.matricule }}</option>
-				</select>
-				<select [(ngModel)]="dialogVoyage.projetId" class="table-filter" style="margin-bottom:6px;">
-					<option [ngValue]="null">-- Projet --</option>
-					<option *ngFor="let pr of projets" [ngValue]="pr.id">{{ pr.nom }}</option>
-				</select>
-				<input [(ngModel)]="dialogVoyage.userId" type="number" placeholder="User ID" class="table-filter" style="margin-bottom:6px;" />
-				<div class="dialog-actions">
-					<button class="add-row-btn" *ngIf="!editMode" (click)="addDialogVoyage()">Ajouter</button>
-					<button class="add-row-btn" *ngIf="editMode" (click)="updateDialogVoyage()">Enregistrer</button>
-					<button class="add-row-btn" (click)="closeDialog()">Annuler</button>
-				</div>
-			</div>
-		</div>
-	</main>
+    <!-- Table -->
+    <div class="table-container">
+      <table class="modern-table">
+        <thead>
+          <tr>
+            <th class="sortable" (click)="sortBy('numBonLivraison')">
+              <div class="th-content">
+                <span>Bon Livraison</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'numBonLivraison' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'numBonLivraison' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'numBonLivraison'
+                }"></i>
+              </div>
+            </th>
+            <th class="sortable" (click)="sortBy('numTicket')">
+              <div class="th-content">
+                <span>Ticket</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'numTicket' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'numTicket' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'numTicket'
+                }"></i>
+              </div>
+            </th>
+            <th class="sortable" (click)="sortBy('date')">
+              <div class="th-content">
+                <span>Date</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'date' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'date' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'date'
+                }"></i>
+              </div>
+            </th>
+            <th class="sortable" (click)="sortBy('reste')">
+              <div class="th-content">
+                <span>Reste <span *ngIf="projetActif || contextProjet" style="font-weight: 400; color: #64748b;">({{ getResteProjet() }})</span></span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'reste' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'reste' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'reste'
+                }"></i>
+              </div>
+            </th>
+            <th class="sortable" (click)="sortBy('poidsClient')">
+              <div class="th-content">
+                <span>Poids Client</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'poidsClient' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'poidsClient' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'poidsClient'
+                }"></i>
+              </div>
+            </th>
+            <th class="sortable" (click)="sortBy('poidsDepot')">
+              <div class="th-content">
+                <span>Poids Dépôt</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'poidsDepot' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'poidsDepot' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'poidsDepot'
+                }"></i>
+              </div>
+            </th>
+            <th>Client</th>
+            <th>Chauffeur</th>
+            <th>Camion</th>
+            <th class="actions-header">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let vg of paginatedVoyages" class="table-row">
+            <td>{{ vg.numBonLivraison }}</td>
+            <td>{{ vg.numTicket }}</td>
+            <td>{{ vg.date }}</td>
+            <td>
+              <span [style.color]="vg.clientId ? getResteColor(vg.reste || 0, getQuantiteAutorisee(vg.clientId)) : '#64748b'" style="font-weight: 600;">
+                {{ vg.reste || 0 }}
+              </span>
+            </td>
+            <td>{{ vg.poidsClient || '-' }}</td>
+            <td>{{ vg.poidsDepot || '-' }}</td>
+            <td>{{ getClientNomNumero(vg.clientId) }}</td>
+            <td>{{ vg.chauffeurNom || vg.chauffeurId || '-' }}</td>
+            <td>{{ vg.camionNom || vg.camionId || '-' }}</td>
+            <td class="actions-cell">
+              <button class="action-btn edit-btn" (click)="selectVoyage(vg)" [disabled]="!canAddData()" [title]="!canAddData() ? 'Ce projet n\'est pas actif' : 'Modifier'">
+                <i class="bi bi-pencil-fill"></i>
+              </button>
+              <button class="action-btn delete-btn" (click)="deleteVoyage(vg.id)" [disabled]="!canAddData()" [title]="!canAddData() ? 'Ce projet n\'est pas actif' : 'Supprimer'">
+                <i class="bi bi-trash-fill"></i>
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="paginatedVoyages.length === 0" class="no-data-row">
+            <td colspan="10">
+              <div class="no-data">
+                <i class="bi bi-inbox"></i>
+                <p>Aucun voyage trouvé</p>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-container" *ngIf="filteredVoyages.length > 0">
+      <div class="pagination-info">
+        Affichage de {{ (currentPage - 1) * pageSize + 1 }} à {{ Math.min(currentPage * pageSize, filteredVoyages.length) }} sur {{ filteredVoyages.length }} voyage(s)
+      </div>
+      <div class="pagination-controls">
+        <button class="page-btn" (click)="goToPage(1)" [disabled]="currentPage === 1">
+          <i class="bi bi-chevron-double-left"></i>
+        </button>
+        <button class="page-btn" (click)="goToPage(currentPage - 1)" [disabled]="currentPage === 1">
+          <i class="bi bi-chevron-left"></i>
+        </button>
+        <button 
+          *ngFor="let page of getPageNumbers()" 
+          class="page-btn" 
+          [class.active]="page === currentPage"
+          (click)="goToPage(page)"
+        >
+          {{ page }}
+        </button>
+        <button class="page-btn" (click)="goToPage(currentPage + 1)" [disabled]="currentPage === totalPages">
+          <i class="bi bi-chevron-right"></i>
+        </button>
+        <button class="page-btn" (click)="goToPage(totalPages)" [disabled]="currentPage === totalPages">
+          <i class="bi bi-chevron-double-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Dialog modal -->
+    <div class="dialog-backdrop" *ngIf="showAddDialog || editMode" (click)="closeDialog()">
+      <div class="dialog-modal" (click)="$event.stopPropagation()" style="max-width: 550px; max-height: 90vh; overflow-y: auto; overflow-x: hidden;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+          <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+            <i class="bi bi-truck" style="font-size: 24px; color: white;"></i>
+          </div>
+          <h3 style="margin: 0; font-size: 24px; font-weight: 700; color: #1e293b;">{{ editMode ? 'Modifier le voyage' : 'Nouveau voyage' }}</h3>
+        </div>
+        
+        <div *ngIf="error" style="background: #fee2e2; color: #dc2626; padding: 12px 16px; border-radius: 10px; margin-bottom: 20px; font-size: 13px; border-left: 4px solid #dc2626;">
+          <i class="bi bi-exclamation-triangle-fill" style="margin-right: 8px;"></i>{{ error }}
+        </div>
+        
+        <!-- Section: Informations du voyage -->
+        <div style="background: #f8fafc; padding: 16px; border-radius: 12px; margin-bottom: 16px;">
+          <div style="font-size: 12px; font-weight: 600; color: #667eea; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+            <i class="bi bi-file-text"></i> Informations du voyage
+          </div>
+          
+          <label style="display: block; margin-top: 12px; font-weight: 500; color: #4a5568; font-size: 13px;">Numéro de bon de livraison *</label>
+          <input [(ngModel)]="dialogVoyage.numBonLivraison" placeholder="Entrer le numéro de bon" style="background: white;" />
+          
+          <label style="display: block; margin-top: 12px; font-weight: 500; color: #4a5568; font-size: 13px;">Numéro de ticket *</label>
+          <input [(ngModel)]="dialogVoyage.numTicket" placeholder="Entrer le numéro de ticket" style="background: white;" />
+          
+          <label style="display: block; margin-top: 12px; font-weight: 500; color: #64748b; font-size: 13px;">
+            <i class="bi bi-calculator"></i> Reste du client (calculé automatiquement)
+          </label>
+          <div style="position: relative;">
+            <input 
+              [value]="dialogVoyage.reste || 0" 
+              type="number" 
+              placeholder="Calculé automatiquement" 
+              disabled 
+              [style.background]="'#f1f5f9'" 
+              [style.color]="dialogVoyage.clientId ? getResteColor(dialogVoyage.reste || 0, getQuantiteAutorisee(dialogVoyage.clientId)) : '#64748b'" 
+              [style.font-weight]="'600'"
+              style="cursor: not-allowed;" 
+            />
+          </div>
+        </div>
+        
+        <!-- Section: Type de destination -->
+        <div style="margin-bottom: 16px;">
+          <div style="font-size: 12px; font-weight: 600; color: #667eea; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+            <i class="bi bi-geo-alt"></i> Destination
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <button 
+              type="button"
+              [style.background]="dialogVoyage._type === 'client' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f1f5f9'"
+              [style.color]="dialogVoyage._type === 'client' ? 'white' : '#64748b'"
+              [style.border]="dialogVoyage._type === 'client' ? 'none' : '2px solid #e2e8f0'"
+              style="padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px;"
+              (click)="dialogVoyage._type = 'client'; dialogVoyage.depotId = undefined; dialogVoyage.poidsDepot = undefined;"
+            >
+              <i class="bi bi-person-fill" style="font-size: 18px;"></i> Client
+            </button>
+            <button 
+              type="button"
+              [style.background]="dialogVoyage._type === 'depot' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f1f5f9'"
+              [style.color]="dialogVoyage._type === 'depot' ? 'white' : '#64748b'"
+              [style.border]="dialogVoyage._type === 'depot' ? 'none' : '2px solid #e2e8f0'"
+              style="padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px;"
+              (click)="dialogVoyage._type = 'depot'; dialogVoyage.clientId = undefined; dialogVoyage.poidsClient = undefined; updateResteForDepot();"
+            >
+              <i class="bi bi-building" style="font-size: 18px;"></i> Dépôt
+            </button>
+          </div>
+        </div>
+        
+        <div *ngIf="dialogVoyage._type === 'client'" style="background: #f0fdf4; padding: 16px; border-radius: 12px; margin-bottom: 16px; border: 2px solid #86efac;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #15803d; font-size: 13px;">
+            <i class="bi bi-person-check-fill"></i> Client *
+          </label>
+          <select [(ngModel)]="dialogVoyage.clientId" (change)="updateResteEnTempsReel()" style="background: white;">
+            <option [ngValue]="null" disabled>-- Sélectionner un client --</option>
+            <option *ngFor="let cl of clients" [ngValue]="cl.id">{{ cl.nom }}</option>
+          </select>
+          
+          <div *ngIf="dialogVoyage.clientId" style="margin-top: 12px; padding: 12px; background: white; border-radius: 8px; font-size: 12px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: #64748b;">Quantité autorisée:</span>
+              <span style="font-weight: 600; color: #10b981;">{{ getQuantiteAutorisee(dialogVoyage.clientId) }}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: #64748b;">Déjà livré:</span>
+              <span style="font-weight: 600; color: #f59e0b;">{{ getTotalLivreClient(dialogVoyage.clientId) }}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+              <span style="color: #64748b;">Reste disponible:</span>
+              <span style="font-weight: 700;" [style.color]="getResteColor(getResteClient(dialogVoyage.clientId), getQuantiteAutorisee(dialogVoyage.clientId))">
+                {{ getResteClient(dialogVoyage.clientId) }}
+              </span>
+            </div>
+          </div>
+          
+          <label style="display: block; margin-top: 12px; margin-bottom: 8px; font-weight: 500; color: #15803d; font-size: 13px;">
+            <i class="bi bi-box-seam"></i> Poids client *
+          </label>
+          <input [(ngModel)]="dialogVoyage.poidsClient" (input)="updateResteEnTempsReel()" type="number" placeholder="Entrer le poids" style="background: white;" />
+        </div>
+        
+        <div *ngIf="dialogVoyage._type === 'depot'" style="background: #fef3c7; padding: 16px; border-radius: 12px; margin-bottom: 16px; border: 2px solid #fcd34d;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #92400e; font-size: 13px;">
+            <i class="bi bi-building-fill-check"></i> Dépôt *
+          </label>
+          <select [(ngModel)]="dialogVoyage.depotId" (change)="updateResteForDepot()" style="background: white;">
+            <option [ngValue]="null" disabled>-- Sélectionner un dépôt --</option>
+            <option *ngFor="let dp of depots" [ngValue]="dp.id">{{ dp.nom }}</option>
+          </select>
+          <label style="display: block; margin-top: 12px; margin-bottom: 8px; font-weight: 500; color: #92400e; font-size: 13px;">
+            <i class="bi bi-box-seam"></i> Poids Dépôt *
+          </label>
+          <input [(ngModel)]="dialogVoyage.poidsDepot" (input)="updateResteForDepot()" type="number" placeholder="Entrer le poids" style="background: white;" />
+        </div>
+        
+        <!-- Section: Ressources -->
+        <div style="background: #f8fafc; padding: 16px; border-radius: 12px; margin-bottom: 16px;">
+          <div style="font-size: 12px; font-weight: 600; color: #667eea; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+            <i class="bi bi-people"></i> Ressources
+          </div>
+          
+          <label style="display: block; margin-top: 12px; font-weight: 500; color: #4a5568; font-size: 13px;">
+            <i class="bi bi-person-badge"></i> Chauffeur *
+          </label>
+          <select [(ngModel)]="dialogVoyage.chauffeurId" style="background: white;">
+            <option [ngValue]="null" disabled>-- Sélectionner un chauffeur --</option>
+            <option *ngFor="let ch of chauffeurs" [ngValue]="ch.id">{{ ch.nom }}</option>
+          </select>
+          
+          <label style="display: block; margin-top: 12px; font-weight: 500; color: #4a5568; font-size: 13px;">
+            <i class="bi bi-truck-front"></i> Camion *
+          </label>
+          <select [(ngModel)]="dialogVoyage.camionId" style="background: white;">
+            <option [ngValue]="null" disabled>-- Sélectionner un camion --</option>
+            <option *ngFor="let ca of camions" [ngValue]="ca.id">{{ ca.matricule }}</option>
+          </select>
+        </div>
+        
+        <div *ngIf="!projetActifId && !contextProjetId" style="background: #f8fafc; padding: 16px; border-radius: 12px; margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #4a5568; font-size: 13px;">
+            <i class="bi bi-folder"></i> Projet *
+          </label>
+          <select [(ngModel)]="dialogVoyage.projetId" [disabled]="!!projetActifId" style="background: white;">
+            <option [ngValue]="null" disabled>-- Sélectionner un projet --</option>
+            <option *ngFor="let pr of projets" [ngValue]="pr.id">{{ pr.nom }}</option>
+          </select>
+        </div>
+        
+        <div class="dialog-actions">
+          <button *ngIf="!editMode" (click)="addDialogVoyage()" [disabled]="!canAddData()">Ajouter</button>
+          <button *ngIf="editMode" (click)="updateDialogVoyage()" [disabled]="!canAddData()">Enregistrer</button>
+          <button (click)="closeDialog()">Annuler</button>
+        </div>
+      </div>
+    </div>
+  </main>
 </div>

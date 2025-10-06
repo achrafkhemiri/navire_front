@@ -1,50 +1,55 @@
-
-
 <app-navbar 
   [isSidebarOpen]="isSidebarOpen" 
-  [sidebarWidth]="220" 
-  [sidebarClosedWidth]="70">
+  [sidebarWidth]="280" 
+  [sidebarClosedWidth]="75">
 </app-navbar>
 
 <div class="layout" [class.sidebar-closed]="!isSidebarOpen">
   <app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
   <main class="content">
-    <h2 class="mb-4 text-center">Paramètres du projet</h2>
-    <div class="row g-4 justify-content-center">
-      <div class="col-md-6 col-lg-3">
-        <div class="card text-center shadow-sm">
-          <div class="card-body">
-            <i class="bi bi-person-badge fs-1 text-primary mb-2"></i>
-            <h6 class="card-title">Client</h6>
-            <a [routerLink]="['/client']" class="btn btn-outline-primary btn-sm mt-2">Voir les clients</a>
-          </div>
+    <!-- Header avec titre et informations projet -->
+    <div class="page-header">
+      <div class="header-content">
+        <div class="header-icon">
+          <i class="bi bi-gear-fill"></i>
+        </div>
+        <div class="header-text">
+          <h1 class="page-title">Paramètres du projet</h1>
+          <p class="page-subtitle" *ngIf="projet">
+            <strong>{{ projet.nom }}</strong> - {{ projet.nomProduit }}
+          </p>
+          <p class="page-subtitle" *ngIf="!projet">
+            Gérez les différents modules de votre projet
+          </p>
         </div>
       </div>
-      <div class="col-md-6 col-lg-3">
-        <div class="card text-center shadow-sm">
-          <div class="card-body">
-            <i class="bi bi-building fs-1 text-success mb-2"></i>
-            <h6 class="card-title">Dépôt</h6>
-            <a [routerLink]="['/depot']" class="btn btn-outline-success btn-sm mt-2">Voir les dépôts</a>
-          </div>
+    </div>
+
+    <!-- Grid de cartes modules -->
+    <div class="modules-grid">
+      <div class="module-card" *ngFor="let card of cards">
+        <div class="card-icon-wrapper">
+          <i class="bi {{card.icon}} {{card.color}}"></i>
         </div>
-      </div>
-      <div class="col-md-6 col-lg-3">
-        <div class="card text-center shadow-sm">
-          <div class="card-body">
-            <i class="bi bi-truck fs-1 text-warning mb-2"></i>
-            <h6 class="card-title">Camion</h6>
-            <a [routerLink]="['/camion']" class="btn btn-outline-warning btn-sm mt-2">Voir les camions</a>
-          </div>
+        <div class="card-content">
+          <h3 class="card-title">{{card.title}}</h3>
+          <p class="card-description">Gérer les {{card.title.toLowerCase()}}</p>
         </div>
+        <a [routerLink]="card.dynamic ? ['/projet', projetId, 'voyages'] : [card.link]" 
+           class="card-action">
+          <span>{{card.text}}</span>
+          <i class="bi bi-arrow-right"></i>
+        </a>
       </div>
-      <div class="col-md-6 col-lg-3">
-        <div class="card text-center shadow-sm">
-          <div class="card-body">
-            <i class="bi bi-person-lines-fill fs-1 text-info mb-2"></i>
-            <h6 class="card-title">Chauffeur</h6>
-            <a [routerLink]="['/chauffeur']" class="btn btn-outline-info btn-sm mt-2">Voir les chauffeurs</a>
-          </div>
+    </div>
+
+    <!-- Section informations supplémentaires -->
+    <div class="info-section">
+      <div class="info-card">
+        <i class="bi bi-info-circle"></i>
+        <div>
+          <h4>Besoin d'aide ?</h4>
+          <p>Chaque module vous permet de gérer un aspect spécifique de votre projet.</p>
         </div>
       </div>
     </div>

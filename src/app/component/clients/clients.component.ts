@@ -10,6 +10,7 @@ import { ClientDTO } from '../../api/model/clientDTO';
 export class ClientsComponent {
   clients: ClientDTO[] = [];
   filteredClients: ClientDTO[] = [];
+  paginatedClients: ClientDTO[] = [];
   selectedClient: ClientDTO | null = null;
   newClient: ClientDTO = { nom: '', numero: '' };
   editMode: boolean = false;
@@ -18,6 +19,18 @@ export class ClientsComponent {
   showAddClient: boolean = false;
   clientFilter: string = '';
   dialogClient: ClientDTO = { nom: '', numero: '' };
+  
+  // Pagination
+  currentPage: number = 1;
+  pageSize: number = 5;
+  totalPages: number = 1;
+  pageSizes: number[] = [5, 10, 20, 50];
+  
+  // Sorting
+  sortColumn: string = '';
+  sortDirection: 'asc' | 'desc' = 'asc';
+  
+  Math = Math;
 
   constructor(
     private clientService: ClientControllerService
@@ -30,10 +43,8 @@ export class ClientsComponent {
       next: async (data) => {
         if (data instanceof Blob) {
           const text = await data.text();
-          console.log('getAllClients - blob text:', text);
           try {
             const json = JSON.parse(text);
-            console.log('getAllClients - parsed json:', json);
             if (Array.isArray(json)) {
               this.clients = json;
             } else {
@@ -44,13 +55,12 @@ export class ClientsComponent {
             this.clients = [];
           }
         } else if (Array.isArray(data)) {
-          console.log('getAllClients - json array, length:', data.length);
           this.clients = data;
         } else {
-          console.log('getAllClients - unexpected response:', data);
           this.clients = [];
         }
         this.filteredClients = this.clients;
+        this.updatePagination();
       },
       error: (err) => {
         this.error = 'Erreur lors du chargement des clients';
@@ -70,6 +80,89 @@ export class ClientsComponent {
         client.numero?.toLowerCase().includes(this.clientFilter.toLowerCase())
       );
     }
+    this.updatePagination();
+  }
+
+  sortBy(column: string) {
+    if (this.sortColumn === column) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortColumn = column;
+      this.sortDirection = 'asc';
+    }
+    this.sortClients();
+    this.updatePagination();
+  }
+
+  sortClients() {
+    this.filteredClients.sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      switch (this.sortColumn) {
+        case 'id':
+          aVal = a.id ?? 0;
+          bVal = b.id ?? 0;
+          break;
+        case 'nom':
+          aVal = a.nom ?? '';
+          bVal = b.nom ?? '';
+          break;
+        case 'numero':
+          aVal = a.numero ?? '';
+          bVal = b.numero ?? '';
+          break;
+        default:
+          return 0;
+      }
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        aVal = aVal.toLowerCase();
+        bVal = bVal.toLowerCase();
+      }
+
+      if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
+  updatePagination() {
+    this.totalPages = Math.ceil(this.filteredClients.length / this.pageSize);
+    if (this.currentPage > this.totalPages) {
+      this.currentPage = this.totalPages || 1;
+    }
+    const startIndex = (this.currentPage - 1) * this.pageSize;
+    const endIndex = startIndex + this.pageSize;
+    this.paginatedClients = this.filteredClients.slice(startIndex, endIndex);
+  }
+
+  goToPage(page: number) {
+    if (page >= 1 && page <= this.totalPages) {
+      this.currentPage = page;
+      this.updatePagination();
+    }
+  }
+
+  getPageNumbers(): number[] {
+    const pages: number[] = [];
+    const maxPagesToShow = 5;
+    let startPage = Math.max(1, this.currentPage - Math.floor(maxPagesToShow / 2));
+    let endPage = Math.min(this.totalPages, startPage + maxPagesToShow - 1);
+
+    if (endPage - startPage + 1 < maxPagesToShow) {
+      startPage = Math.max(1, endPage - maxPagesToShow + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  }
+
+  onPageSizeChange() {
+    this.currentPage = 1;
+    this.updatePagination();
   }
 
   selectClient(client: ClientDTO) {

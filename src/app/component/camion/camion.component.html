@@ -1,72 +1,169 @@
 <app-navbar [isSidebarOpen]="isSidebarOpen" [sidebarWidth]="220" [sidebarClosedWidth]="70"></app-navbar>
 <div class="layout" [class.sidebar-closed]="!isSidebarOpen">
-	<app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
-	<main class="content">
-		<h2 class="page-title">Tous les Camions</h2>
-		<div *ngIf="error" class="error">{{ error }}</div>
-		
-		<section class="table-section">
-			<div class="table-toolbar">
-				<input class="table-filter" placeholder="Filtrer par matricule ou société" [(ngModel)]="camionFilter" (input)="filterCamions()" />
-				<button class="add-row-btn" (click)="openAddDialog()">
-					<img src="assets/ajouter.png" alt="Ajouter" width="20" height="20" style="vertical-align:middle; margin-right:6px;" />
-					Ajouter un camion
-				</button>
-			</div>
+  <app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+  <main class="content">
+    <!-- Breadcrumb Navigation -->
+    <app-breadcrumb [items]="breadcrumbItems" [showBackButton]="true"></app-breadcrumb>
+    
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="header-left">
+        <div class="header-icon">
+          <i class="bi bi-truck"></i>
+        </div>
+        <div>
+          <h1 class="page-title">Camions</h1>
+          <p class="page-subtitle">{{ filteredCamions.length }} camion(s) trouvé(s)</p>
+        </div>
+      </div>
+      <button class="add-btn" (click)="openAddDialog()">
+        <i class="bi bi-plus-lg"></i>
+        <span>Ajouter un camion</span>
+      </button>
+    </div>
 
-			<div class="mat-elevation-z8">
-				<table class="mat-mdc-table">
-					<thead>
-						<tr>
-							<th class="mat-mdc-header-cell">ID</th>
-							<th class="mat-mdc-header-cell">Matricule</th>
-							<th class="mat-mdc-header-cell">Société</th>
-							<th class="mat-mdc-header-cell">Bon Livraison</th>
-							<th class="mat-mdc-header-cell">Actions</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr *ngFor="let cam of filteredCamions" class="mat-mdc-row">
-							<td class="mat-mdc-cell">{{ cam.id }}</td>
-							<td class="mat-mdc-cell">{{ cam.matricule }}</td>
-							<td class="mat-mdc-cell">{{ cam.societe }}</td>
-							<td class="mat-mdc-cell">{{ cam.numBonLivraison }}</td>
-							<td class="mat-mdc-cell">
-								<span class="actions-img-group">
-									<img src="assets/edit.png" alt="Edit" width="24" height="24" style="cursor:pointer; margin-right:8px;" (click)="editCamion(cam)" />
-									<img src="assets/delete.png" alt="Supprimer" width="24" height="24" style="cursor:pointer;" (click)="deleteCamion(cam.id)" />
-								</span>
-							</td>
-						</tr>
-						<tr *ngIf="filteredCamions.length === 0" class="mat-mdc-no-data-row">
-							<td class="mat-mdc-cell" colspan="5">Aucun camion trouvé.</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
-		</section>
+    <div *ngIf="error" class="error">{{ error }}</div>
 
-		<!-- Dialog modal pour ajout ou modification camion -->
-		<div class="dialog-backdrop" *ngIf="showAddDialog">
-			<div class="dialog-modal">
-				<h3>{{ editMode ? 'Modifier le camion' : 'Ajouter un camion' }}</h3>
-				<div class="form-group">
-					<label for="matricule">Matricule:</label>
-					<input type="text" id="matricule" [(ngModel)]="dialogCamion.matricule" name="matricule" required />
-				</div>
-				<div class="form-group">
-					<label for="societe">Société:</label>
-					<input type="text" id="societe" [(ngModel)]="dialogCamion.societe" name="societe" required />
-				</div>
-				<div class="form-group">
-					<label for="numBonLivraison">Bon Livraison:</label>
-					<input type="text" id="numBonLivraison" [(ngModel)]="dialogCamion.numBonLivraison" name="numBonLivraison" required />
-				</div>
-				<div class="dialog-actions">
-					<button type="button" (click)="cancel()">Annuler</button>
-					<button type="submit" (click)="editMode ? updateCamion() : saveCamion()">{{ editMode ? 'Modifier' : 'Ajouter' }}</button>
-				</div>
-			</div>
-		</div>
-	</main>
+    <!-- Toolbar -->
+    <div class="toolbar-section">
+      <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input 
+          type="text" 
+          class="search-input" 
+          placeholder="Rechercher par matricule ou société..." 
+          [(ngModel)]="camionFilter" 
+          (input)="filterCamions()"
+        />
+      </div>
+      <div class="toolbar-right">
+        <span class="results-count">{{ filteredCamions.length }} résultat(s)</span>
+        <div class="page-size-selector">
+          <span>Afficher</span>
+          <select [(ngModel)]="pageSize" (change)="onPageSizeChange()" class="page-size-select">
+            <option *ngFor="let size of pageSizes" [value]="size">{{ size }}</option>
+          </select>
+          <span>lignes</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-container">
+      <table class="modern-table">
+        <thead>
+          <tr>
+            <th class="sortable" (click)="sortBy('id')">
+              <div class="th-content">
+                <span>ID</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'id' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'id' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'id'
+                }"></i>
+              </div>
+            </th>
+            <th class="sortable" (click)="sortBy('matricule')">
+              <div class="th-content">
+                <span>Matricule</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'matricule' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'matricule' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'matricule'
+                }"></i>
+              </div>
+            </th>
+            <th class="sortable" (click)="sortBy('societe')">
+              <div class="th-content">
+                <span>Société</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'societe' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'societe' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'societe'
+                }"></i>
+              </div>
+            </th>
+            <th class="sortable" (click)="sortBy('numBonLivraison')">
+              <div class="th-content">
+                <span>Bon Livraison</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'numBonLivraison' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'numBonLivraison' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'numBonLivraison'
+                }"></i>
+              </div>
+            </th>
+            <th class="actions-header text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let cam of paginatedCamions" class="table-row">
+            <td class="id-cell">{{ cam.id }}</td>
+            <td>{{ cam.matricule }}</td>
+            <td>{{ cam.societe }}</td>
+            <td>{{ cam.numBonLivraison }}</td>
+            <td class="actions-cell">
+              <button class="action-btn edit-btn" (click)="editCamion(cam)" title="Modifier">
+                <i class="bi bi-pencil-fill"></i>
+              </button>
+              <button class="action-btn delete-btn" (click)="deleteCamion(cam.id)" title="Supprimer">
+                <i class="bi bi-trash-fill"></i>
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="paginatedCamions.length === 0" class="no-data-row">
+            <td colspan="5">
+              <div class="no-data">
+                <i class="bi bi-inbox"></i>
+                <p>Aucun camion trouvé</p>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-container" *ngIf="filteredCamions.length > 0">
+      <div class="pagination-info">
+        Affichage de {{ (currentPage - 1) * pageSize + 1 }} à {{ Math.min(currentPage * pageSize, filteredCamions.length) }} sur {{ filteredCamions.length }} camion(s)
+      </div>
+      <div class="pagination-controls">
+        <button class="page-btn" (click)="goToPage(1)" [disabled]="currentPage === 1">
+          <i class="bi bi-chevron-double-left"></i>
+        </button>
+        <button class="page-btn" (click)="goToPage(currentPage - 1)" [disabled]="currentPage === 1">
+          <i class="bi bi-chevron-left"></i>
+        </button>
+        <button 
+          *ngFor="let page of getPageNumbers()" 
+          class="page-btn" 
+          [class.active]="page === currentPage"
+          (click)="goToPage(page)"
+        >
+          {{ page }}
+        </button>
+        <button class="page-btn" (click)="goToPage(currentPage + 1)" [disabled]="currentPage === totalPages">
+          <i class="bi bi-chevron-right"></i>
+        </button>
+        <button class="page-btn" (click)="goToPage(totalPages)" [disabled]="currentPage === totalPages">
+          <i class="bi bi-chevron-double-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Dialog modal -->
+    <div class="dialog-backdrop" *ngIf="showAddDialog" (click)="cancel()">
+      <div class="dialog-modal" (click)="$event.stopPropagation()">
+        <h3>{{ editMode ? 'Modifier le camion' : 'Ajouter un camion' }}</h3>
+        <input [(ngModel)]="dialogCamion.matricule" placeholder="Matricule" />
+        <input [(ngModel)]="dialogCamion.societe" placeholder="Société" />
+        <input [(ngModel)]="dialogCamion.numBonLivraison" placeholder="Numéro bon de livraison" />
+        <div class="dialog-actions">
+          <button (click)="editMode ? updateCamion() : saveCamion()">{{ editMode ? 'Enregistrer' : 'Ajouter' }}</button>
+          <button (click)="cancel()">Annuler</button>
+        </div>
+      </div>
+    </div>
+  </main>
 </div>

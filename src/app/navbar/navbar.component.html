@@ -1,14 +1,34 @@
 <header class="navbar" [ngStyle]="{'left.px': isSidebarOpen ? sidebarWidth : sidebarClosedWidth}">
-  <div class="logo">
-    <i class="fas fa-layer-group"></i>
-    <span>{{ getProjectDisplay() }}</span>
+  <div class="navbar-left">
+    <div class="logo ms-5 px-3">
+      <i class="bi bi-compass"></i>
+      <div class=" logo-text">
+        <span class="project-label">Projet Actif</span>
+        <span class="project-name">{{ getProjectDisplay() }}</span>
+      </div>
+    </div>
   </div>
 
-  <div class="actions">
-    <button class="toggle-btn" (click)="toggleViewMode()">{{ getButtonText() }}</button>
-    <button class="logout-btn" (click)="logout()">
-      <i class="fas fa-sign-out-alt"></i>
-      Déconnexion
+  <div class="navbar-right">
+    <button class="toggle-view-btn" (click)="toggleViewMode()">
+      <i class="bi" [ngClass]="isAllVoyagesView ? 'bi-folder2' : 'bi-grid-3x3-gap'"></i>
+      <span>{{ getButtonText() }}</span>
     </button>
+
+    <div class="notifications-icon" routerLink="/notifications" title="Notifications">
+      <i class="bi bi-bell"></i>
+      <span class="badge" *ngIf="notificationsCount > 0">{{ notificationsCount }}</span>
+    </div>
+    
+    <div class="user-section">
+      <div class="user-info">
+        <i class="bi bi-person-circle"></i>
+        <span class="user-name">Utilisateur</span>
+      </div>
+      <button class="logout-btn" (click)="logout()" title="Se déconnecter">
+        <i class="bi bi-box-arrow-right"></i>
+        <span>Déconnexion</span>
+      </button>
+    </div>
   </div>
 </header>

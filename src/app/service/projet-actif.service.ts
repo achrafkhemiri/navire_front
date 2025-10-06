@@ -37,7 +37,8 @@ export class ProjetActifService {
     const stored = localStorage.getItem(this.STORAGE_KEY);
     if (stored) {
       this.projetActif = JSON.parse(stored);
-      this.projetActifSubject.next(this.projetActif);
+      // Ne pas émettre ici pour éviter les boucles infinies
+      // L'émission sera faite uniquement via setProjetActif()
       return this.projetActif;
     }
     return null;

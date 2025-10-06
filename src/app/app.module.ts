@@ -2,6 +2,7 @@ import { ProjetParametreComponent } from './component/projet/projet-parametre.co
 import { ProjetListComponent } from './projet-list/projet-list.component';
 import { ProjetComponent } from './component/projet/projet.component';
 import { VoyageComponent } from './component/voyage/voyage.component';
+import { BreadcrumbComponent } from './component/breadcrumb/breadcrumb.component';
 import { NgModule } from '@angular/core';
 import { HTTP_INTERCEPTORS } from '@angular/common/http';
 import { BASE_PATH } from './api/variables';
@@ -39,6 +40,8 @@ import { ClientComponent } from './component/client/client.component';
 import { ClientsComponent } from './component/clients/clients.component';
 import { DepotsComponent } from './component/depots/depots.component';
 import { RouterModule } from '@angular/router';
+import { AuthErrorInterceptor } from './auth-error.interceptor';
+import { NotificationsComponent } from './component/notifications/notifications.component';
 
 @NgModule({ 
   declarations: [
@@ -64,6 +67,8 @@ import { RouterModule } from '@angular/router';
   // Ajout du composant projet-parametre
   ProjetParametreComponent,
   ProjetListComponent,
+  BreadcrumbComponent,
+  NotificationsComponent,
   ],
   imports: [
     BrowserModule,
@@ -86,8 +91,13 @@ import { RouterModule } from '@angular/router';
       provide: HTTP_INTERCEPTORS,
       useClass: SsrJwtInterceptor,
       multi: true
-    }
-    , { provide: BASE_PATH, useValue: 'http://localhost:8086' }
+    },
+    {
+      provide: HTTP_INTERCEPTORS,
+      useClass: AuthErrorInterceptor,
+      multi: true
+    },
+    { provide: BASE_PATH, useValue: 'http://localhost:8086' }
   ],
   bootstrap: [AppComponent]
 })

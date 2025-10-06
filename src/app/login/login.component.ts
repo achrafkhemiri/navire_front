@@ -1,4 +1,5 @@
 import { ProjetActifService } from '../service/projet-actif.service';
+import { AuthService } from '../service/auth.service';
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { UserControllerService } from '../api/api/userController.service';
@@ -15,7 +16,8 @@ export class LoginComponent implements OnInit {
     private userService: UserControllerService,
     private router: Router,
     private projetActifService: ProjetActifService,
-    private projetControllerService: ProjetControllerService
+    private projetControllerService: ProjetControllerService,
+    private authService: AuthService
   ) {}
   // Ajout pour récupération du projet actif côté frontend
   // À adapter selon la logique métier (ex: projet actif = projet avec active=true)
@@ -73,13 +75,11 @@ export class LoginComponent implements OnInit {
           projets.text().then((txt: string) => {
             try {
               const parsed = JSON.parse(txt);
-              console.log('Projets:', parsed);
             } catch (e) {
               console.error('Erreur parsing JSON projets (login ngOnInit):', e);
             }
           }).catch((e: any) => console.error('Erreur lecture Blob projets (login ngOnInit):', e));
         } else {
-          console.log('Projets:', projets);
         }
       },
       error: (err: any) => {
@@ -92,49 +92,38 @@ export class LoginComponent implements OnInit {
 
 
   onSubmit() {
-    const loginData: LoginDTO = {
-      mail: this.email,
-      password: this.password
-    };
+    const loginData: LoginDTO = { mail: this.email, password: this.password };
     this.userService.login(loginData).subscribe({
       next: async (result: any) => {
-        // Parser la réponse login si c'est un Blob
         if (result instanceof Blob) {
-          try {
-            const txt = await result.text();
-            if (txt) {
-              try { result = JSON.parse(txt); } catch(e) { /* non-JSON */ }
-            }
-          } catch(e) {
-            // ignore, result stays as Blob
-          }
+          try { const txt = await result.text(); if (txt) { try { result = JSON.parse(txt); } catch {} } } catch {}
         }
+        this.authService.markLoggedIn();
 
-        console.log('Réponse login:', result);
-        // Le cookie JWT HttpOnly est envoyé par le backend
-        // SSR: le cookie sera lu par l'intercepteur SsrJwtInterceptor
-        // Récupérer le projet actif (à adapter selon votre logique)
-        const projetActif = result?.projetActif || null; // Adapter selon la réponse API
-        console.log('Projet actif reçu:', projetActif);
+        const projetActif = result?.projetActif || null;
+        let cibleNavig = ['/'];
         if (projetActif && projetActif.id) {
           this.projetActifService.setProjetActif(projetActif);
-          try { window.sessionStorage.setItem('projetActifId', projetActif.id); } catch(e){}
-          this.router.navigate(['/projet', projetActif.id, 'parametre']);
+          try { window.sessionStorage.setItem('projetActifId', projetActif.id); } catch {}
+          cibleNavig = ['/projet', projetActif.id, 'parametre'];
+          this.router.navigate(cibleNavig);
         } else {
-          // Si le projet actif n'est pas dans la réponse, le récupérer côté frontend
           const actif = await this.chargerProjetActifApresLogin();
-          console.log('Projet actif après chargement:', actif);
-          if (actif && actif.id) {
-            this.router.navigate(['/projet', actif.id, 'parametre']);
-          } else {
-            // Pas de projet actif trouvé, naviguer vers l'accueil
-            this.router.navigate(['/']);
-          }
+            if (actif && actif.id) {
+              cibleNavig = ['/projet', actif.id, 'parametre'];
+            }
+            this.router.navigate(cibleNavig);
         }
+        // Fallback si toujours sur /login après 400ms
+        setTimeout(() => {
+          if (window.location.pathname.includes('login')) {
+            this.authService.markLoggedIn();
+            this.router.navigate(cibleNavig);
+          }
+        }, 400);
       },
       error: (err: any) => {
         console.error('Login error:', err);
-        // Affiche un message d'erreur à l'utilisateur
       }
     });
   }

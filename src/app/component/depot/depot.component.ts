@@ -6,6 +6,7 @@ import { BASE_PATH } from '../../api/variables';
 import { ProjetActifService } from '../../service/projet-actif.service';
 import { ProjetControllerService } from '../../api/api/projetController.service';
 import { DepotDTO } from '../../api/model/depotDTO';
+import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
 
 @Component({
   selector: 'app-depot',
@@ -15,7 +16,14 @@ import { DepotDTO } from '../../api/model/depotDTO';
 export class DepotComponent {
   depots: DepotDTO[] = [];
   filteredDepots: DepotDTO[] = [];
+  paginatedDepots: DepotDTO[] = [];
+  // Global active project
   projetActifId: number | null = null;
+  projetActif: any = null;
+  // Context (visited) project from session
+  contextProjetId: number | null = null;
+  contextProjet: any = null;
+  breadcrumbItems: BreadcrumbItem[] = [];
   selectedDepot: DepotDTO | null = null;
   dialogDepot: DepotDTO = { nom: '' };
   editMode: boolean = false;
@@ -23,24 +31,89 @@ export class DepotComponent {
   isSidebarOpen: boolean = true;
   showAddDialog: boolean = false;
   depotFilter: string = '';
+  
+  // Pagination
+  currentPage: number = 1;
+  pageSize: number = 5;
+  totalPages: number = 1;
+  pageSizes: number[] = [5, 10, 20, 50];
+  
+  // Tri
+  sortColumn: string = '';
+  sortDirection: 'asc' | 'desc' = 'asc';
+  
+  Math = Math;
 
   constructor(private depotService: DepotControllerService, private projetActifService: ProjetActifService, private projetService: ProjetControllerService, private http: HttpClient, @Inject(BASE_PATH) private basePath: string) {
-    this.loadProjetActif();
+    this.initializeProjetContext();
   }
 
-  loadProjetActif() {
-    // Récupère le projet actif depuis le service (préféré) ou localStorage
-    const projet = this.projetActifService.getProjetActif?.();
-    if (projet && projet.id) {
-      this.projetActifId = projet.id;
-    } else {
-      const projetActif = window.sessionStorage.getItem('projetActifId');
-      if (projetActif) {
-        this.projetActifId = Number(projetActif);
-      }
+  initializeProjetContext() {
+    const globalProjet = this.projetActifService.getProjetActif?.();
+    if (globalProjet && globalProjet.id) {
+      this.projetActifId = globalProjet.id;
+      this.projetActif = globalProjet;
     }
-    console.log('loadProjetActif() - projetActifId:', this.projetActifId);
+    const contextId = window.sessionStorage.getItem('projetActifId');
+    if (contextId) {
+      this.contextProjetId = Number(contextId);
+      this.loadProjetDetails(this.contextProjetId, true);
+    }
     this.loadDepots();
+  }
+
+  loadProjetDetails(projetId: number, isContext: boolean = false) {
+    this.projetService.getProjetById(projetId, 'body').subscribe({
+      next: async (data: any) => {
+        if (data instanceof Blob) {
+          const text = await data.text();
+          try {
+            const parsed = JSON.parse(text);
+            if (isContext) {
+              this.contextProjet = parsed;
+              this.updateBreadcrumb();
+            } else {
+              this.projetActif = parsed;
+            }
+          } catch (e) {
+            console.error('Erreur parsing projet:', e);
+          }
+        } else {
+          if (isContext) {
+            this.contextProjet = data;
+            this.updateBreadcrumb();
+          } else {
+            this.projetActif = data;
+          }
+        }
+      },
+      error: (err: any) => {
+        console.error('Erreur chargement projet:', err);
+      }
+    });
+  }
+
+  canAddData(): boolean {
+    if (this.contextProjet) {
+      return this.contextProjet.active === true;
+    }
+    return !!(this.projetActif && this.projetActif.active === true);
+  }
+
+  updateBreadcrumb() {
+    const projet = this.contextProjet || this.projetActif;
+    if (projet) {
+      this.breadcrumbItems = [
+        { label: 'Projets', url: '/projet' },
+        { label: projet.nom || `Projet ${projet.id}`, url: `/projet/${projet.id}/parametre` },
+        { label: 'Param\u00e8tres', url: `/projet/${projet.id}/parametre` },
+        { label: 'D\u00e9p\u00f4ts' }
+      ];
+    } else {
+      this.breadcrumbItems = [
+        { label: 'D\u00e9p\u00f4ts' }
+      ];
+    }
   }
 
   openAddDialog() {
@@ -62,8 +135,9 @@ export class DepotComponent {
       return;
     }
     // Associe le projet actif
-    if (this.projetActifId) {
-      this.dialogDepot.projetId = this.projetActifId;
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    if (targetProjetId) {
+      this.dialogDepot.projetId = targetProjetId;
     }
 
     // Log request payload
@@ -82,33 +156,50 @@ export class DepotComponent {
               console.log('Réponse création depot (parsed):', parsed);
               const parsedId = parsed?.id;
               console.log('Parsed created depot id from Blob:', parsedId);
-              if (this.projetActifId && parsedId) {
-                this.projetService.addDepotToProjet(this.projetActifId, parsedId).subscribe({
-                  next: () => console.log('Depot associé au projet actif (via Blob)'),
-                  error: (err) => console.error('Erreur association depot-projet (via Blob):', err)
+              const associateProjetId = this.contextProjetId || this.projetActifId;
+              if (associateProjetId && parsedId) {
+                this.projetService.addDepotToProjet(associateProjetId, parsedId).subscribe({
+                  next: () => {
+                    console.log('Depot associé au projet (via Blob)');
+                    this.loadDepots();
+                  },
+                  error: (err) => {
+                    console.error('Erreur association depot-projet (via Blob):', err);
+                    this.loadDepots();
+                  }
                 });
+              } else {
+                this.loadDepots();
               }
             } catch (e) {
               console.error('Erreur parsing création depot:', e);
+              this.loadDepots();
             }
-          }).catch(e => console.error('Erreur lecture Blob création depot:', e));
+          }).catch(e => {
+            console.error('Erreur lecture Blob création depot:', e);
+            this.loadDepots();
+          });
         } else {
           console.log('Depot créé:', created);
+          const createdId = (created as any)?.id;
+          const associateProjetId = this.contextProjetId || this.projetActifId;
+          if (associateProjetId && createdId) {
+            this.projetService.addDepotToProjet(associateProjetId, createdId).subscribe({
+              next: () => {
+                console.log('Depot associé (json) au projet');
+                this.loadDepots();
+              },
+              error: (err) => {
+                console.error('Erreur association depot-projet (json):', err);
+                this.loadDepots();
+              }
+            });
+          } else {
+            this.loadDepots();
+          }
         }
 
         this.dialogDepot = { nom: '' };
-        // Auto-associate with active project if available
-        let createdId: number | undefined;
-        if (created && !(created instanceof Blob)) {
-          createdId = (created as any).id;
-        }
-        if (this.projetActifId && createdId) {
-          this.projetService.addDepotToProjet(this.projetActifId, createdId).subscribe({
-            next: () => console.log('Depot associé au projet actif'),
-            error: (err) => console.error('Erreur association depot-projet:', err)
-          });
-        }
-        this.loadDepots();
         this.closeDialog();
       },
       error: (err) => {
@@ -144,9 +235,10 @@ export class DepotComponent {
     const filter = this.depotFilter.trim().toLowerCase();
     let depotsFiltrés = this.depots;
     // Filtre par projet actif
-    if (this.projetActifId) {
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    if (targetProjetId) {
       // If depots were returned from the project-scoped endpoint they may not include projetId
-      depotsFiltrés = depotsFiltrés.filter(d => (d.projetId === undefined) || (d.projetId === this.projetActifId));
+      depotsFiltrés = depotsFiltrés.filter(d => (d.projetId === undefined) || (d.projetId === targetProjetId));
     }
     // Filtre par texte
     if (filter) {
@@ -155,6 +247,83 @@ export class DepotComponent {
       );
     }
     this.filteredDepots = depotsFiltrés;
+    this.updatePagination();
+  }
+  
+  sortBy(column: string) {
+    if (this.sortColumn === column) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortColumn = column;
+      this.sortDirection = 'asc';
+    }
+    this.sortDepots();
+  }
+  
+  sortDepots() {
+    if (!this.sortColumn) {
+      this.updatePagination();
+      return;
+    }
+    
+    this.filteredDepots.sort((a, b) => {
+      let aVal: any = a[this.sortColumn as keyof DepotDTO];
+      let bVal: any = b[this.sortColumn as keyof DepotDTO];
+      
+      if (aVal === null || aVal === undefined) aVal = '';
+      if (bVal === null || bVal === undefined) bVal = '';
+      
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      
+      if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+    
+    this.updatePagination();
+  }
+  
+  updatePagination() {
+    this.totalPages = Math.ceil(this.filteredDepots.length / this.pageSize);
+    if (this.currentPage > this.totalPages && this.totalPages > 0) {
+      this.currentPage = this.totalPages;
+    }
+    if (this.currentPage < 1) {
+      this.currentPage = 1;
+    }
+    
+    const startIndex = (this.currentPage - 1) * this.pageSize;
+    const endIndex = startIndex + this.pageSize;
+    this.paginatedDepots = this.filteredDepots.slice(startIndex, endIndex);
+  }
+  
+  goToPage(page: number) {
+    if (page >= 1 && page <= this.totalPages) {
+      this.currentPage = page;
+      this.updatePagination();
+    }
+  }
+  
+  getPageNumbers(): number[] {
+    const pages: number[] = [];
+    const maxPagesToShow = 5;
+    let startPage = Math.max(1, this.currentPage - Math.floor(maxPagesToShow / 2));
+    let endPage = Math.min(this.totalPages, startPage + maxPagesToShow - 1);
+    
+    if (endPage - startPage + 1 < maxPagesToShow) {
+      startPage = Math.max(1, endPage - maxPagesToShow + 1);
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  }
+  
+  onPageSizeChange() {
+    this.currentPage = 1;
+    this.updatePagination();
   }
 
   deleteDepot(id?: number) {
@@ -168,10 +337,11 @@ export class DepotComponent {
   }
 
   loadDepots() {
-    console.log('loadDepots() - projetActifId:', this.projetActifId);
-    if (this.projetActifId) {
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    console.log('loadDepots() - targetProjetId:', targetProjetId);
+    if (targetProjetId) {
       // Prefer server endpoint that returns depots for a project
-      const url = `${this.basePath}/api/projets/${this.projetActifId}/depots`;
+      const url = `${this.basePath}/api/projets/${targetProjetId}/depots`;
       this.http.get<any[]>(url, { withCredentials: true, responseType: 'json' as 'json' }).subscribe({
         next: (data) => {
           console.log('loadDepots() - project-scoped response:', data);

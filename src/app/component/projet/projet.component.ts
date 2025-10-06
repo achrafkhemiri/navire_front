@@ -35,11 +35,26 @@ export class ProjetComponent {
     }, 0);
   }
   projets: ProjetDTO[] = [];
+  filteredProjets: ProjetDTO[] = [];
+  paginatedProjets: ProjetDTO[] = [];
   selectedProjet: ProjetDTO | null = null;
   newProjet: ProjetDTO = { nom: '', nomProduit: '', quantiteTotale: 0, nomNavire: '', paysNavire: '', etat: '', dateDebut: '', dateFin: '', active: false };
   editMode: boolean = false;
   error: string = '';
   projetActif: ProjetDTO | null = null;
+  projetFilter: string = '';
+  
+  // Pagination
+  currentPage: number = 1;
+  pageSize: number = 5;
+  totalPages: number = 1;
+  pageSizes: number[] = [5, 10, 20, 50];
+  
+  // Tri
+  sortColumn: string = '';
+  sortDirection: 'asc' | 'desc' = 'asc';
+  
+  Math = Math;
 
   constructor(private projetService: ProjetControllerService) {
     this.loadProjets();
@@ -77,9 +92,100 @@ export class ProjetComponent {
         this.projets = projets;
         // Sélectionne automatiquement le projet actif
         this.projetActif = this.projets.find(pr => pr.active) || null;
+        this.applyFilter();
       },
       error: (err) => this.error = 'Erreur chargement: ' + (err.error?.message || err.message)
     });
+  }
+  
+  applyFilter() {
+    const filter = this.projetFilter.trim().toLowerCase();
+    if (!filter) {
+      this.filteredProjets = [...this.projets];
+    } else {
+      this.filteredProjets = this.projets.filter(pr =>
+        pr.nom?.toLowerCase().includes(filter) ||
+        pr.nomProduit?.toLowerCase().includes(filter) ||
+        pr.nomNavire?.toLowerCase().includes(filter)
+      );
+    }
+    this.updatePagination();
+  }
+  
+  sortBy(column: string) {
+    if (this.sortColumn === column) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortColumn = column;
+      this.sortDirection = 'asc';
+    }
+    this.sortProjets();
+  }
+  
+  sortProjets() {
+    if (!this.sortColumn) {
+      this.updatePagination();
+      return;
+    }
+    
+    this.filteredProjets.sort((a, b) => {
+      let aVal: any = a[this.sortColumn as keyof ProjetDTO];
+      let bVal: any = b[this.sortColumn as keyof ProjetDTO];
+      
+      if (aVal === null || aVal === undefined) aVal = '';
+      if (bVal === null || bVal === undefined) bVal = '';
+      
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      
+      if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+    
+    this.updatePagination();
+  }
+  
+  updatePagination() {
+    this.totalPages = Math.ceil(this.filteredProjets.length / this.pageSize);
+    if (this.currentPage > this.totalPages && this.totalPages > 0) {
+      this.currentPage = this.totalPages;
+    }
+    if (this.currentPage < 1) {
+      this.currentPage = 1;
+    }
+    
+    const startIndex = (this.currentPage - 1) * this.pageSize;
+    const endIndex = startIndex + this.pageSize;
+    this.paginatedProjets = this.filteredProjets.slice(startIndex, endIndex);
+  }
+  
+  goToPage(page: number) {
+    if (page >= 1 && page <= this.totalPages) {
+      this.currentPage = page;
+      this.updatePagination();
+    }
+  }
+  
+  getPageNumbers(): number[] {
+    const pages: number[] = [];
+    const maxPagesToShow = 5;
+    let startPage = Math.max(1, this.currentPage - Math.floor(maxPagesToShow / 2));
+    let endPage = Math.min(this.totalPages, startPage + maxPagesToShow - 1);
+    
+    if (endPage - startPage + 1 < maxPagesToShow) {
+      startPage = Math.max(1, endPage - maxPagesToShow + 1);
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  }
+  
+  onPageSizeChange() {
+    this.currentPage = 1;
+    this.updatePagination();
   }
 
   addProjet() {

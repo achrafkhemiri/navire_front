@@ -1,6 +1,8 @@
 import { Component } from '@angular/core';
 import { CamionControllerService } from '../../api/api/camionController.service';
 import { CamionDTO } from '../../api/model/camionDTO';
+import { ProjetControllerService } from '../../api/api/projetController.service';
+import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
 
 @Component({
   selector: 'app-camion',
@@ -10,6 +12,7 @@ import { CamionDTO } from '../../api/model/camionDTO';
 export class CamionComponent {
   camions: CamionDTO[] = [];
   filteredCamions: CamionDTO[] = [];
+  paginatedCamions: CamionDTO[] = [];
   selectedCamion: CamionDTO | null = null;
   newCamion: CamionDTO = { matricule: '', societe: '', numBonLivraison: '' };
   dialogCamion: CamionDTO = { matricule: '', societe: '', numBonLivraison: '' };
@@ -18,9 +21,67 @@ export class CamionComponent {
   isSidebarOpen: boolean = true;
   camionFilter: string = '';
   error: string = '';
+  // Context project (if visiting a project page)
+  contextProjetId: number | null = null;
+  contextProjet: any = null;
+  breadcrumbItems: BreadcrumbItem[] = [];
+  
+  // Pagination
+  currentPage: number = 1;
+  pageSize: number = 5;
+  totalPages: number = 1;
+  pageSizes: number[] = [5, 10, 20, 50];
+  
+  // Tri
+  sortColumn: string = '';
+  sortDirection: 'asc' | 'desc' = 'asc';
+  
+  Math = Math;
 
-  constructor(private camionService: CamionControllerService) {
+  constructor(
+    private camionService: CamionControllerService,
+    private projetService: ProjetControllerService
+  ) {
+    // check session context
+    const contextId = window.sessionStorage.getItem('projetActifId');
+    if (contextId) {
+      this.contextProjetId = Number(contextId);
+      this.loadProjetDetails(this.contextProjetId, true);
+    }
     this.loadCamions();
+  }
+
+  canAddData(): boolean {
+    if (this.contextProjet) return this.contextProjet.active === true;
+    // no projet context -> allow by default
+    return true;
+  }
+
+  loadProjetDetails(projetId: number, isContext: boolean = false) {
+    this.projetService.getProjetById(projetId, 'body').subscribe({
+      next: (data: any) => {
+        if (isContext) {
+          this.contextProjet = data;
+          this.updateBreadcrumb();
+        }
+      },
+      error: (err: any) => console.error('Erreur chargement projet:', err)
+    });
+  }
+
+  updateBreadcrumb() {
+    if (this.contextProjet) {
+      this.breadcrumbItems = [
+        { label: 'Projets', url: '/projets' },
+        { label: this.contextProjet.nom, url: `/projet/${this.contextProjet.id}` },
+        { label: 'Paramètres', url: `/projet/${this.contextProjet.id}/parametre` },
+        { label: 'Camions' }
+      ];
+    } else {
+      this.breadcrumbItems = [
+        { label: 'Camions' }
+      ];
+    }
   }
 
   loadCamions() {
@@ -49,12 +110,18 @@ export class CamionComponent {
           this.camions = [];
           this.filteredCamions = [];
         }
+        this.updatePagination();
       },
       error: (err) => this.error = 'Erreur chargement: ' + (err.error?.message || err.message)
     });
   }
 
   addCamion() {
+    // simple guard: if visiting inactive project, prevent
+    if (this.contextProjet && this.contextProjet.active === false) {
+      this.error = 'Ce projet n\'est pas actif.';
+      return;
+    }
     this.camionService.createCamion(this.newCamion, 'body').subscribe({
       next: () => {
         this.newCamion = { matricule: '', societe: '', numBonLivraison: '' };
@@ -75,6 +142,8 @@ export class CamionComponent {
       next: (updated) => {
         const idx = this.camions.findIndex(c => c.id === updated.id);
         if (idx > -1) this.camions[idx] = updated;
+        this.filteredCamions = [...this.camions];
+        this.updatePagination();
         this.selectedCamion = null;
         this.editMode = false;
       },
@@ -87,6 +156,8 @@ export class CamionComponent {
     this.camionService.deleteCamion(id, 'body').subscribe({
       next: () => {
         this.camions = this.camions.filter(c => c.id !== id);
+        this.filteredCamions = [...this.camions];
+        this.updatePagination();
       },
       error: (err) => this.error = 'Erreur suppression: ' + (err.error?.message || err.message)
     });
@@ -107,6 +178,83 @@ export class CamionComponent {
         cam.societe?.toLowerCase().includes(filter)
       );
     }
+    this.updatePagination();
+  }
+  
+  sortBy(column: string) {
+    if (this.sortColumn === column) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortColumn = column;
+      this.sortDirection = 'asc';
+    }
+    this.sortCamions();
+  }
+  
+  sortCamions() {
+    if (!this.sortColumn) {
+      this.updatePagination();
+      return;
+    }
+    
+    this.filteredCamions.sort((a, b) => {
+      let aVal: any = a[this.sortColumn as keyof CamionDTO];
+      let bVal: any = b[this.sortColumn as keyof CamionDTO];
+      
+      if (aVal === null || aVal === undefined) aVal = '';
+      if (bVal === null || bVal === undefined) bVal = '';
+      
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      
+      if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+    
+    this.updatePagination();
+  }
+  
+  updatePagination() {
+    this.totalPages = Math.ceil(this.filteredCamions.length / this.pageSize);
+    if (this.currentPage > this.totalPages && this.totalPages > 0) {
+      this.currentPage = this.totalPages;
+    }
+    if (this.currentPage < 1) {
+      this.currentPage = 1;
+    }
+    
+    const startIndex = (this.currentPage - 1) * this.pageSize;
+    const endIndex = startIndex + this.pageSize;
+    this.paginatedCamions = this.filteredCamions.slice(startIndex, endIndex);
+  }
+  
+  goToPage(page: number) {
+    if (page >= 1 && page <= this.totalPages) {
+      this.currentPage = page;
+      this.updatePagination();
+    }
+  }
+  
+  getPageNumbers(): number[] {
+    const pages: number[] = [];
+    const maxPagesToShow = 5;
+    let startPage = Math.max(1, this.currentPage - Math.floor(maxPagesToShow / 2));
+    let endPage = Math.min(this.totalPages, startPage + maxPagesToShow - 1);
+    
+    if (endPage - startPage + 1 < maxPagesToShow) {
+      startPage = Math.max(1, endPage - maxPagesToShow + 1);
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  }
+  
+  onPageSizeChange() {
+    this.currentPage = 1;
+    this.updatePagination();
   }
 
   openAddDialog() {

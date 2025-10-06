@@ -10,6 +10,7 @@ import { DepotDTO } from '../../api/model/depotDTO';
 export class DepotsComponent {
   depots: DepotDTO[] = [];
   filteredDepots: DepotDTO[] = [];
+  paginatedDepots: DepotDTO[] = [];
   selectedDepot: DepotDTO | null = null;
   dialogDepot: DepotDTO = { nom: '' };
   editMode: boolean = false;
@@ -17,6 +18,18 @@ export class DepotsComponent {
   isSidebarOpen: boolean = true;
   showAddDialog: boolean = false;
   depotFilter: string = '';
+  
+  // Pagination
+  currentPage: number = 1;
+  pageSize: number = 5;
+  totalPages: number = 1;
+  pageSizes: number[] = [5, 10, 20, 50];
+  
+  // Sorting
+  sortColumn: string = '';
+  sortDirection: 'asc' | 'desc' = 'asc';
+  
+  Math = Math;
 
   constructor(private depotService: DepotControllerService) {
     this.loadAllDepots();
@@ -48,6 +61,7 @@ export class DepotsComponent {
           this.depots = [];
         }
         this.filteredDepots = this.depots;
+        this.updatePagination();
       },
       error: (err) => {
         this.error = 'Erreur lors du chargement des dépôts';
@@ -66,6 +80,85 @@ export class DepotsComponent {
         depot.nom?.toLowerCase().includes(this.depotFilter.toLowerCase())
       );
     }
+    this.updatePagination();
+  }
+
+  sortBy(column: string) {
+    if (this.sortColumn === column) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortColumn = column;
+      this.sortDirection = 'asc';
+    }
+    this.sortDepots();
+    this.updatePagination();
+  }
+
+  sortDepots() {
+    this.filteredDepots.sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      switch (this.sortColumn) {
+        case 'id':
+          aVal = a.id ?? 0;
+          bVal = b.id ?? 0;
+          break;
+        case 'nom':
+          aVal = a.nom ?? '';
+          bVal = b.nom ?? '';
+          break;
+        default:
+          return 0;
+      }
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        aVal = aVal.toLowerCase();
+        bVal = bVal.toLowerCase();
+      }
+
+      if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
+  updatePagination() {
+    this.totalPages = Math.ceil(this.filteredDepots.length / this.pageSize);
+    if (this.currentPage > this.totalPages) {
+      this.currentPage = this.totalPages || 1;
+    }
+    const startIndex = (this.currentPage - 1) * this.pageSize;
+    const endIndex = startIndex + this.pageSize;
+    this.paginatedDepots = this.filteredDepots.slice(startIndex, endIndex);
+  }
+
+  goToPage(page: number) {
+    if (page >= 1 && page <= this.totalPages) {
+      this.currentPage = page;
+      this.updatePagination();
+    }
+  }
+
+  getPageNumbers(): number[] {
+    const pages: number[] = [];
+    const maxPagesToShow = 5;
+    let startPage = Math.max(1, this.currentPage - Math.floor(maxPagesToShow / 2));
+    let endPage = Math.min(this.totalPages, startPage + maxPagesToShow - 1);
+
+    if (endPage - startPage + 1 < maxPagesToShow) {
+      startPage = Math.max(1, endPage - maxPagesToShow + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  }
+
+  onPageSizeChange() {
+    this.currentPage = 1;
+    this.updatePagination();
   }
 
   openAddDialog() {
