@@ -4,7 +4,9 @@ import { ClientControllerService } from '../../api/api/clientController.service'
 import { ProjetClientControllerService } from '../../api/api/projetClientController.service';
 import { ProjetActifService } from '../../service/projet-actif.service';
 import { ProjetControllerService } from '../../api/api/projetController.service';
+import { VoyageControllerService } from '../../api/api/voyageController.service';
 import { ClientDTO } from '../../api/model/clientDTO';
+import { VoyageDTO } from '../../api/model/voyageDTO';
 import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
 import { NotificationService } from '../../service/notification.service';
 import { QuantiteService } from '../../service/quantite.service';
@@ -54,6 +56,15 @@ export class ClientComponent {
   clientFilter: string = '';
   dialogClient: ClientDTO = { nom: '', numero: '' };
   
+  // Pour l'autocomplétion type Select2
+  allClients: ClientDTO[] = []; // Tous les clients (toutes les BDD)
+  filteredSuggestions: ClientDTO[] = [];
+  showSuggestions: boolean = false;
+  selectedExistingClient: ClientDTO | null = null;
+  
+  // Voyages pour calculer le reste
+  voyages: VoyageDTO[] = [];
+  
   // Alerte temporaire
   showAlert: boolean = false;
   alertMessage: string = '';
@@ -82,6 +93,7 @@ export class ClientComponent {
     private projetClientService: ProjetClientControllerService,
     private projetActifService: ProjetActifService,
     private projetService: ProjetControllerService,
+    private voyageService: VoyageControllerService,
     private notificationService: NotificationService,
     private quantiteService: QuantiteService
   ) {
@@ -104,8 +116,9 @@ export class ClientComponent {
       this.loadProjetDetails(this.contextProjetId, true);
     }
 
-   
+    this.loadAllClients(); // Charger tous les clients pour l'autocomplétion
     this.loadClients();
+    this.loadVoyages(); // Charger les voyages pour calculer le reste
   }
 
   loadProjetDetails(projetId: number, isContext: boolean = false) {
@@ -172,8 +185,81 @@ export class ClientComponent {
 
   openAddDialog() {
     this.dialogClient = { nom: '', numero: '' };
+    this.selectedExistingClient = null;
     this.showAddClient = true;
     this.editMode = false;
+    this.showSuggestions = false;
+    this.filteredSuggestions = [];
+  }
+  
+  // Charger tous les clients de la base de données
+  loadAllClients() {
+    this.clientService.getAllClients('body').subscribe({
+      next: async (data) => {
+        if (data instanceof Blob) {
+          const text = await data.text();
+          try {
+            const parsed = JSON.parse(text);
+            this.allClients = Array.isArray(parsed) ? parsed : [];
+          } catch (e) {
+            this.allClients = [];
+          }
+        } else {
+          this.allClients = Array.isArray(data) ? data : [];
+        }
+      },
+      error: (err) => {
+        console.error('Erreur chargement tous les clients:', err);
+        this.allClients = [];
+      }
+    });
+  }
+  
+  // Filtrer les suggestions lors de la saisie
+  onClientInputChange(field: 'nom' | 'numero') {
+    const searchValue = field === 'nom' ? this.dialogClient.nom : this.dialogClient.numero;
+    
+    if (!searchValue || searchValue.trim().length < 2) {
+      this.showSuggestions = false;
+      this.filteredSuggestions = [];
+      this.selectedExistingClient = null;
+      return;
+    }
+    
+    const searchLower = searchValue.trim().toLowerCase();
+    
+    // Filtrer les clients qui correspondent et qui ne sont PAS déjà dans le projet actuel
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    this.filteredSuggestions = this.allClients.filter(client => {
+      // Vérifier si le client correspond à la recherche
+      const nomMatch = client.nom?.toLowerCase().includes(searchLower);
+      const numeroMatch = client.numero?.toLowerCase().includes(searchLower);
+      const matchesSearch = nomMatch || numeroMatch;
+      
+      // Vérifier si le client n'est pas déjà dans le projet
+      const notInProject = !this.clients.some(c => c.id === client.id);
+      
+      return matchesSearch && notInProject;
+    }).slice(0, 10); // Limiter à 10 suggestions
+    
+    this.showSuggestions = this.filteredSuggestions.length > 0;
+    this.selectedExistingClient = null;
+  }
+  
+  // Sélectionner un client existant depuis les suggestions
+  selectSuggestion(client: ClientDTO) {
+    this.selectedExistingClient = client;
+    this.dialogClient.nom = client.nom || '';
+    this.dialogClient.numero = client.numero || '';
+    this.showSuggestions = false;
+    this.filteredSuggestions = [];
+  }
+  
+  // Fermer les suggestions si on clique ailleurs
+  closeSuggestions() {
+    setTimeout(() => {
+      this.showSuggestions = false;
+    }, 200);
   }
 
   selectClient(cl: ClientDTO) {
@@ -188,8 +274,31 @@ export class ClientComponent {
       this.error = 'Veuillez remplir tous les champs.';
       return;
     }
-    // Associe le projet actif
+    
     const targetProjetId = this.contextProjetId || this.projetActifId;
+    
+    // Si un client existant a été sélectionné, on l'associe au projet
+    if (this.selectedExistingClient && this.selectedExistingClient.id) {
+      // Vérifier si le client est déjà associé à ce projet
+      const isAlreadyInProject = this.clients.some(c => c.id === this.selectedExistingClient!.id);
+      
+      if (isAlreadyInProject) {
+        this.showTemporaryAlert(
+          'Ce client est déjà associé à ce projet.',
+          'warning'
+        );
+        this.closeDialog();
+        return;
+      }
+      
+      // Associer le client existant au projet
+      this.askQuantiteAndAssociate(this.selectedExistingClient.id);
+      this.dialogClient = { nom: '', numero: '' };
+      this.closeDialog();
+      return;
+    }
+    
+    // Sinon, créer un nouveau client
     if (targetProjetId) {
       this.dialogClient.projetId = targetProjetId;
     }
@@ -254,6 +363,7 @@ export class ClientComponent {
         );
         // Recharger la liste après l'association réussie
         this.loadClients();
+        this.loadVoyages(); // Recharger les voyages pour mettre à jour le reste
       },
       error: async (err) => {
         console.error('Erreur association client-projet:', err);
@@ -352,6 +462,7 @@ export class ClientComponent {
         
         // Recharger la liste des clients
         this.loadClients();
+        this.loadVoyages(); // Recharger les voyages pour mettre à jour le reste
       }
     });
   }
@@ -364,6 +475,7 @@ export class ClientComponent {
         this.selectedClient = null;
         this.editMode = false;
         this.loadClients();
+        this.loadVoyages(); // Recharger les voyages pour mettre à jour le reste
         this.closeDialog();
       },
       error: (err) => this.error = 'Erreur modification: ' + (err.error?.message || err.message)
@@ -502,6 +614,16 @@ export class ClientComponent {
         bVal = this.getQuantitePourProjet(b) || 0;
       }
       
+      if (this.sortColumn === 'quantiteVendue') {
+        aVal = this.getTotalLivreClient(a.id);
+        bVal = this.getTotalLivreClient(b.id);
+      }
+      
+      if (this.sortColumn === 'reste') {
+        aVal = this.getResteClient(a);
+        bVal = this.getResteClient(b);
+      }
+      
       if (aVal === undefined || aVal === null) aVal = '';
       if (bVal === undefined || bVal === null) bVal = '';
       
@@ -559,6 +681,7 @@ export class ClientComponent {
     this.clientService.deleteClient(id, 'body').subscribe({
       next: () => {
         this.loadClients();
+        this.loadVoyages(); // Recharger les voyages pour mettre à jour le reste
       },
       error: (err) => this.error = 'Erreur suppression: ' + (err.error?.message || err.message)
     });
@@ -569,6 +692,35 @@ export class ClientComponent {
     this.editMode = false;
   }
 
+  // Charger les voyages pour le projet actif
+  loadVoyages() {
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    if (!targetProjetId) {
+      this.voyages = [];
+      return;
+    }
+    
+    this.voyageService.getVoyagesByProjet(targetProjetId, 'body').subscribe({
+      next: async (data) => {
+        if (data instanceof Blob) {
+          const text = await data.text();
+          try {
+            const parsed = JSON.parse(text);
+            this.voyages = Array.isArray(parsed) ? parsed : [];
+          } catch (e) {
+            this.voyages = [];
+          }
+        } else {
+          this.voyages = Array.isArray(data) ? data : [];
+        }
+      },
+      error: (err) => {
+        console.error('Erreur chargement voyages:', err);
+        this.voyages = [];
+      }
+    });
+  }
+
   // Récupère la quantité autorisée pour le projet actif depuis la map renvoyée par le backend
   getQuantitePourProjet(client: any): number | undefined {
     if (!this.projetActifId || !client) return undefined;
@@ -577,6 +729,31 @@ export class ClientComponent {
     }
     // fallback si jamais la structure change
     return (client.quantiteAutorisee !== undefined) ? client.quantiteAutorisee : undefined;
+  }
+  
+  // Calculer le total livré pour un client
+  getTotalLivreClient(clientId?: number): number {
+    if (!clientId || !this.voyages) return 0;
+    return this.voyages
+      .filter(v => v.clientId === clientId && v.poidsClient)
+      .reduce((sum, v) => sum + (v.poidsClient || 0), 0);
+  }
+  
+  // Calculer le reste pour un client
+  getResteClient(client: any): number {
+    if (!client || !client.id) return 0;
+    const quantiteAutorisee = this.getQuantitePourProjet(client) || 0;
+    const totalLivre = this.getTotalLivreClient(client.id);
+    return quantiteAutorisee - totalLivre;
+  }
+  
+  // Obtenir la couleur selon le reste
+  getResteColor(reste: number, quantiteAutorisee: number): string {
+    if (quantiteAutorisee === 0) return '#64748b'; // Gris si pas de limite
+    const percentage = (reste / quantiteAutorisee) * 100;
+    if (percentage > 50) return '#10b981'; // Vert
+    if (percentage > 20) return '#f59e0b'; // Orange
+    return '#ef4444'; // Rouge
   }
 
   // Affiche une alerte temporaire pendant 1 minute
@@ -617,6 +794,7 @@ export class ClientComponent {
         next: () => {
           console.log('Client supprimé après annulation');
           this.loadClients();
+          this.loadVoyages();
         },
         error: (err) => {
           console.error('Erreur lors de la suppression du client:', err);

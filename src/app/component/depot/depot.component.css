@@ -1,1 +1,85 @@
 /* Styles globaux gérés par styles-table.css - pas de styles spécifiques nécessaires */
+
+/* Styles pour l'autocomplétion Select2 */
+.autocomplete-suggestion {
+  padding: 12px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background-color 0.2s;
+}
+
+.autocomplete-suggestion:last-child {
+  border-bottom: none;
+}
+
+.autocomplete-suggestion:hover {
+  background-color: #f8fafc;
+}
+
+.autocomplete-suggestion i.bi-box-seam {
+  color: #6366f1;
+  font-size: 18px;
+}
+
+.autocomplete-suggestion:hover i.bi-box-seam {
+  color: #4f46e5;
+}
+
+.suggestion-details {
+  flex: 1;
+}
+
+.suggestion-name {
+  font-weight: 500;
+  color: #1e293b;
+  font-size: 14px;
+}
+
+.suggestion-icon-return {
+  color: #64748b;
+  font-size: 16px;
+  transition: color 0.2s;
+}
+
+.autocomplete-suggestion:hover .suggestion-icon-return {
+  color: #3b82f6;
+}
+
+/* Amélioration du modal dialog */
+.dialog-modal label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #475569;
+  font-size: 13px;
+}
+
+.dialog-modal label i {
+  margin-right: 6px;
+  color: #6366f1;
+}
+
+/* Animation de la liste déroulante */
+@keyframes slideDownFade {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.suggestions-list {
+  animation: slideDownFade 0.2s ease-out;
+}
+
+/* Style pour les inputs dans le dialog */
+.dialog-modal input:disabled {
+  background-color: #f1f5f9;
+  cursor: not-allowed;
+}

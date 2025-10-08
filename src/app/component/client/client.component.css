@@ -1045,3 +1045,135 @@
     width: 100%;
   }
 }
+
+/* Styles pour l'autocomplétion Select2 */
+.autocomplete-suggestion {
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.2s ease;
+}
+
+.autocomplete-suggestion:last-child {
+  border-bottom: none;
+}
+
+.autocomplete-suggestion:hover {
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+}
+
+.autocomplete-suggestion i.bi-person-circle {
+  font-size: 24px;
+  color: #94a3b8;
+}
+
+.autocomplete-suggestion:hover i.bi-person-circle {
+  color: #667eea;
+}
+
+.suggestion-details {
+  flex: 1;
+}
+
+.suggestion-name {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.suggestion-numero {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.suggestion-icon-return {
+  color: #667eea;
+  font-size: 16px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.autocomplete-suggestion:hover .suggestion-icon-return {
+  opacity: 1;
+}
+
+/* Amélioration du modal dialog */
+.dialog-modal label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #475569;
+  font-size: 13px;
+}
+
+.dialog-modal label i {
+  margin-right: 6px;
+  color: #667eea;
+}
+
+/* Animation de la liste déroulante */
+@keyframes slideDownFade {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.suggestions-list {
+  animation: slideDownFade 0.2s ease;
+}
+
+/* Style pour les inputs dans le dialog */
+.dialog-modal input:disabled {
+  background: #f1f5f9;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Style pour la colonne Quantité vendue */
+.quantite-vendue-cell {
+  text-align: center;
+}
+
+.vendue-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+  min-width: 70px;
+  justify-content: center;
+}
+
+.vendue-badge i {
+  font-size: 14px;
+}
+
+/* Style pour la colonne Reste */
+.reste-cell {
+  text-align: center;
+}
+
+.reste-badge {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  min-width: 60px;
+  text-align: center;
+}

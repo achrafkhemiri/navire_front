@@ -27,5 +27,8 @@ export interface VoyageDTO {
     depotNom?: string;
     projetId?: number;
     userId?: number;
+    quantite?: number;
+    projetClientId?: number;
+    societe?: string;
 }
 

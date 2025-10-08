@@ -107,6 +107,26 @@
 								}"></i>
 							</div>
 						</th>
+						<th *ngIf="projetActifId" (click)="sortBy('quantiteVendue')" class="sortable">
+							<div class="th-content">
+								<span>Quantité vendue</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-up': sortColumn === 'quantiteVendue' && sortDirection === 'asc',
+									'bi-chevron-down': sortColumn === 'quantiteVendue' && sortDirection === 'desc',
+									'bi-chevron-expand': sortColumn !== 'quantiteVendue'
+								}"></i>
+							</div>
+						</th>
+						<th *ngIf="projetActifId" (click)="sortBy('reste')" class="sortable">
+							<div class="th-content">
+								<span>Reste</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-up': sortColumn === 'reste' && sortDirection === 'asc',
+									'bi-chevron-down': sortColumn === 'reste' && sortDirection === 'desc',
+									'bi-chevron-expand': sortColumn !== 'reste'
+								}"></i>
+							</div>
+						</th>
 						<th class="actions-header text-center">Actions</th>
 					</tr>
 				</thead>
@@ -122,6 +142,17 @@
 						<td *ngIf="projetActifId" class="quantite-cell">
 							<span class="badge">{{ getQuantitePourProjet(cl) || 0 }}</span>
 						</td>
+						<td *ngIf="projetActifId" class="quantite-vendue-cell">
+							<span class="vendue-badge">
+								<i class="bi bi-box-seam-fill"></i>
+								{{ getTotalLivreClient(cl.id) }}
+							</span>
+						</td>
+						<td *ngIf="projetActifId" class="reste-cell">
+							<span class="reste-badge" [style.background]="getResteColor(getResteClient(cl), getQuantitePourProjet(cl) || 0)" [style.color]="'white'">
+								{{ getResteClient(cl) }}
+							</span>
+						</td>
 						<td class="actions-cell">
 							<button class="action-btn edit-btn" (click)="selectClient(cl)" [disabled]="!isProjetActif()" title="Modifier">
 								<i class="bi bi-pencil-square"></i>
@@ -132,7 +163,7 @@
 						</td>
 					</tr>
 					<tr *ngIf="paginatedClients.length === 0" class="no-data-row">
-						<td [attr.colspan]="projetActifId ? 4 : 3">
+						<td [attr.colspan]="projetActifId ? 6 : 3">
 							<div class="no-data">
 								<i class="bi bi-inbox"></i>
 								<p>Aucun client trouvé</p>
@@ -175,10 +206,68 @@
 					<div class="dialog-backdrop" *ngIf="showAddClient || editMode">
 						<div class="dialog-modal">
 							<h3>{{ editMode ? 'Modifier le client' : 'Ajouter un client' }}</h3>
-							  <input [(ngModel)]="dialogClient.nom" placeholder="Nom" class="table-filter" />
-							  <input [(ngModel)]="dialogClient.numero" placeholder="Numéro" class="table-filter" />
+							
+							<!-- Message d'information pour l'autocomplétion -->
+							<div *ngIf="!editMode && selectedExistingClient" style="background: #dbeafe; padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; border-left: 4px solid #3b82f6;">
+								<div style="display: flex; align-items: center; gap: 8px; color: #1e40af;">
+									<i class="bi bi-info-circle-fill"></i>
+									<span style="font-size: 13px; font-weight: 600;">Client existant sélectionné - Il sera associé à ce projet</span>
+								</div>
+							</div>
+							
+							<!-- Champ Nom avec autocomplétion -->
+							<div style="position: relative; margin-bottom: 16px;">
+								<label style="display: block; margin-bottom: 8px; font-weight: 600; color: #475569; font-size: 13px;">
+									<i class="bi bi-person-fill"></i> Nom du client *
+								</label>
+								<input 
+									[(ngModel)]="dialogClient.nom" 
+									(input)="onClientInputChange('nom')"
+									(blur)="closeSuggestions()"
+									placeholder="Rechercher ou créer un client..." 
+									class="table-filter"
+									[disabled]="editMode"
+									style="width: 100%;" 
+								/>
+								
+								<!-- Liste de suggestions -->
+								<div *ngIf="showSuggestions && filteredSuggestions.length > 0" 
+									class="suggestions-list"
+									style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 2px solid #e2e8f0; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); max-height: 250px; overflow-y: auto; z-index: 1000; margin-top: 4px;">
+									<div *ngFor="let suggestion of filteredSuggestions" 
+										(mousedown)="selectSuggestion(suggestion)"
+										class="autocomplete-suggestion">
+										<i class="bi bi-person-circle"></i>
+										<div class="suggestion-details">
+											<div class="suggestion-name">{{ suggestion.nom }}</div>
+											<div class="suggestion-numero">{{ suggestion.numero }}</div>
+										</div>
+										<i class="bi bi-arrow-return-left suggestion-icon-return"></i>
+									</div>
+								</div>
+							</div>
+							
+							<!-- Champ Numéro avec autocomplétion -->
+							<div style="position: relative; margin-bottom: 16px;">
+								<label style="display: block; margin-bottom: 8px; font-weight: 600; color: #475569; font-size: 13px;">
+									<i class="bi bi-hash"></i> Numéro *
+								</label>
+								<input 
+									[(ngModel)]="dialogClient.numero" 
+									(input)="onClientInputChange('numero')"
+									(blur)="closeSuggestions()"
+									placeholder="Numéro du client" 
+									class="table-filter"
+									[disabled]="editMode"
+									style="width: 100%;" 
+								/>
+							</div>
+							
 							<div class="dialog-actions">
-								<button class="add-row-btn" *ngIf="!editMode" (click)="addDialogClient()" [disabled]="!isProjetActif()">Ajouter</button>
+								<button class="add-row-btn" *ngIf="!editMode" (click)="addDialogClient()" [disabled]="!isProjetActif()">
+									<i class="bi" [ngClass]="selectedExistingClient ? 'bi-link-45deg' : 'bi-plus-lg'"></i>
+									{{ selectedExistingClient ? 'Associer' : 'Ajouter' }}
+								</button>
 								<button class="add-row-btn" *ngIf="editMode" (click)="updateDialogClient()" [disabled]="!isProjetActif()">Enregistrer</button>
 								<button class="add-row-btn" (click)="closeDialog()">Annuler</button>
 							</div>

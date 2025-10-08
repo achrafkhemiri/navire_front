@@ -92,7 +92,7 @@ export class ProjetComponent {
         this.projets = projets;
         // Sélectionne automatiquement le projet actif
         this.projetActif = this.projets.find(pr => pr.active) || null;
-        this.applyFilter();
+        this.applyFilter(); // applyFilter appelle sortProjetsByDateAndActive
       },
       error: (err) => this.error = 'Erreur chargement: ' + (err.error?.message || err.message)
     });
@@ -109,7 +109,22 @@ export class ProjetComponent {
         pr.nomNavire?.toLowerCase().includes(filter)
       );
     }
+    this.sortProjetsByDateAndActive();
     this.updatePagination();
+  }
+  
+  sortProjetsByDateAndActive() {
+    // Trier les projets par ID décroissant (le plus récent en premier)
+    this.filteredProjets.sort((a, b) => {
+      // Le projet actif est toujours en première position
+      if (a.active && !b.active) return -1;
+      if (!a.active && b.active) return 1;
+      
+      // Sinon, trier par ID décroissant (le plus récent en premier)
+      const idA = a.id || 0;
+      const idB = b.id || 0;
+      return idB - idA;
+    });
   }
   
   sortBy(column: string) {

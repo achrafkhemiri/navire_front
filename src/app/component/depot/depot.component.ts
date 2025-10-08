@@ -32,6 +32,12 @@ export class DepotComponent {
   showAddDialog: boolean = false;
   depotFilter: string = '';
   
+  // Pour l'autocomplétion type Select2
+  allDepots: DepotDTO[] = []; // Tous les dépôts (toutes les BDD)
+  filteredSuggestions: DepotDTO[] = [];
+  showSuggestions: boolean = false;
+  selectedExistingDepot: DepotDTO | null = null;
+  
   // Pagination
   currentPage: number = 1;
   pageSize: number = 5;
@@ -59,6 +65,7 @@ export class DepotComponent {
       this.contextProjetId = Number(contextId);
       this.loadProjetDetails(this.contextProjetId, true);
     }
+    this.loadAllDepots(); // Charger tous les dépôts pour l'autocomplétion
     this.loadDepots();
   }
 
@@ -93,7 +100,15 @@ export class DepotComponent {
     });
   }
 
+  // IMPORTANT: Cette méthode est pour FILTRER les données (garde le comportement actuel)
+  isProjetActif(): boolean {
+    // Pour filtrage on utilise le contexte si disponible, sinon global
+    return !!(this.contextProjetId || this.projetActifId);
+  }
+
+  // NOUVELLE: Cette méthode est UNIQUEMENT pour les boutons Ajouter
   canAddData(): boolean {
+    // Si on visite un autre projet, on contrôle selon ce projet contextuel
     if (this.contextProjet) {
       return this.contextProjet.active === true;
     }
@@ -118,8 +133,78 @@ export class DepotComponent {
 
   openAddDialog() {
     this.dialogDepot = { nom: '' };
+    this.selectedExistingDepot = null;
     this.showAddDialog = true;
     this.editMode = false;
+    this.showSuggestions = false;
+    this.filteredSuggestions = [];
+  }
+
+  // Charger tous les dépôts de la base de données pour l'autocomplétion
+  loadAllDepots() {
+    this.depotService.getAllDepots('body').subscribe({
+      next: async (data) => {
+        if (data instanceof Blob) {
+          const text = await data.text();
+          try {
+            const json = JSON.parse(text);
+            if (Array.isArray(json)) {
+              this.allDepots = json;
+            }
+          } catch (e) {
+            console.error('Erreur parsing allDepots:', e);
+          }
+        } else if (Array.isArray(data)) {
+          this.allDepots = data;
+        }
+        console.log('AllDepots chargés pour autocomplétion:', this.allDepots.length);
+      },
+      error: (err) => {
+        console.error('Erreur chargement allDepots:', err);
+      }
+    });
+  }
+
+  // Filtrer les suggestions lors de la saisie
+  onDepotInputChange() {
+    const searchValue = this.dialogDepot.nom;
+    
+    if (!searchValue || searchValue.trim().length < 2) {
+      this.showSuggestions = false;
+      this.filteredSuggestions = [];
+      this.selectedExistingDepot = null;
+      return;
+    }
+    
+    const searchLower = searchValue.trim().toLowerCase();
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    
+    // Filtrer les dépôts qui correspondent et qui ne sont PAS déjà dans le projet actuel
+    this.filteredSuggestions = this.allDepots.filter(depot => {
+      const matchesSearch = depot.nom?.toLowerCase().includes(searchLower);
+      // Exclure les dépôts déjà associés au projet actuel
+      const notInCurrentProject = !this.depots.some(d => d.id === depot.id);
+      return matchesSearch && notInCurrentProject;
+    }).slice(0, 10); // Limiter à 10 suggestions
+    
+    this.showSuggestions = this.filteredSuggestions.length > 0;
+    this.selectedExistingDepot = null;
+  }
+
+  // Sélectionner un dépôt existant depuis les suggestions
+  selectSuggestion(depot: DepotDTO) {
+    this.selectedExistingDepot = depot;
+    this.dialogDepot.nom = depot.nom || '';
+    this.showSuggestions = false;
+    this.filteredSuggestions = [];
+  }
+
+  // Fermer les suggestions si on clique ailleurs
+  closeSuggestions() {
+    setTimeout(() => {
+      this.showSuggestions = false;
+      this.filteredSuggestions = [];
+    }, 200);
   }
 
   selectDepot(dep: DepotDTO) {
@@ -134,14 +219,34 @@ export class DepotComponent {
       this.error = 'Veuillez remplir le nom.';
       return;
     }
-    // Associe le projet actif
+    
     const targetProjetId = this.contextProjetId || this.projetActifId;
+    
+    // Si un dépôt existant a été sélectionné, on l'associe simplement au projet
+    if (this.selectedExistingDepot && this.selectedExistingDepot.id) {
+      console.log('Association dépôt existant:', this.selectedExistingDepot.id, 'au projet:', targetProjetId);
+      if (targetProjetId) {
+        this.projetService.addDepotToProjet(targetProjetId, this.selectedExistingDepot.id).subscribe({
+          next: () => {
+            console.log('Dépôt existant associé au projet');
+            this.loadDepots();
+            this.closeDialog();
+          },
+          error: (err) => {
+            this.error = 'Erreur association dépôt: ' + (err.error?.message || err.message);
+            console.error('Erreur association dépôt existant:', err);
+          }
+        });
+      }
+      return;
+    }
+    
+    // Sinon, créer un nouveau dépôt
     if (targetProjetId) {
       this.dialogDepot.projetId = targetProjetId;
     }
 
-    // Log request payload
-  console.log('Création depot - payload:', this.dialogDepot);
+    console.log('Création nouveau depot - payload:', this.dialogDepot);
 
     this.depotService.createDepot(this.dialogDepot, 'body').subscribe({
       next: (created) => {
@@ -234,18 +339,26 @@ export class DepotComponent {
   applyFilter() {
     const filter = this.depotFilter.trim().toLowerCase();
     let depotsFiltrés = this.depots;
-    // Filtre par projet actif
+    
+    // Filtre par projet actif - similaire au composant client
     const targetProjetId = this.contextProjetId || this.projetActifId;
     if (targetProjetId) {
-      // If depots were returned from the project-scoped endpoint they may not include projetId
-      depotsFiltrés = depotsFiltrés.filter(d => (d.projetId === undefined) || (d.projetId === targetProjetId));
+      // Filtrer uniquement les dépôts qui appartiennent au projet ciblé
+      depotsFiltrés = depotsFiltrés.filter(d => d.projetId === targetProjetId);
+      console.log(`applyFilter() - Filtrage pour projet ${targetProjetId}:`, {
+        total: this.depots.length,
+        filtrés: depotsFiltrés.length,
+        dépôts: depotsFiltrés
+      });
     }
+    
     // Filtre par texte
     if (filter) {
       depotsFiltrés = depotsFiltrés.filter(d =>
         d.nom?.toLowerCase().includes(filter)
       );
     }
+    
     this.filteredDepots = depotsFiltrés;
     this.updatePagination();
   }
@@ -339,9 +452,12 @@ export class DepotComponent {
   loadDepots() {
     const targetProjetId = this.contextProjetId || this.projetActifId;
     console.log('loadDepots() - targetProjetId:', targetProjetId);
+    
     if (targetProjetId) {
-      // Prefer server endpoint that returns depots for a project
+      // Utiliser l'endpoint spécifique au projet qui retourne les dépôts avec projetId
       const url = `${this.basePath}/api/projets/${targetProjetId}/depots`;
+      console.log('loadDepots() - using project-specific endpoint:', url);
+      
       this.http.get<any[]>(url, { withCredentials: true, responseType: 'json' as 'json' }).subscribe({
         next: (data) => {
           console.log('loadDepots() - project-scoped response:', data);
@@ -350,48 +466,21 @@ export class DepotComponent {
           } else {
             this.depots = [];
           }
+          console.log('loadDepots() - depots loaded:', this.depots);
           this.applyFilter();
         },
         error: err => {
-          console.warn('Project-scoped depot request failed, falling back to getAllDepots', err);
-          // fallback to existing getAllDepots behavior
-          this.depotService.getAllDepots('body').subscribe({
-            next: async (data) => {
-              console.log('loadDepots() - raw response:', data);
-              if (data instanceof Blob) {
-                const text = await data.text();
-                console.log('loadDepots() - blob text:', text);
-                try {
-                  const json = JSON.parse(text);
-                  console.log('loadDepots() - parsed json:', json);
-                  if (Array.isArray(json)) {
-                    this.depots = json;
-                  } else {
-                    this.depots = [];
-                  }
-                } catch (e) {
-                  this.error = 'Erreur parsing JSON: ' + e;
-                  console.error('Erreur parsing JSON in loadDepots:', e);
-                  this.depots = [];
-                }
-              } else if (Array.isArray(data)) {
-                console.log('loadDepots() - json array, length:', data.length);
-                this.depots = data;
-              } else {
-                console.log('loadDepots() - unexpected response:', data);
-                this.depots = [];
-              }
-              this.applyFilter();
-            },
-            error: (err) => this.error = 'Erreur chargement: ' + (err.error?.message || err.message)
-          });
+          console.error('Project-scoped depot request failed:', err);
+          this.error = 'Erreur chargement des dépôts: ' + (err.error?.message || err.message);
+          this.depots = [];
+          this.applyFilter();
         }
       });
     } else {
-      // If no active project, fetch all depots
+      // Pas de projet actif, charger tous les dépôts
       this.depotService.getAllDepots('body').subscribe({
         next: async (data) => {
-          console.log('loadDepots() - raw response:', data);
+          console.log('loadDepots() - raw response (all depots):', data);
           if (data instanceof Blob) {
             const text = await data.text();
             console.log('loadDepots() - blob text:', text);
@@ -415,9 +504,13 @@ export class DepotComponent {
             console.log('loadDepots() - unexpected response:', data);
             this.depots = [];
           }
+          console.log('loadDepots() - depots loaded:', this.depots);
           this.applyFilter();
         },
-        error: (err) => this.error = 'Erreur chargement: ' + (err.error?.message || err.message)
+        error: (err) => {
+          this.error = 'Erreur chargement: ' + (err.error?.message || err.message);
+          console.error('Erreur chargement depots:', err);
+        }
       });
     }
   }

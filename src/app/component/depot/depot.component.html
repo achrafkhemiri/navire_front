@@ -83,7 +83,11 @@
             <td colspan="2">
               <div class="no-data">
                 <i class="bi bi-inbox"></i>
-                <p>Aucun dépôt trouvé</p>
+                <p *ngIf="!isProjetActif()">Aucun dépôt trouvé</p>
+                <p *ngIf="isProjetActif()">Aucun dépôt associé à ce projet</p>
+                <p *ngIf="isProjetActif()" style="font-size: 13px; color: #64748b; margin-top: 8px;">
+                  Ajoutez un nouveau dépôt pour ce projet
+                </p>
               </div>
             </td>
           </tr>
@@ -124,9 +128,51 @@
     <div class="dialog-backdrop" *ngIf="showAddDialog || editMode" (click)="closeDialog()">
       <div class="dialog-modal" (click)="$event.stopPropagation()">
         <h3>{{ editMode ? 'Modifier le dépôt' : 'Ajouter un dépôt' }}</h3>
-        <input [(ngModel)]="dialogDepot.nom" placeholder="Nom du dépôt" />
+        
+        <!-- Message d'information pour l'autocomplétion -->
+        <div *ngIf="!editMode && selectedExistingDepot" style="background: #dbeafe; padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; border-left: 4px solid #3b82f6;">
+          <div style="display: flex; align-items: center; gap: 8px; color: #1e40af;">
+            <i class="bi bi-info-circle-fill"></i>
+            <span style="font-weight: 500;">Dépôt existant sélectionné : il sera associé à ce projet</span>
+          </div>
+        </div>
+        
+        <!-- Champ Nom avec autocomplétion -->
+        <div style="position: relative; margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #475569; font-size: 13px;">
+            <i class="bi bi-box-seam" style="margin-right: 6px;"></i>
+            Nom du dépôt
+          </label>
+          <input 
+            [(ngModel)]="dialogDepot.nom" 
+            (input)="onDepotInputChange()"
+            (blur)="closeSuggestions()"
+            placeholder="Rechercher ou créer un dépôt..." 
+            [disabled]="editMode"
+            style="width: 100%;" 
+          />
+          
+          <!-- Liste de suggestions -->
+          <div *ngIf="showSuggestions && filteredSuggestions.length > 0" 
+               style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 250px; overflow-y: auto; z-index: 1000; margin-top: 4px;">
+            <div *ngFor="let depot of filteredSuggestions" 
+                 class="autocomplete-suggestion"
+                 (mousedown)="selectSuggestion(depot)"
+                 style="padding: 12px 16px; cursor: pointer; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #f1f5f9; transition: background-color 0.2s;">
+              <i class="bi bi-box-seam" style="color: #6366f1; font-size: 18px;"></i>
+              <div class="suggestion-details" style="flex: 1;">
+                <div class="suggestion-name" style="font-weight: 500; color: #1e293b;">{{ depot.nom }}</div>
+              </div>
+              <i class="bi bi-plus-circle suggestion-icon-return" style="color: #64748b; font-size: 16px;"></i>
+            </div>
+          </div>
+        </div>
+        
         <div class="dialog-actions">
-          <button *ngIf="!editMode" (click)="addDialogDepot()" [disabled]="!canAddData()">Ajouter</button>
+          <button *ngIf="!editMode" (click)="addDialogDepot()" [disabled]="!canAddData()">
+            <i class="bi" [ngClass]="selectedExistingDepot ? 'bi-link-45deg' : 'bi-plus-lg'"></i>
+            {{ selectedExistingDepot ? 'Associer' : 'Créer' }}
+          </button>
           <button *ngIf="editMode" (click)="updateDialogDepot()" [disabled]="!canAddData()">Enregistrer</button>
           <button (click)="closeDialog()">Annuler</button>
         </div>
