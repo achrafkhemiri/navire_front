@@ -3,6 +3,7 @@ import { ProjetListComponent } from './projet-list/projet-list.component';
 import { ProjetComponent } from './component/projet/projet.component';
 import { VoyageComponent } from './component/voyage/voyage.component';
 import { BreadcrumbComponent } from './component/breadcrumb/breadcrumb.component';
+import { RecapComponent } from './component/recap/recap.component';
 import { NgModule } from '@angular/core';
 import { HTTP_INTERCEPTORS } from '@angular/common/http';
 import { BASE_PATH } from './api/variables';
@@ -69,6 +70,7 @@ import { NotificationsComponent } from './component/notifications/notifications.
   ProjetListComponent,
   BreadcrumbComponent,
   NotificationsComponent,
+  RecapComponent,
   ],
   imports: [
     BrowserModule,

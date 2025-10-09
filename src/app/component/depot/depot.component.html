@@ -46,6 +46,53 @@
       </div>
     </div>
 
+    <!-- Date Filter Section -->
+    <div class="date-filter-section">
+      <div class="date-filter-card">
+        <div class="date-filter-header">
+          <div class="filter-title-group">
+            <i class="bi bi-calendar-date"></i>
+            <h4>Filtre par Date</h4>
+          </div>
+          <button 
+            class="filter-toggle-btn"
+            [class.active]="dateFilterActive"
+            (click)="toggleDateFilter()">
+            <i class="bi" [ngClass]="dateFilterActive ? 'bi-toggle-on' : 'bi-toggle-off'"></i>
+            {{ dateFilterActive ? 'Actif' : 'Inactif' }}
+          </button>
+        </div>
+        <div *ngIf="dateFilterActive" class="date-filter-body">
+          <div class="filter-controls">
+            <div class="date-input-group">
+              <label>
+                <i class="bi bi-calendar-event"></i>
+                Date limite
+              </label>
+              <input 
+                type="date" 
+                [(ngModel)]="selectedDate"
+                (change)="onDateFilterChange()"
+                class="date-input"
+              />
+            </div>
+            <div class="filter-actions">
+              <button 
+                class="clear-filter-btn"
+                (click)="clearDateFilter()">
+                <i class="bi bi-x-circle"></i>
+                Effacer
+              </button>
+            </div>
+          </div>
+          <div *ngIf="selectedDate" class="filter-info-message">
+            <i class="bi bi-info-circle-fill"></i>
+            <span>Affichage des quantités vendues jusqu'au {{ formatDate(selectedDate) }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Table -->
     <div class="table-container">
       <table class="modern-table">
@@ -61,6 +108,12 @@
                 }"></i>
               </div>
             </th>
+            <th class="text-center quantity-header">
+              <div class="th-content">
+                <i class="bi bi-box-seam-fill"></i>
+                <span>Quantité Vendue</span>
+              </div>
+            </th>
             <th class="actions-header text-center">Actions</th>
           </tr>
         </thead>
@@ -69,6 +122,13 @@
             <td>
               <i class="bi bi-box-seam" style="margin-right: 8px; color: #6366f1;"></i>
               {{ dep.nom }}
+            </td>
+            <td class="text-center">
+              <span class="quantity-badge">
+                <i class="bi bi-box-seam-fill"></i>
+                <span class="quantity-value">{{ getTotalLivreDepot(dep.id) | number:'1.0-2' }}</span>
+                <span class="quantity-unit">kg</span>
+              </span>
             </td>
             <td class="actions-cell">
               <button class="action-btn edit-btn" (click)="selectDepot(dep)" [disabled]="!canAddData()" [title]="!canAddData() ? 'Ce projet n\'est pas actif' : 'Modifier'">
@@ -80,7 +140,7 @@
             </td>
           </tr>
           <tr *ngIf="paginatedDepots.length === 0" class="no-data-row">
-            <td colspan="2">
+            <td colspan="3">
               <div class="no-data">
                 <i class="bi bi-inbox"></i>
                 <p *ngIf="!isProjetActif()">Aucun dépôt trouvé</p>

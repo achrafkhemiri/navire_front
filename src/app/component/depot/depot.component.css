@@ -1,5 +1,244 @@
 /* Styles globaux gérés par styles-table.css - pas de styles spécifiques nécessaires */
 
+/* ===== DATE FILTER SECTION ===== */
+.date-filter-section {
+  margin-bottom: 24px;
+}
+
+.date-filter-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  overflow: visible;
+  position: relative;
+}
+
+.date-filter-header {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  padding: 18px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 16px 16px 0 0;
+}
+
+.filter-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: white;
+}
+
+.filter-title-group i {
+  font-size: 22px;
+}
+
+.filter-title-group h4 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.filter-toggle-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 8px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.filter-toggle-btn.active {
+  background: white;
+  color: #2563eb;
+  border-color: white;
+}
+
+.filter-toggle-btn i {
+  font-size: 18px;
+}
+
+.date-filter-body {
+  padding: 24px;
+  animation: slideDown 0.3s ease;
+}
+
+.filter-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.date-input-group {
+  flex: 1;
+  min-width: 280px;
+}
+
+.date-input-group label {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-input-group label i {
+  color: #3b82f6;
+  font-size: 16px;
+}
+
+.date-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 15px;
+  transition: all 0.3s ease;
+  font-family: inherit;
+  background: #ffffff;
+  color: #1e293b;
+}
+
+.date-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.date-input:hover {
+  border-color: #cbd5e1;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.clear-filter-btn {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 10px rgba(239, 68, 68, 0.3);
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.clear-filter-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
+}
+
+.clear-filter-btn:active {
+  transform: translateY(0);
+}
+
+.filter-info-message {
+  margin-top: 16px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-radius: 12px;
+  border-left: 4px solid #3b82f6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #1e40af;
+  animation: slideDown 0.3s ease;
+}
+
+.filter-info-message i {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.filter-info-message span {
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ===== QUANTITY COLUMN ===== */
+.quantity-header .th-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.quantity-header .th-content i {
+  color: #3b82f6;
+  font-size: 16px;
+}
+
+.quantity-badge {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  padding: 8px 18px;
+  border-radius: 24px;
+  font-weight: 600;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 10px rgba(59, 130, 246, 0.25);
+  transition: all 0.3s ease;
+}
+
+.quantity-badge:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
+}
+
+.quantity-badge i {
+  font-size: 15px;
+}
+
+.quantity-value {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.quantity-unit {
+  font-size: 12px;
+  opacity: 0.9;
+  font-weight: 500;
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Styles pour l'autocomplétion Select2 */
 .autocomplete-suggestion {
   padding: 12px 16px;

@@ -17,6 +17,7 @@ import { ProjetClientDTO } from '../../api/model/projetClientDTO';
 import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
 import { HttpClient } from '@angular/common/http';
 import { BASE_PATH } from '../../api/variables';
+import * as XLSX from 'xlsx';
 
 @Component({
   selector: 'app-voyage',
@@ -85,6 +86,12 @@ export class VoyageComponent {
   // Tri
   sortColumn: string = '';
   sortDirection: 'asc' | 'desc' = 'asc';
+  
+  // Filtres
+  activeFilter: 'all' | 'date' | 'client' | 'depot' = 'all';
+  selectedDate: string | null = null;
+  selectedClientId: number | null = null;
+  selectedDepotId: number | null = null;
   
   Math = Math;
 
@@ -1013,9 +1020,13 @@ export class VoyageComponent {
   applyFilter() {
     const filter = this.voyageFilter.trim().toLowerCase();
     let voyagesFiltrés = this.voyages;
+    
+    // Filtre par projet actif
     if (this.projetActifId) {
       voyagesFiltrés = voyagesFiltrés.filter(vg => vg.projetId === this.projetActifId);
     }
+    
+    // Filtre par recherche textuelle
     if (filter) {
       voyagesFiltrés = voyagesFiltrés.filter(vg =>
         (vg.numBonLivraison?.toLowerCase().includes(filter) || false) ||
@@ -1023,8 +1034,110 @@ export class VoyageComponent {
         (vg.societe?.toLowerCase().includes(filter) || false)
       );
     }
+    
+    // Filtres par boutons
+    if (this.activeFilter === 'date' && this.selectedDate) {
+      voyagesFiltrés = voyagesFiltrés.filter(vg => vg.date === this.selectedDate);
+    } else if (this.activeFilter === 'client' && this.selectedClientId) {
+      voyagesFiltrés = voyagesFiltrés.filter(vg => vg.clientId === this.selectedClientId);
+    } else if (this.activeFilter === 'depot' && this.selectedDepotId) {
+      voyagesFiltrés = voyagesFiltrés.filter(vg => vg.depotId === this.selectedDepotId);
+    }
+    
     this.filteredVoyages = voyagesFiltrés;
     this.updatePagination();
+  }
+  
+  setFilter(filterType: 'all' | 'date' | 'client' | 'depot') {
+    this.activeFilter = filterType;
+    
+    // Réinitialiser les filtres spécifiques quand on change de type
+    if (filterType === 'all') {
+      this.selectedDate = null;
+      this.selectedClientId = null;
+      this.selectedDepotId = null;
+    } else if (filterType === 'date') {
+      this.selectedClientId = null;
+      this.selectedDepotId = null;
+      // Initialiser avec la date d'aujourd'hui si aucune date n'est sélectionnée
+      if (!this.selectedDate) {
+        this.selectedDate = new Date().toISOString().split('T')[0];
+      }
+    } else if (filterType === 'client') {
+      this.selectedDate = null;
+      this.selectedDepotId = null;
+    } else if (filterType === 'depot') {
+      this.selectedDate = null;
+      this.selectedClientId = null;
+    }
+    
+    this.applyFilter();
+  }
+  
+  getFilterCount(filterType: 'date' | 'client' | 'depot'): number {
+    let voyagesFiltrés = this.voyages;
+    
+    if (this.projetActifId) {
+      voyagesFiltrés = voyagesFiltrés.filter(vg => vg.projetId === this.projetActifId);
+    }
+    
+    if (filterType === 'date') {
+      // Compter les voyages avec une date (voyages valides pour ce filtre)
+      return voyagesFiltrés.filter(vg => vg.date).length;
+    } else if (filterType === 'client') {
+      // Compter les voyages avec un client
+      return voyagesFiltrés.filter(vg => vg.clientId).length;
+    } else if (filterType === 'depot') {
+      // Compter les voyages avec un dépôt
+      return voyagesFiltrés.filter(vg => vg.depotId).length;
+    }
+    
+    return 0;
+  }
+  
+  getTotalWeight(): number {
+    return this.filteredVoyages.reduce((total, voyage) => {
+      const poidsClient = voyage.poidsClient || 0;
+      const poidsDepot = voyage.poidsDepot || 0;
+      return total + poidsClient + poidsDepot;
+    }, 0);
+  }
+  
+  getTotalClientWeight(): number {
+    return this.filteredVoyages.reduce((total, voyage) => {
+      return total + (voyage.poidsClient || 0);
+    }, 0);
+  }
+  
+  getTotalDepotWeight(): number {
+    return this.filteredVoyages.reduce((total, voyage) => {
+      return total + (voyage.poidsDepot || 0);
+    }, 0);
+  }
+  
+  getTotalWeightLabel(): string {
+    if (this.activeFilter === 'all') {
+      return 'Total des voyages';
+    } else if (this.activeFilter === 'date' && this.selectedDate) {
+      // Formater la date en français
+      const date = new Date(this.selectedDate);
+      const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+      const dateFormatted = date.toLocaleDateString('fr-FR', options);
+      return `Total des voyages du ${dateFormatted}`;
+    } else if (this.activeFilter === 'client' && this.selectedClientId) {
+      const client = this.clients.find(c => c.id === this.selectedClientId);
+      if (client) {
+        return `Total des voyages pour ${client.nom} (${client.numero || 'N/A'})`;
+      }
+      return 'Total des voyages par client';
+    } else if (this.activeFilter === 'depot' && this.selectedDepotId) {
+      const depot = this.depots.find(d => d.id === this.selectedDepotId);
+      if (depot) {
+        return `Total des voyages pour le dépôt ${depot.nom}`;
+      }
+      return 'Total des voyages par dépôt';
+    }
+    return 'Total des voyages';
   }
   
   sortBy(column: string) {
@@ -1302,5 +1415,67 @@ export class VoyageComponent {
       },
       error: (err) => this.error = 'Erreur suppression: ' + (err.error?.message || err.message)
     });
+  }
+
+  exportToExcel(): void {
+    // Préparer les données pour l'export
+    const dataToExport = this.filteredVoyages.map(voyage => {
+      // Trouver les noms plutôt que les IDs
+      const chauffeur = this.chauffeurs.find(c => c.id === voyage.chauffeurId);
+      const camion = this.camions.find(c => c.id === voyage.camionId);
+      const client = this.clients.find(c => c.id === voyage.clientId);
+      const depot = this.depots.find(d => d.id === voyage.depotId);
+      const projet = this.projets.find(p => p.id === voyage.projetId);
+      
+      return {
+        'N° Bon de Livraison': voyage.numBonLivraison || '',
+        'N° Ticket': voyage.numTicket || '',
+        'Date': voyage.date ? new Date(voyage.date).toLocaleDateString('fr-FR') : '',
+        'Chauffeur': chauffeur?.nom || '',
+        'Camion': camion?.matricule || '',
+        'Société': voyage.societe || '',
+        'Dépôt': depot?.nom || '',
+        'Poids Dépôt (kg)': voyage.poidsDepot || 0,
+        'Client': client?.nom || '',
+        'N° Client': client?.numero || '',
+        'Poids Client (kg)': voyage.poidsClient || 0,
+        'Reste (kg)': voyage.reste || 0,
+        'Projet': projet?.nom || ''
+      };
+    });
+
+    // Créer une feuille de calcul
+    const worksheet: XLSX.WorkSheet = XLSX.utils.json_to_sheet(dataToExport);
+
+    // Ajuster la largeur des colonnes
+    const columnWidths = [
+      { wch: 20 }, // N° Bon de Livraison
+      { wch: 15 }, // N° Ticket
+      { wch: 12 }, // Date
+      { wch: 20 }, // Chauffeur
+      { wch: 15 }, // Camion
+      { wch: 20 }, // Société
+      { wch: 20 }, // Dépôt
+      { wch: 15 }, // Poids Dépôt
+      { wch: 25 }, // Client
+      { wch: 15 }, // N° Client
+      { wch: 15 }, // Poids Client
+      { wch: 12 }, // Reste
+      { wch: 20 }  // Projet
+    ];
+    worksheet['!cols'] = columnWidths;
+
+    // Créer un classeur
+    const workbook: XLSX.WorkBook = {
+      Sheets: { 'Voyages': worksheet },
+      SheetNames: ['Voyages']
+    };
+
+    // Générer le nom du fichier avec la date actuelle
+    const dateStr = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
+    const fileName = `Voyages_${dateStr}.xlsx`;
+
+    // Télécharger le fichier
+    XLSX.writeFile(workbook, fileName);
   }
 }

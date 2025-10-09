@@ -73,7 +73,7 @@
                 }"></i>
               </div>
             </th>
-            <th class="sortable" (click)="sortBy('societe')">
+            <!-- <th class="sortable" (click)="sortBy('societe')">
               <div class="th-content">
                 <span>Société</span>
                 <i class="bi" [ngClass]="{
@@ -82,7 +82,7 @@
                   'bi-chevron-expand': sortColumn !== 'societe'
                 }"></i>
               </div>
-            </th>
+            </th> -->
             <th class="sortable" (click)="sortBy('numBonLivraison')">
               <div class="th-content">
                 <span>Bon Livraison</span>
@@ -100,7 +100,7 @@
           <tr *ngFor="let cam of paginatedCamions" class="table-row">
             <td class="id-cell">{{ cam.id }}</td>
             <td>{{ cam.matricule }}</td>
-            <td>{{ cam.societe }}</td>
+            <!-- <td>{{ cam.societe }}</td> -->
             <td>{{ cam.numBonLivraison }}</td>
             <td class="actions-cell">
               <button class="action-btn edit-btn" (click)="editCamion(cam)" title="Modifier">

@@ -48,6 +48,57 @@
 			</button>
 		</div>
 
+		<!-- Filter Buttons -->
+		<div class="filter-section" style="margin-bottom: 20px;">
+			<div style="display: flex; gap: 12px; flex-wrap: wrap;">
+				<button 
+					class="filter-btn" 
+					[class.active]="!dateFilterActive"
+					(click)="clearDateFilter()"
+					style="flex: 1; min-width: 150px;">
+					<i class="bi bi-list-ul"></i>
+					<span>Tous les clients</span>
+					<span class="filter-badge">{{ filteredClients.length }}</span>
+				</button>
+				<button 
+					class="filter-btn" 
+					[class.active]="dateFilterActive"
+					(click)="toggleDateFilter()"
+					style="flex: 1; min-width: 150px;">
+					<i class="bi bi-calendar-event"></i>
+					<span>Filtrer par date</span>
+					<span class="filter-badge" *ngIf="selectedDate">1</span>
+				</button>
+			</div>
+			
+			<!-- Date Filter Details -->
+			<div *ngIf="dateFilterActive" class="filter-details" style="margin-top: 16px; padding: 16px; background: #f8fafc; border-radius: 12px; border-left: 4px solid #667eea;">
+				<label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b; font-size: 14px;">
+					<i class="bi bi-calendar3"></i> Sélectionner une date pour le calcul
+				</label>
+				<div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+					<input 
+						type="date" 
+						[(ngModel)]="selectedDate" 
+						(change)="onDateFilterChange()"
+						style="flex: 1; min-width: 200px; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+					/>
+					<button 
+						*ngIf="selectedDate"
+						(click)="clearDateFilter()"
+						style="padding: 10px 20px; background: #ef4444; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.3s ease;"
+						onmouseover="this.style.background='#dc2626'"
+						onmouseout="this.style.background='#ef4444'">
+						<i class="bi bi-x-circle"></i> Effacer
+					</button>
+				</div>
+				<p *ngIf="selectedDate" style="margin-top: 12px; font-size: 13px; color: #64748b; display: flex; align-items: center; gap: 8px;">
+					<i class="bi bi-info-circle-fill" style="color: #3b82f6;"></i>
+					Les quantités vendue et reste sont calculées jusqu'au <strong>{{ formatDate(selectedDate) }}</strong>
+				</p>
+			</div>
+		</div>
+
 		<!-- Toolbar avec recherche et options -->
 		<div class="toolbar-section">
 			<div class="search-box">

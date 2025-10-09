@@ -85,6 +85,10 @@ export class ClientComponent {
   sortColumn: string = '';
   sortDirection: 'asc' | 'desc' = 'asc';
   
+  // Date Filter
+  dateFilterActive: boolean = false;
+  selectedDate: string | null = null;
+  
   // Expose Math to template
   Math = Math;
 
@@ -734,9 +738,15 @@ export class ClientComponent {
   // Calculer le total livré pour un client
   getTotalLivreClient(clientId?: number): number {
     if (!clientId || !this.voyages) return 0;
-    return this.voyages
-      .filter(v => v.clientId === clientId && v.poidsClient)
-      .reduce((sum, v) => sum + (v.poidsClient || 0), 0);
+    
+    let filteredVoyages = this.voyages.filter(v => v.clientId === clientId && v.poidsClient);
+    
+    // Si un filtre de date est actif, ne prendre que les voyages jusqu'à cette date
+    if (this.dateFilterActive && this.selectedDate) {
+      filteredVoyages = filteredVoyages.filter(v => v.date && v.date <= this.selectedDate!);
+    }
+    
+    return filteredVoyages.reduce((sum, v) => sum + (v.poidsClient || 0), 0);
   }
   
   // Calculer le reste pour un client
@@ -813,5 +823,38 @@ export class ClientComponent {
     this.showQuantiteModal = false;
     this.pendingClientId = null;
     this.quantiteAutorisee = 0;
+  }
+  
+  // Activer/désactiver le filtre par date
+  toggleDateFilter() {
+    this.dateFilterActive = !this.dateFilterActive;
+    if (this.dateFilterActive && !this.selectedDate) {
+      // Initialiser avec la date d'aujourd'hui
+      this.selectedDate = new Date().toISOString().split('T')[0];
+    }
+    this.updatePagination();
+  }
+  
+  // Gérer le changement de date
+  onDateFilterChange() {
+    this.updatePagination();
+  }
+  
+  // Effacer le filtre par date
+  clearDateFilter() {
+    this.dateFilterActive = false;
+    this.selectedDate = null;
+    this.updatePagination();
+  }
+  
+  // Formater la date en français
+  formatDate(dateString: string): string {
+    const date = new Date(dateString);
+    const options: Intl.DateTimeFormatOptions = { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    return date.toLocaleDateString('fr-FR', options);
   }
 }

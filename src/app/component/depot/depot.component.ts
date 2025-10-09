@@ -1,11 +1,13 @@
 import { Component } from '@angular/core';
 import { DepotControllerService } from '../../api/api/depotController.service';
+import { VoyageControllerService } from '../../api/api/voyageController.service';
 import { HttpClient } from '@angular/common/http';
 import { Inject } from '@angular/core';
 import { BASE_PATH } from '../../api/variables';
 import { ProjetActifService } from '../../service/projet-actif.service';
 import { ProjetControllerService } from '../../api/api/projetController.service';
 import { DepotDTO } from '../../api/model/depotDTO';
+import { VoyageDTO } from '../../api/model/voyageDTO';
 import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
 
 @Component({
@@ -48,9 +50,23 @@ export class DepotComponent {
   sortColumn: string = '';
   sortDirection: 'asc' | 'desc' = 'asc';
   
+  // Voyages pour calculer la quantité vendue
+  voyages: VoyageDTO[] = [];
+  
+  // Date Filter
+  dateFilterActive: boolean = false;
+  selectedDate: string | null = null;
+  
   Math = Math;
 
-  constructor(private depotService: DepotControllerService, private projetActifService: ProjetActifService, private projetService: ProjetControllerService, private http: HttpClient, @Inject(BASE_PATH) private basePath: string) {
+  constructor(
+    private depotService: DepotControllerService, 
+    private voyageService: VoyageControllerService,
+    private projetActifService: ProjetActifService, 
+    private projetService: ProjetControllerService, 
+    private http: HttpClient, 
+    @Inject(BASE_PATH) private basePath: string
+  ) {
     this.initializeProjetContext();
   }
 
@@ -67,6 +83,7 @@ export class DepotComponent {
     }
     this.loadAllDepots(); // Charger tous les dépôts pour l'autocomplétion
     this.loadDepots();
+    this.loadVoyages(); // Charger les voyages pour calculer la quantité vendue
   }
 
   loadProjetDetails(projetId: number, isContext: boolean = false) {
@@ -513,5 +530,95 @@ export class DepotComponent {
         }
       });
     }
+  }
+
+  // Charger les voyages
+  loadVoyages() {
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    
+    if (targetProjetId) {
+      // Charger les voyages du projet
+      this.voyageService.getVoyagesByProjet(targetProjetId, 'body').subscribe({
+        next: async (data: any) => {
+          if (data instanceof Blob) {
+            const text = await data.text();
+            try {
+              const parsed = JSON.parse(text);
+              this.voyages = Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+              console.error('Erreur parsing voyages:', e);
+              this.voyages = [];
+            }
+          } else {
+            this.voyages = Array.isArray(data) ? data : [];
+          }
+        },
+        error: (err: any) => {
+          console.error('Erreur chargement voyages:', err);
+          this.voyages = [];
+        }
+      });
+    } else {
+      // Charger tous les voyages
+      this.voyageService.getAllVoyages('body').subscribe({
+        next: async (data: any) => {
+          if (data instanceof Blob) {
+            const text = await data.text();
+            try {
+              const parsed = JSON.parse(text);
+              this.voyages = Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+              console.error('Erreur parsing voyages:', e);
+              this.voyages = [];
+            }
+          } else {
+            this.voyages = Array.isArray(data) ? data : [];
+          }
+        },
+        error: (err: any) => {
+          console.error('Erreur chargement voyages:', err);
+          this.voyages = [];
+        }
+      });
+    }
+  }
+
+  // Calculer la quantité totale livrée au dépôt
+  getTotalLivreDepot(depotId: number | undefined): number {
+    if (!depotId) return 0;
+    
+    let voyagesDepot = this.voyages.filter(v => v.depotId === depotId);
+    
+    // Appliquer le filtre par date si actif
+    if (this.dateFilterActive && this.selectedDate) {
+      voyagesDepot = voyagesDepot.filter(v => v.date && v.date <= this.selectedDate!);
+    }
+    
+    return voyagesDepot.reduce((sum, v) => sum + (v.poidsDepot || 0), 0);
+  }
+
+  // Gestion du filtre par date
+  toggleDateFilter() {
+    this.dateFilterActive = !this.dateFilterActive;
+    if (!this.dateFilterActive) {
+      this.selectedDate = null;
+    }
+  }
+
+  onDateFilterChange() {
+    // Le filtre est automatiquement appliqué via getTotalLivreDepot
+    this.updatePagination();
+  }
+
+  clearDateFilter() {
+    this.dateFilterActive = false;
+    this.selectedDate = null;
+    this.updatePagination();
+  }
+
+  formatDate(date: string | null): string {
+    if (!date) return '';
+    const d = new Date(date);
+    return d.toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
   }
 }
