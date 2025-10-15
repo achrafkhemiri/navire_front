@@ -26,7 +26,9 @@
             ],
             "styles": [
               "node_modules/bootstrap/dist/css/bootstrap.min.css",
-              "src/styles.css"
+              "src/styles.css",
+              "src/styles-layout.css",
+              "src/styles-table.css"
             ],
             "scripts": []
           },
@@ -88,7 +90,9 @@
               "src/assets"
             ],
             "styles": [
-              "src/styles.css"
+              "src/styles.css",
+              "src/styles-layout.css",
+              "src/styles-table.css"
             ],
             "scripts": []
           }

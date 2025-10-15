@@ -1,0 +1,1074 @@
+import { Component, HostListener, Inject, ChangeDetectorRef } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
+import { ChargementControllerService } from '../../api/api/chargementController.service';
+import { ChargementDTO } from '../../api/model/chargementDTO';
+import { ChauffeurControllerService } from '../../api/api/chauffeurController.service';
+import { CamionControllerService } from '../../api/api/camionController.service';
+import { ProjetControllerService } from '../../api/api/projetController.service';
+import { ChauffeurDTO } from '../../api/model/chauffeurDTO';
+import { CamionDTO } from '../../api/model/camionDTO';
+import { ProjetDTO } from '../../api/model/projetDTO';
+import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
+import { HttpClient } from '@angular/common/http';
+import { BASE_PATH } from '../../api/variables';
+import { ProjetActifService } from '../../service/projet-actif.service';
+import * as XLSX from 'xlsx';
+
+@Component({
+  selector: 'app-chargement',
+  templateUrl: './chargement.component.html',
+  styleUrls: ['./chargement.component.css']
+})
+export class ChargementComponent {
+  chargements: ChargementDTO[] = [];
+  filteredChargements: ChargementDTO[] = [];
+  paginatedChargements: ChargementDTO[] = [];
+  projetActifId: number | null = null;
+  projetActif: any = null;
+  contextProjetId: number | null = null;
+  contextProjet: any = null;
+  breadcrumbItems: BreadcrumbItem[] = [];
+  selectedChargement: ChargementDTO | null = null;
+  dialogChargement: ChargementDTO = { camionId: 0, chauffeurId: 0, societe: '', projetId: 0, dateChargement: '' };
+  editMode: boolean = false;
+  error: string = '';
+  chauffeurs: ChauffeurDTO[] = [];
+  camions: CamionDTO[] = [];
+  projets: ProjetDTO[] = [];
+  isSidebarOpen: boolean = true;
+  showAddDialog: boolean = false;
+  chargementFilter: string = '';
+  
+  // Camion search/create
+  camionSearchInput: string = '';
+  filteredCamions: CamionDTO[] = [];
+  showCamionDropdown: boolean = false;
+  isCreatingCamion: boolean = false;
+  
+  // Chauffeur search/create
+  chauffeurSearchInput: string = '';
+  filteredChauffeurs: ChauffeurDTO[] = [];
+  showChauffeurDropdown: boolean = false;
+  isCreatingChauffeur: boolean = false;
+  chauffeurCinInput: string = '';
+  
+  // Société search
+  societeSearchInput: string = '';
+  filteredSocietes: string[] = [];
+  showSocieteDropdown: boolean = false;
+  allSocietes: string[] = [];
+  
+  // Pagination
+  currentPage: number = 1;
+  pageSize: number = 5;
+  totalPages: number = 1;
+  pageSizes: number[] = [5, 10, 20, 50];
+  
+  // Tri
+  sortColumn: string = '';
+  sortDirection: 'asc' | 'desc' = 'asc';
+  
+  // Filtres
+  activeFilter: 'all' | 'date' | 'camion' | 'chauffeur' | 'societe' = 'all';
+  selectedDate: string | null = null;
+  selectedCamionId: number | null = null;
+  selectedChauffeurId: number | null = null;
+  selectedSociete: string | null = null;
+  
+  Math = Math;
+
+  constructor(
+    private chargementService: ChargementControllerService,
+    private chauffeurService: ChauffeurControllerService,
+    private camionService: CamionControllerService,
+    private projetService: ProjetControllerService,
+    private projetActifService: ProjetActifService,
+    private http: HttpClient,
+    private route: ActivatedRoute,
+    private cdr: ChangeDetectorRef,
+    @Inject(BASE_PATH) private basePath: string
+  ) {
+    // Écouter les changements du projet actif
+    this.projetActifService.projetActif$.subscribe(projet => {
+      if (projet && projet.id) {
+        const previousId = this.projetActifId;
+        this.projetActifId = projet.id;
+        this.projetActif = projet;
+        
+        if (!previousId || previousId !== projet.id) {
+          setTimeout(() => {
+            this.reloadData();
+          }, 50);
+        }
+      }
+    });
+    
+    this.initializeProjetContext();
+  }
+
+  initializeProjetContext() {
+    // 1. Récupérer le projet actif global du service
+    const globalProjet = this.projetActifService.getProjetActif();
+    if (globalProjet && globalProjet.id) {
+      this.projetActifId = globalProjet.id;
+      this.projetActif = globalProjet;
+      console.log('✅ [Chargement] Projet actif initialisé:', this.projetActif.nom, '- Active:', this.projetActif.active, '- canAddData():', this.canAddData());
+    } else {
+      console.warn('⚠️ [Chargement] Aucun projet actif trouvé au démarrage');
+    }
+
+    // 2. Vérifier si on est dans un contexte projet (via route /projet/:id/chargements)
+    this.route.paramMap.subscribe(pm => {
+      const pid = pm.get('id');
+      const urlProjetId = pid ? Number(pid) : null;
+      const contextId = window.sessionStorage.getItem('projetActifId');
+      
+      if (contextId) {
+        this.contextProjetId = Number(contextId);
+        
+        // Si le contextId correspond au projet actif déjà chargé, l'utiliser directement
+        if (this.projetActif && this.projetActif.id === this.contextProjetId) {
+          this.contextProjet = this.projetActif;
+          console.log('✅ [Chargement] Context projet = projet actif:', this.contextProjet.nom);
+        } else {
+          this.loadProjetDetails(this.contextProjetId, true);
+        }
+      } else if (urlProjetId) {
+        this.projetActifId = urlProjetId;
+        this.loadProjetDetails(urlProjetId);
+      }
+      this.loadChargements();
+    });
+    
+    this.loadProjets();
+    this.loadChauffeurs();
+    this.loadCamions();
+  }
+
+  ngOnInit() {
+    this.updateBreadcrumb();
+  }
+
+  reloadData() {
+    this.loadChargements();
+    this.loadProjets();
+    this.updateBreadcrumb();
+  }
+
+  updateBreadcrumb() {
+    this.breadcrumbItems = [
+      { label: 'Accueil', url: '/home' },
+      { label: 'Projets', url: '/projet-list' }
+    ];
+    
+    if (this.contextProjet) {
+      this.breadcrumbItems.push({
+        label: this.contextProjet.nom || 'Projet',
+        url: `/projet/${this.contextProjetId}`
+      });
+    } else if (this.projetActif) {
+      this.breadcrumbItems.push({
+        label: this.projetActif.nom || 'Projet',
+        url: `/projet/${this.projetActifId}`
+      });
+    }
+    
+    this.breadcrumbItems.push({ label: 'Chargements' });
+  }
+
+  loadProjetDetails(id: number, isContext: boolean = false) {
+    this.projetService.getProjetById(id).subscribe({
+      next: (projet) => {
+        if (isContext) {
+          this.contextProjet = projet;
+        } else {
+          this.projetActif = projet;
+        }
+        this.updateBreadcrumb();
+        console.log('✅ [Chargement] Projet chargé:', projet.nom, '- Active:', projet.active, '- canAddData():', this.canAddData());
+      },
+      error: (err) => console.error('❌ Erreur chargement projet:', err)
+    });
+  }
+
+  loadChargements() {
+    const projectId = this.contextProjetId || this.projetActifId;
+    console.log('📊 [loadChargements] contextProjetId:', this.contextProjetId, 'projetActifId:', this.projetActifId, '→ projectId:', projectId);
+    
+    if (projectId) {
+      console.log('📤 [loadChargements] Appel API getChargementsByProjet:', projectId);
+      this.chargementService.getChargementsByProjet(projectId).subscribe({
+        next: async (data) => {
+          console.log('✅ [loadChargements] Réponse reçue:', data);
+          console.log('   Type:', typeof data, 'isArray:', Array.isArray(data), 'constructor:', data?.constructor?.name);
+          
+          // Si c'est un Blob, le convertir en JSON
+          if (data instanceof Blob) {
+            console.warn('⚠️ [loadChargements] Réponse est un Blob (taille:', data.size, 'octets), conversion...');
+            try {
+              const text = await data.text();
+              console.log('📄 [loadChargements] Contenu Blob:', text);
+              
+              if (!text || text.trim() === '') {
+                console.warn('⚠️ Blob vide, aucun chargement pour ce projet');
+                this.chargements = [];
+              } else {
+                const jsonData = JSON.parse(text);
+                console.log('✅ JSON parsé:', jsonData);
+                this.chargements = Array.isArray(jsonData) ? jsonData : [];
+              }
+            } catch (e) {
+              console.error('❌ Impossible de parser le Blob:', e);
+              this.chargements = [];
+              this.error = 'Erreur: réponse invalide du serveur';
+            }
+          } else {
+            this.chargements = Array.isArray(data) ? data : [];
+          }
+          
+          console.log('📦 [loadChargements] Chargements après conversion:', this.chargements.length, 'éléments');
+          this.applyFilter();
+        },
+        error: (err) => {
+          console.error('❌ [loadChargements] Erreur API:', err);
+          console.error('   Status:', err.status, 'Message:', err.message);
+          this.error = 'Impossible de charger les chargements';
+          this.chargements = [];
+          this.applyFilter();
+        }
+      });
+    } else {
+      console.log('📤 [loadChargements] Appel API getAllChargements (pas de projet)');
+      this.chargementService.getAllChargements().subscribe({
+        next: async (data) => {
+          console.log('✅ [loadChargements] Réponse reçue:', data);
+          console.log('   Type:', typeof data, 'isArray:', Array.isArray(data), 'constructor:', data?.constructor?.name);
+          
+          // Si c'est un Blob, le convertir en JSON
+          if (data instanceof Blob) {
+            console.warn('⚠️ [loadChargements] Réponse est un Blob (taille:', data.size, 'octets), conversion...');
+            try {
+              const text = await data.text();
+              console.log('📄 [loadChargements] Contenu Blob:', text);
+              
+              if (!text || text.trim() === '') {
+                console.warn('⚠️ Blob vide, aucun chargement');
+                this.chargements = [];
+              } else {
+                const jsonData = JSON.parse(text);
+                console.log('✅ JSON parsé:', jsonData);
+                this.chargements = Array.isArray(jsonData) ? jsonData : [];
+              }
+            } catch (e) {
+              console.error('❌ Impossible de parser le Blob:', e);
+              this.chargements = [];
+              this.error = 'Erreur: réponse invalide du serveur';
+            }
+          } else {
+            this.chargements = Array.isArray(data) ? data : [];
+          }
+          
+          console.log('📦 [loadChargements] Chargements après conversion:', this.chargements.length, 'éléments');
+          this.applyFilter();
+        },
+        error: (err) => {
+          console.error('❌ [loadChargements] Erreur API:', err);
+          console.error('   Status:', err.status, 'Message:', err.message);
+          this.error = 'Impossible de charger les chargements';
+          this.chargements = [];
+          this.applyFilter();
+        }
+      });
+    }
+  }
+
+  loadChauffeurs() {
+    this.chauffeurService.getAllChauffeurs('body').subscribe({
+      next: (data) => {
+        if (data instanceof Blob) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              this.chauffeurs = JSON.parse(reader.result as string);
+              console.log('✅ Chauffeurs chargés:', this.chauffeurs.length);
+            } catch (e) {
+              console.error('❌ Erreur parsing chauffeurs:', e);
+              this.chauffeurs = [];
+            }
+          };
+          reader.readAsText(data);
+        } else {
+          this.chauffeurs = Array.isArray(data) ? data : [];
+          console.log('✅ Chauffeurs chargés:', this.chauffeurs.length);
+        }
+      },
+      error: (err) => {
+        console.error('❌ Erreur chargement chauffeurs:', err);
+        this.chauffeurs = [];
+      }
+    });
+  }
+
+  loadCamions() {
+    this.camionService.getAllCamions('body').subscribe({
+      next: (data) => {
+        if (data instanceof Blob) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              this.camions = JSON.parse(reader.result as string);
+              console.log('✅ Camions chargés:', this.camions.length);
+              // Extraire les sociétés uniques des camions
+              this.extractUniqueSocietes();
+            } catch (e) {
+              console.error('❌ Erreur parsing camions:', e);
+              this.camions = [];
+            }
+          };
+          reader.readAsText(data);
+        } else {
+          this.camions = Array.isArray(data) ? data : [];
+          console.log('✅ Camions chargés:', this.camions.length);
+          // Extraire les sociétés uniques des camions
+          this.extractUniqueSocietes();
+        }
+      },
+      error: (err) => {
+        console.error('❌ Erreur chargement camions:', err);
+        this.camions = [];
+      }
+    });
+  }
+
+  // Extraire toutes les sociétés uniques des camions existants
+  extractUniqueSocietes(): void {
+    const societesSet = new Set<string>();
+    this.camions.forEach(camion => {
+      if (camion.societe && camion.societe.trim() && camion.societe !== 'N/A') {
+        societesSet.add(camion.societe.trim());
+      }
+    });
+    this.allSocietes = Array.from(societesSet).sort();
+    console.log('✅ Sociétés uniques extraites:', this.allSocietes.length, this.allSocietes);
+  }
+
+  loadProjets() {
+    this.projetService.getAllProjets().subscribe({
+      next: (data) => this.projets = data,
+      error: (err) => console.error('Erreur chargement projets:', err)
+    });
+  }
+
+  get isProjetActif(): boolean {
+    if (this.contextProjet) {
+      return this.contextProjet.active === true;
+    }
+    return !!(this.projetActif && this.projetActif.active === true);
+  }
+  
+  canAddData(): boolean {
+    return this.isProjetActif;
+  }
+
+  openAddDialog() {
+    if (!this.canAddData()) return;
+    
+    this.editMode = false;
+    this.dialogChargement = {
+      camionId: 0,
+      chauffeurId: 0,
+      societe: '',
+      projetId: this.contextProjetId || this.projetActifId || 0,
+      dateChargement: new Date().toISOString().slice(0, 16) // Format: yyyy-MM-ddTHH:mm for datetime-local
+    };
+    this.camionSearchInput = '';
+    this.chauffeurSearchInput = '';
+    this.societeSearchInput = '';
+    this.showAddDialog = true;
+    this.error = '';
+  }
+
+  openEditDialog(chargement: ChargementDTO) {
+    if (!this.canAddData()) return;
+    
+    this.editMode = true;
+    this.selectedChargement = chargement;
+    this.dialogChargement = { ...chargement };
+    
+    // Pré-remplir les champs de recherche
+    const camion = this.camions.find(c => c.id === chargement.camionId);
+    const chauffeur = this.chauffeurs.find(c => c.id === chargement.chauffeurId);
+    
+    this.camionSearchInput = camion ? `${camion.matricule} - ${camion.societe}` : '';
+    this.chauffeurSearchInput = chauffeur ? chauffeur.nom : '';
+    this.societeSearchInput = chargement.societe || '';
+    
+    this.showAddDialog = true;
+    this.error = '';
+  }
+
+  closeDialog() {
+    this.showAddDialog = false;
+    this.editMode = false;
+    this.selectedChargement = null;
+    this.error = '';
+  }
+
+  saveChargement() {
+    if (!this.dialogChargement.camionId || !this.dialogChargement.chauffeurId || 
+        !this.dialogChargement.societe || !this.dialogChargement.dateChargement || 
+        !this.dialogChargement.projetId) {
+      this.error = 'Veuillez remplir tous les champs obligatoires';
+      console.error('Validation échouée:', {
+        camionId: this.dialogChargement.camionId,
+        chauffeurId: this.dialogChargement.chauffeurId,
+        societe: this.dialogChargement.societe,
+        dateChargement: this.dialogChargement.dateChargement,
+        projetId: this.dialogChargement.projetId
+      });
+      return;
+    }
+
+    // Convertir la date au format attendu par le backend (yyyy-MM-dd'T'HH:mm:ss)
+    const chargementToSave = { ...this.dialogChargement };
+    if (chargementToSave.dateChargement) {
+      // Si le format est yyyy-MM-ddTHH:mm (datetime-local), ajouter :00 pour les secondes
+      if (chargementToSave.dateChargement.length === 16) {
+        chargementToSave.dateChargement = chargementToSave.dateChargement + ':00';
+      }
+    }
+
+    if (this.editMode && this.selectedChargement) {
+      this.chargementService.updateChargement(this.selectedChargement.id!, chargementToSave).subscribe({
+        next: () => {
+          this.loadChargements();
+          this.closeDialog();
+        },
+        error: (err) => {
+          console.error('Erreur mise à jour:', err);
+          this.error = 'Erreur lors de la mise à jour du chargement';
+        }
+      });
+    } else {
+      console.log('📤 Envoi du chargement:', chargementToSave);
+      this.chargementService.createChargement(chargementToSave).subscribe({
+        next: () => {
+          console.log('✅ Chargement créé avec succès');
+          this.loadChargements();
+          this.closeDialog();
+        },
+        error: (err) => {
+          console.error('❌ Erreur création:', err);
+          console.error('Status:', err.status);
+          console.error('Message:', err.message);
+          console.error('Error body:', err.error);
+          this.error = 'Erreur lors de la création du chargement: ' + (err.error?.message || err.message);
+        }
+      });
+    }
+  }
+
+  deleteChargement(id: number) {
+    if (!this.canAddData()) return;
+    
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce chargement ?')) {
+      this.chargementService.deleteChargement(id).subscribe({
+        next: () => this.loadChargements(),
+        error: (err) => {
+          console.error('Erreur suppression:', err);
+          alert('Erreur lors de la suppression');
+        }
+      });
+    }
+  }
+
+  // Recherche Camion
+  onCamionSearch() {
+    if (!Array.isArray(this.camions)) {
+      this.camions = [];
+      this.filteredCamions = [];
+      return;
+    }
+    
+    if (this.camionSearchInput.length >= 2) {
+      this.filteredCamions = this.camions.filter(c =>
+        c.matricule?.toLowerCase().includes(this.camionSearchInput.toLowerCase()) ||
+        c.societe?.toLowerCase().includes(this.camionSearchInput.toLowerCase())
+      );
+      this.showCamionDropdown = true;
+    } else {
+      this.showCamionDropdown = false;
+    }
+  }
+
+  selectCamion(camion: CamionDTO): void {
+    this.dialogChargement.camionId = camion.id!;
+    this.camionSearchInput = camion.matricule;
+    this.showCamionDropdown = false;
+    this.filteredCamions = [];
+  }
+
+  async createAndSelectCamion(): Promise<void> {
+    const matricule = this.camionSearchInput.trim();
+    
+    if (!matricule) {
+      this.error = 'Veuillez entrer un matricule de camion.';
+      return;
+    }
+
+    // Vérifier si le camion existe déjà
+    const existingCamion = this.camions.find(c => 
+      c.matricule?.toLowerCase() === matricule.toLowerCase()
+    );
+    
+    if (existingCamion) {
+      this.selectCamion(existingCamion);
+      return;
+    }
+
+    // Créer un nouveau camion
+    this.isCreatingCamion = true;
+    this.error = '';
+    
+    const newCamion: CamionDTO = {
+      matricule: matricule,
+      societe: this.dialogChargement.societe || 'N/A'
+    };
+
+    try {
+      const response = await this.camionService.createCamion(newCamion, 'body').toPromise();
+      
+      if (response) {
+        let createdCamion: CamionDTO;
+        
+        if (response instanceof Blob) {
+          const text = await response.text();
+          createdCamion = JSON.parse(text);
+        } else {
+          createdCamion = response;
+        }
+        
+        // Ajouter le nouveau camion à la liste
+        this.camions.push(createdCamion);
+        
+        // Sélectionner le nouveau camion
+        this.dialogChargement.camionId = createdCamion.id!;
+        this.camionSearchInput = createdCamion.matricule;
+        this.showCamionDropdown = false;
+        this.filteredCamions = [];
+        
+        console.log('✅ Camion créé et sélectionné:', createdCamion);
+      }
+    } catch (err) {
+      console.error('❌ Erreur création camion:', err);
+      this.error = 'Erreur lors de la création du camion.';
+    } finally {
+      this.isCreatingCamion = false;
+    }
+  }
+
+  // Recherche Chauffeur
+  onChauffeurSearch() {
+    if (!Array.isArray(this.chauffeurs)) {
+      this.chauffeurs = [];
+      this.filteredChauffeurs = [];
+      return;
+    }
+    
+    if (this.chauffeurSearchInput.length >= 2) {
+      this.filteredChauffeurs = this.chauffeurs.filter(c =>
+        c.nom?.toLowerCase().includes(this.chauffeurSearchInput.toLowerCase()) ||
+        c.numCin?.toLowerCase().includes(this.chauffeurSearchInput.toLowerCase())
+      );
+      this.showChauffeurDropdown = true;
+    } else {
+      this.showChauffeurDropdown = false;
+    }
+  }
+
+  selectChauffeur(chauffeur: ChauffeurDTO): void {
+    this.dialogChargement.chauffeurId = chauffeur.id!;
+    this.chauffeurSearchInput = chauffeur.nom;
+    this.showChauffeurDropdown = false;
+    this.filteredChauffeurs = [];
+  }
+
+  async createAndSelectChauffeur(nom: string, cin: string): Promise<void> {
+    if (!nom.trim() || !cin.trim()) {
+      this.error = 'Veuillez entrer le nom et le CIN du chauffeur.';
+      return;
+    }
+
+    // Vérifier si le chauffeur existe déjà (par CIN)
+    const existingChauffeur = this.chauffeurs.find(ch => 
+      ch.numCin?.toLowerCase() === cin.toLowerCase()
+    );
+    
+    if (existingChauffeur) {
+      this.selectChauffeur(existingChauffeur);
+      this.chauffeurCinInput = '';
+      return;
+    }
+
+    // Créer un nouveau chauffeur
+    this.isCreatingChauffeur = true;
+    this.error = '';
+    
+    const newChauffeur: ChauffeurDTO = {
+      nom: nom.trim(),
+      numCin: cin.trim()
+    };
+
+    try {
+      const response = await this.chauffeurService.createChauffeur(newChauffeur, 'body').toPromise();
+      
+      if (response) {
+        let createdChauffeur: ChauffeurDTO;
+        
+        if (response instanceof Blob) {
+          const text = await response.text();
+          createdChauffeur = JSON.parse(text);
+        } else {
+          createdChauffeur = response;
+        }
+        
+        // Ajouter le nouveau chauffeur à la liste
+        this.chauffeurs.push(createdChauffeur);
+        
+        // Sélectionner le nouveau chauffeur
+        this.dialogChargement.chauffeurId = createdChauffeur.id!;
+        this.chauffeurSearchInput = createdChauffeur.nom;
+        this.showChauffeurDropdown = false;
+        this.filteredChauffeurs = [];
+        this.chauffeurCinInput = '';
+        
+        console.log('✅ Chauffeur créé et sélectionné:', createdChauffeur);
+      }
+    } catch (err) {
+      console.error('❌ Erreur création chauffeur:', err);
+      this.error = 'Erreur lors de la création du chauffeur.';
+    } finally {
+      this.isCreatingChauffeur = false;
+    }
+  }
+
+  // Recherche Société
+  onSocieteSearch() {
+    if (this.societeSearchInput.length >= 1) {
+      // Utiliser les sociétés déjà extraites des camions
+      this.filteredSocietes = this.allSocietes.filter(s =>
+        s.toLowerCase().includes(this.societeSearchInput.toLowerCase())
+      ).slice(0, 20); // Limiter à 20 résultats
+      this.showSocieteDropdown = true;
+    } else {
+      // Afficher toutes les sociétés si le champ est vide (limité à 20)
+      this.filteredSocietes = this.allSocietes.slice(0, 20);
+      this.showSocieteDropdown = true;
+    }
+  }
+
+  selectSociete(societe: string) {
+    this.dialogChargement.societe = societe;
+    this.societeSearchInput = societe;
+    this.showSocieteDropdown = false;
+  }
+
+  // Filtres
+  setFilter(filter: 'all' | 'date' | 'camion' | 'chauffeur' | 'societe') {
+    this.activeFilter = filter;
+    
+    if (filter === 'all') {
+      this.selectedDate = null;
+      this.selectedCamionId = null;
+      this.selectedChauffeurId = null;
+      this.selectedSociete = null;
+    }
+    
+    this.applyFilter();
+  }
+
+  applyFilter() {
+    console.log('🔍 [applyFilter] Début - chargements:', this.chargements?.length, 'éléments');
+    
+    if (!this.chargements || !Array.isArray(this.chargements)) {
+      console.warn('⚠️ [applyFilter] chargements n\'est pas un tableau, initialisation à []');
+      this.chargements = [];
+    }
+    
+    let filtered = [...this.chargements];
+    console.log('🔍 [applyFilter] Filtered initial:', filtered.length, 'éléments');
+
+    // Filtre de recherche
+    if (this.chargementFilter) {
+      const search = this.chargementFilter.toLowerCase();
+      filtered = filtered.filter(c =>
+        c.societe?.toLowerCase().includes(search) ||
+        c.nomProjet?.toLowerCase().includes(search) ||
+        c.produit?.toLowerCase().includes(search) ||
+        c.navire?.toLowerCase().includes(search) ||
+        c.port?.toLowerCase().includes(search)
+      );
+    }
+
+    // Filtres spécifiques
+    if (this.activeFilter === 'date' && this.selectedDate) {
+      filtered = filtered.filter(c => c.dateChargement === this.selectedDate);
+    } else if (this.activeFilter === 'camion' && this.selectedCamionId) {
+      filtered = filtered.filter(c => c.camionId === this.selectedCamionId);
+    } else if (this.activeFilter === 'chauffeur' && this.selectedChauffeurId) {
+      filtered = filtered.filter(c => c.chauffeurId === this.selectedChauffeurId);
+    } else if (this.activeFilter === 'societe' && this.selectedSociete) {
+      filtered = filtered.filter(c => c.societe === this.selectedSociete);
+    }
+
+    this.filteredChargements = filtered;
+    this.totalPages = Math.ceil(this.filteredChargements.length / this.pageSize);
+    this.currentPage = 1;
+    console.log('✅ [applyFilter] Fin - filteredChargements:', this.filteredChargements.length, 'totalPages:', this.totalPages);
+    this.updatePagination();
+  }
+
+  getFilterCount(filter: string): number {
+    switch(filter) {
+      case 'date':
+        return this.selectedDate ? this.chargements.filter(c => c.dateChargement === this.selectedDate).length : 0;
+      case 'camion':
+        return this.selectedCamionId ? this.chargements.filter(c => c.camionId === this.selectedCamionId).length : 0;
+      case 'chauffeur':
+        return this.selectedChauffeurId ? this.chargements.filter(c => c.chauffeurId === this.selectedChauffeurId).length : 0;
+      case 'societe':
+        return this.selectedSociete ? this.chargements.filter(c => c.societe === this.selectedSociete).length : 0;
+      default:
+        return 0;
+    }
+  }
+
+  // Pagination
+  updatePagination() {
+    const start = (this.currentPage - 1) * this.pageSize;
+    const end = start + this.pageSize;
+    this.paginatedChargements = this.filteredChargements.slice(start, end);
+  }
+
+  goToPage(page: number) {
+    this.currentPage = page;
+    this.updatePagination();
+  }
+
+  changePageSize(size: number) {
+    this.pageSize = size;
+    this.totalPages = Math.ceil(this.filteredChargements.length / this.pageSize);
+    this.currentPage = 1;
+    this.updatePagination();
+  }
+  // Format datetime for display
+  formatDateTime(dateStr: string | undefined): string {
+    if (!dateStr) return '';
+    
+    // Parse the datetime string
+    const date = new Date(dateStr);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) return dateStr;
+    
+    // Format: DD/MM/YYYY HH:mm
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  }
+
+  // Tri
+  sortData(column: string) {
+    if (this.sortColumn === column) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortColumn = column;
+      this.sortDirection = 'asc';
+    }
+
+    this.filteredChargements.sort((a: any, b: any) => {
+      const aVal = a[column];
+      const bVal = b[column];
+      
+      if (aVal === null || aVal === undefined) return 1;
+      if (bVal === null || bVal === undefined) return -1;
+      
+      if (typeof aVal === 'string') {
+        return this.sortDirection === 'asc' 
+          ? aVal.localeCompare(bVal) 
+          : bVal.localeCompare(aVal);
+      }
+      
+      return this.sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+
+    this.updatePagination();
+  }
+
+  // Export Excel
+  exportToExcel() {
+    const dataToExport = this.filteredChargements.map(c => ({
+      'ID': c.id,
+      'Date': c.dateChargement,
+      'Société': c.societe,
+      'Projet': c.nomProjet,
+      'Produit': c.produit,
+      'Navire': c.navire,
+      'Port': c.port,
+      'Camion ID': c.camionId,
+      'Chauffeur ID': c.chauffeurId
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Chargements');
+    XLSX.writeFile(wb, `chargements_${new Date().toISOString().split('T')[0]}.xlsx`);
+  }
+
+  getCamionInfo(camionId: number): string {
+    const camion = this.camions.find(c => c.id === camionId);
+    return camion ? `${camion.matricule}` : 'N/A';
+  }
+
+  getChauffeurInfo(chauffeurId: number): string {
+    const chauffeur = this.chauffeurs.find(c => c.id === chauffeurId);
+    return chauffeur ? chauffeur.nom : 'N/A';
+  }
+
+  // Imprimer une facture thermique (format papier rouleau)
+  printThermalReceipt(chargement: ChargementDTO): void {
+    // Récupérer les informations complètes
+    const camion = this.camions.find(c => c.id === chargement.camionId);
+    const chauffeur = this.chauffeurs.find(c => c.id === chargement.chauffeurId);
+    
+    // Créer une fenêtre en plein écran pour visualiser la facture
+    const printWindow = window.open('', '_blank');
+    
+    if (!printWindow) {
+      alert('Impossible d\'ouvrir la fenêtre d\'impression. Veuillez autoriser les popups.');
+      return;
+    }
+
+    // Date et heure formatées
+    const dateFormatted = new Date(chargement.dateChargement).toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    const now = new Date().toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    // Contenu HTML avec style thermique (80mm de largeur)
+    const content = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Facture Chargement #${chargement.id}</title>
+        <style>
+          @page {
+            size: 80mm auto;
+            margin: 0;
+          }
+          
+          body {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            line-height: 1.3;
+            margin: 0;
+            padding: 20px;
+            max-width: 80mm;
+            margin: 0 auto;
+            background: #f5f5f5;
+          }
+          
+          .receipt-container {
+            background: white;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+          }
+          
+          .print-button {
+            display: block;
+            width: 200px;
+            margin: 20px auto;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          }
+          
+          .print-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0,0,0,0.15);
+          }
+          
+          .header {
+            text-align: center;
+            border-bottom: 2px dashed #000;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+          }
+          
+          .company-name {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 5px;
+          }
+          
+          .receipt-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin: 10px 0;
+            text-decoration: underline;
+          }
+          
+          .section {
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px dashed #666;
+          }
+          
+          .row {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+          }
+          
+          .label {
+            font-weight: bold;
+          }
+          
+          .value {
+            text-align: right;
+          }
+          
+          .footer {
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 2px dashed #000;
+            font-size: 10px;
+          }
+          
+          .barcode {
+            text-align: center;
+            font-size: 20px;
+            font-family: 'Libre Barcode 39', cursive;
+            margin: 10px 0;
+          }
+          
+          @media print {
+            body {
+              background: white;
+              padding: 10px;
+            }
+            
+            .receipt-container {
+              box-shadow: none;
+              padding: 10px;
+            }
+            
+            .print-button {
+              display: none;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <button class="print-button" onclick="window.print()">
+          <i class="bi bi-printer-fill"></i> Imprimer la facture
+        </button>
+        
+        <div class="receipt-container">
+        <div class="header">
+          <div class="company-name">${chargement.nomProjet || 'PROJET'}</div>
+          <div>${chargement.produit || 'Produit'}</div>
+          <div style="font-size: 10px; margin-top: 5px;">
+            Port: ${chargement.port || 'N/A'} | Navire: ${chargement.navire || 'N/A'}
+          </div>
+        </div>
+        
+        <div class="receipt-title">FACTURE CHARGEMENT</div>
+        
+        <div class="section">
+          <div class="row">
+            <span class="label">N° Facture:</span>
+            <span class="value">#${chargement.id}</span>
+          </div>
+          <div class="row">
+            <span class="label">Date/Heure:</span>
+            <span class="value">${dateFormatted}</span>
+          </div>
+          <div class="row">
+            <span class="label">Imprimé le:</span>
+            <span class="value">${now}</span>
+          </div>
+        </div>
+        
+        <div class="section">
+          <div style="font-weight: bold; margin-bottom: 5px;">TRANSPORT</div>
+          <div class="row">
+            <span class="label">Société:</span>
+            <span class="value">${chargement.societe || 'N/A'}</span>
+          </div>
+          <div class="row">
+            <span class="label">Camion:</span>
+            <span class="value">${camion?.matricule || 'N/A'}</span>
+          </div>
+          <div class="row">
+            <span class="label">Chauffeur:</span>
+            <span class="value">${chauffeur?.nom || 'N/A'}</span>
+          </div>
+          ${chauffeur?.numCin ? `
+          <div class="row">
+            <span class="label">CIN:</span>
+            <span class="value">${chauffeur.numCin}</span>
+          </div>
+          ` : ''}
+        </div>
+        
+        <div class="barcode">*${chargement.id}*</div>
+        
+        <div class="footer">
+          <div>Merci pour votre confiance</div>
+          <div style="margin-top: 5px;">──────────────────────</div>
+          <div style="margin-top: 5px;">Document généré automatiquement</div>
+        </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(content);
+    printWindow.document.close();
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.autocomplete-container')) {
+      this.showCamionDropdown = false;
+      this.showChauffeurDropdown = false;
+      this.showSocieteDropdown = false;
+    }
+  }
+}

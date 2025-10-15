@@ -2,6 +2,7 @@ import { ProjetParametreComponent } from './component/projet/projet-parametre.co
 import { ProjetListComponent } from './projet-list/projet-list.component';
 import { ProjetComponent } from './component/projet/projet.component';
 import { VoyageComponent } from './component/voyage/voyage.component';
+import { ChargementComponent } from './component/chargement/chargement.component';
 import { BreadcrumbComponent } from './component/breadcrumb/breadcrumb.component';
 import { RecapComponent } from './component/recap/recap.component';
 import { NgModule } from '@angular/core';
@@ -59,6 +60,7 @@ import { DeclarationComponent } from './component/declaration/declaration.compon
   ChauffeurComponent,
   ProjetComponent,
   VoyageComponent,
+  ChargementComponent,
   CamionComponent,
   DepotComponent,
   ProjetClientComponent,
