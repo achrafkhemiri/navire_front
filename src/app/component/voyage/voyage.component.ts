@@ -17,6 +17,7 @@ import { ProjetClientDTO } from '../../api/model/projetClientDTO';
 import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
 import { HttpClient } from '@angular/common/http';
 import { BASE_PATH } from '../../api/variables';
+import { ProjetActifService } from '../../service/projet-actif.service';
 import * as XLSX from 'xlsx';
 
 @Component({
@@ -103,10 +104,30 @@ export class VoyageComponent {
     private depotService: DepotControllerService,
     private projetService: ProjetControllerService,
     private projetClientService: ProjetClientControllerService,
+    private projetActifService: ProjetActifService,
     private http: HttpClient,
     private route: ActivatedRoute,
     @Inject(BASE_PATH) private basePath: string
   ) {
+    // 🔥 Écouter les changements du projet actif
+    this.projetActifService.projetActif$.subscribe(projet => {
+      console.log('📡 [Voyage] Notification reçue - Nouveau projet:', projet);
+      
+      if (projet && projet.id) {
+        const previousId = this.projetActifId;
+        this.projetActifId = projet.id;
+        this.projetActif = projet;
+        
+        // 🔥 FIX : Recharger si le projet change OU si c'est la première fois
+        if (!previousId || previousId !== projet.id) {
+          console.log('🔄 [Voyage] Rechargement - previousId:', previousId, 'newId:', projet.id);
+          setTimeout(() => {
+            this.reloadData();
+          }, 50);
+        }
+      }
+    });
+    
     this.route.paramMap.subscribe(pm => {
       const pid = pm.get('id');
       this.projetActifId = pid ? Number(pid) : null;
@@ -122,6 +143,40 @@ export class VoyageComponent {
       this.loadVoyages();
     });
     this.loadProjets(); // charge aussi si pas de param route
+    this.loadChauffeurs();
+    this.loadCamions();
+    this.loadClients();
+    this.loadDepots();
+    this.loadProjetsClients();
+  }
+
+  // 🔥 Méthode pour recharger toutes les données
+  reloadData() {
+    console.log('🔄 [Voyage] reloadData() - Projet actif:', this.projetActif?.nom, 'ID:', this.projetActifId);
+    
+    const currentUrl = window.location.pathname;
+    const isOnParametrePage = currentUrl.includes('/parametre');
+    
+    if (isOnParametrePage) {
+      const contextId = window.sessionStorage.getItem('projetActifId');
+      if (contextId) {
+        const contextIdNumber = Number(contextId);
+        console.log('📌 [Voyage] Page paramètre - Contexte:', contextIdNumber);
+        this.contextProjetId = contextIdNumber;
+        if (contextIdNumber !== this.projetActifId) {
+          this.loadProjetDetails(this.contextProjetId, true);
+        } else {
+          this.contextProjet = this.projetActif;
+        }
+      }
+    } else {
+      console.log('🏠 [Voyage] Mode Vue Projet Actif - Projet:', this.projetActif?.nom);
+      this.contextProjetId = null;
+      this.contextProjet = null;
+    }
+    
+    // Recharger toutes les données
+    this.loadVoyages();
     this.loadChauffeurs();
     this.loadCamions();
     this.loadClients();

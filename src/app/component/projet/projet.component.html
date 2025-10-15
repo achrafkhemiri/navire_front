@@ -82,11 +82,15 @@
 							<span class="projet-info-label">Navire</span>
 							<span class="projet-info-value">{{ pr.nomNavire || 'Non défini' }}</span>
 						</div>
-						<div class="projet-info-item">
+						<!-- <div class="projet-info-item">
 							<span class="projet-info-label">Pays</span>
 							<span class="projet-info-value">{{ pr.paysNavire || 'Non défini' }}</span>
+						</div> -->
+						<div class="projet-info-item" *ngIf="pr.port">
+							<span class="projet-info-label">Port</span>
+							<span class="projet-info-value">{{ pr.port }}</span>
 						</div>
-						<div class="projet-info-item">
+						<!-- <div class="projet-info-item">
 							<span class="projet-info-label">État</span>
 							<span class="projet-badge" [ngClass]="{
 								'en-attente': pr.etat === 'En attente',
@@ -100,7 +104,7 @@
 								}"></i>
 								{{ pr.etat }}
 							</span>
-						</div>
+						</div> -->
 					</div>
 
 					<!-- Actions -->
@@ -155,7 +159,7 @@
 
 		<!-- Modal Ajout Projet -->
 		<div class="modal fade" id="addProjetModal" tabindex="-1" aria-labelledby="addProjetModalLabel" aria-hidden="true">
-			<div class="modal-dialog">
+			<div class="modal-dialog modal-lg modal-dialog-scrollable">
 				<div class="modal-content">
 					<div class="modal-header bg-success text-white">
 						<h5 class="modal-title" id="addProjetModalLabel">Ajouter un projet</h5>
@@ -164,29 +168,81 @@
 					<div class="modal-body">
 						<form (ngSubmit)="addProjet(); closeAddProjetModal()" #addProjetForm="ngForm">
 							<div class="mb-3">
-								<label for="nom" class="form-label">Nom</label>
+								<label for="nom" class="form-label">Société</label>
 								<input [(ngModel)]="newProjet.nom" name="nom" id="nom" class="form-control" required />
+							</div>
+							<div class="mb-3">
+								<label for="port" class="form-label">Port</label>
+								<input [(ngModel)]="newProjet.port" name="port" id="port" class="form-control" placeholder="Nom du port" />
 							</div>
 							<div class="mb-3">
 								<label for="nomProduit" class="form-label">Produit</label>
 								<input [(ngModel)]="newProjet.nomProduit" name="nomProduit" id="nomProduit" class="form-control" required />
 							</div>
 							<div class="mb-3">
-								<label for="quantiteTotale" class="form-label">Quantité</label>
-								<input [(ngModel)]="newProjet.quantiteTotale" name="quantiteTotale" id="quantiteTotale" type="number" class="form-control" required />
-							</div>
-							<div class="mb-3">
 								<label for="nomNavire" class="form-label">Navire</label>
 								<input [(ngModel)]="newProjet.nomNavire" name="nomNavire" id="nomNavire" class="form-control" />
 							</div>
+							<!-- Section Déclarations -->
 							<div class="mb-3">
-								<label for="paysNavire" class="form-label">Pays</label>
-								<input [(ngModel)]="newProjet.paysNavire" name="paysNavire" id="paysNavire" class="form-control" />
+								<label class="form-label fw-bold">
+									<i class="bi bi-file-text"></i> Déclarations
+								</label>
+								<div *ngFor="let declaration of declarations; let i = index" class="declaration-item mb-2">
+									<div class="card border-secondary">
+										<div class="card-body p-3">
+											<div class="row align-items-center">
+												<div class="col-md-5">
+													<label class="form-label small">Numéro de déclaration</label>
+													<input 
+														[(ngModel)]="declaration.numeroDeclaration" 
+														[name]="'numDeclaration' + i" 
+														type="text" 
+														class="form-control form-control-sm" 
+														placeholder="Ex: DEC-2024-001" />
+												</div>
+												<div class="col-md-5">
+													<label class="form-label small">Quantité manifestée (T)</label>
+													<input 
+														[(ngModel)]="declaration.quantiteManifestee" 
+														[name]="'quantiteDeclaration' + i" 
+														type="number" 
+														step="0.01"
+														min="0"
+														class="form-control form-control-sm" 
+														placeholder="Ex: 1500.50" />
+												</div>
+												<div class="col-md-2 text-end">
+													<button 
+														*ngIf="declarations.length > 1" 
+														type="button" 
+														class="btn btn-sm btn-outline-danger mt-4" 
+														(click)="supprimerDeclaration(i)"
+														title="Supprimer">
+														<i class="bi bi-trash"></i>
+													</button>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+								<button type="button" class="btn btn-sm btn-outline-primary mt-2" (click)="ajouterDeclaration()">
+									<i class="bi bi-plus-circle"></i> Ajouter une déclaration
+								</button>
+							<div class="mb-3">
+								<label for="quantiteTotale" class="form-label">Quantité</label>
+								<input [(ngModel)]="newProjet.quantiteTotale" name="quantiteTotale" id="quantiteTotale" type="number" class="form-control" required />
+							</div>
+							
+							<!-- <div class="mb-3">
+								<label for="paysNavire" class="form-label hidden">Pays</label>
+								<input [(ngModel)]="newProjet.paysNavire" name="paysNavire" value="fr" id="paysNavire" class="form-control" />
 							</div>
 							<div class="mb-3">
-								<label for="etat" class="form-label">Etat</label>
-								<input [(ngModel)]="newProjet.etat" name="etat" id="etat" class="form-control" />
-							</div>
+								<label for="etat" class="form-label hidden">Etat</label>
+								<input [(ngModel)]="newProjet.etat" name="etat" id="etat" value="ter" class="form-control" />
+							</div> -->
+							
 							<div class="mb-3">
 								<label for="dateDebut" class="form-label">Date début</label>
 								<input [(ngModel)]="newProjet.dateDebut" name="dateDebut" id="dateDebut" type="date" class="form-control" />
@@ -195,6 +251,9 @@
 								<label for="dateFin" class="form-label">Date fin</label>
 								<input [(ngModel)]="newProjet.dateFin" name="dateFin" id="dateFin" type="date" class="form-control" />
 							</div>
+							
+							</div>
+							
 							<div class="form-check form-switch mb-3">
 								<input class="form-check-input" type="checkbox" id="active" [(ngModel)]="newProjet.active" name="active">
 								<label class="form-check-label" for="active">Projet actif</label>
@@ -235,13 +294,17 @@
 								<label for="editNomNavire" class="form-label">Navire</label>
 								<input [(ngModel)]="selectedProjet.nomNavire" name="editNomNavire" id="editNomNavire" class="form-control" />
 							</div>
-							<div class="mb-3">
+							<!-- <div class="mb-3">
 								<label for="editPaysNavire" class="form-label">Pays</label>
 								<input [(ngModel)]="selectedProjet.paysNavire" name="editPaysNavire" id="editPaysNavire" class="form-control" />
 							</div>
 							<div class="mb-3">
 								<label for="editEtat" class="form-label">Etat</label>
 								<input [(ngModel)]="selectedProjet.etat" name="editEtat" id="editEtat" class="form-control" />
+							</div> -->
+							<div class="mb-3">
+								<label for="editPort" class="form-label">Port</label>
+								<input [(ngModel)]="selectedProjet.port" name="editPort" id="editPort" class="form-control" placeholder="Nom du port" />
 							</div>
 							<div class="mb-3">
 								<label for="editDateDebut" class="form-label">Date début</label>

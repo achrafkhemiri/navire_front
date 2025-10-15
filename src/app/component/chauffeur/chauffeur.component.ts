@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { ChauffeurControllerService } from '../../api/api/chauffeurController.service';
 import { ChauffeurDTO } from '../../api/model/chauffeurDTO';
 import { ProjetControllerService } from '../../api/api/projetController.service';
+import { ProjetActifService } from '../../service/projet-actif.service';
 import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
 
 @Component({
@@ -21,6 +22,8 @@ export class ChauffeurComponent {
   isSidebarOpen: boolean = true;
   chauffeurFilter: string = '';
   error: string = '';
+  projetActifId: number | null = null;
+  projetActif: any = null;
   contextProjetId: number | null = null;
   contextProjet: any = null;
   breadcrumbItems: BreadcrumbItem[] = [];
@@ -39,14 +42,63 @@ export class ChauffeurComponent {
 
   constructor(
     private chauffeurService: ChauffeurControllerService,
-    private projetService: ProjetControllerService
+    private projetService: ProjetControllerService,
+    private projetActifService: ProjetActifService
   ) {
+    // 🔥 Écouter les changements du projet actif
+    this.projetActifService.projetActif$.subscribe(projet => {
+      console.log('📡 [Chauffeur] Notification reçue - Nouveau projet:', projet);
+      
+      if (projet && projet.id) {
+        const previousId = this.projetActifId;
+        this.projetActifId = projet.id;
+        this.projetActif = projet;
+        
+        // 🔥 FIX : Recharger si le projet change OU si c'est la première fois
+        if (!previousId || previousId !== projet.id) {
+          console.log('🔄 [Chauffeur] Rechargement - previousId:', previousId, 'newId:', projet.id);
+          setTimeout(() => {
+            this.reloadData();
+          }, 50);
+        }
+      }
+    });
+    
     const contextId = window.sessionStorage.getItem('projetActifId');
     if (contextId) {
       this.contextProjetId = Number(contextId);
       this.loadProjetDetails(this.contextProjetId, true);
     }
     this.loadChauffeurs();
+  }
+
+  // 🔥 Méthode pour recharger toutes les données
+  reloadData() {
+    console.log('🔄 [Chauffeur] reloadData() - Projet actif:', this.projetActif?.nom, 'ID:', this.projetActifId);
+    
+    const currentUrl = window.location.pathname;
+    const isOnParametrePage = currentUrl.includes('/parametre');
+    
+    if (isOnParametrePage) {
+      const contextId = window.sessionStorage.getItem('projetActifId');
+      if (contextId) {
+        const contextIdNumber = Number(contextId);
+        console.log('📌 [Chauffeur] Page paramètre - Contexte:', contextIdNumber);
+        this.contextProjetId = contextIdNumber;
+        if (contextIdNumber !== this.projetActifId) {
+          this.loadProjetDetails(this.contextProjetId, true);
+        } else {
+          this.contextProjet = this.projetActif;
+        }
+      }
+    } else {
+      console.log('🏠 [Chauffeur] Mode Vue Projet Actif - Projet:', this.projetActif?.nom);
+      this.contextProjetId = null;
+      this.contextProjet = null;
+    }
+    
+    this.loadChauffeurs();
+    this.updateBreadcrumb();
   }
 
   canAddData(): boolean {

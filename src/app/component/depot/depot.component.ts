@@ -67,6 +67,25 @@ export class DepotComponent {
     private http: HttpClient, 
     @Inject(BASE_PATH) private basePath: string
   ) {
+    // 🔥 Écouter les changements du projet actif
+    this.projetActifService.projetActif$.subscribe(projet => {
+      console.log('📡 [Depot] Notification reçue - Nouveau projet:', projet);
+      
+      if (projet && projet.id) {
+        const previousId = this.projetActifId;
+        this.projetActifId = projet.id;
+        this.projetActif = projet;
+        
+        // 🔥 FIX : Recharger si le projet change OU si c'est la première fois
+        if (!previousId || previousId !== projet.id) {
+          console.log('🔄 [Depot] Rechargement - previousId:', previousId, 'newId:', projet.id);
+          setTimeout(() => {
+            this.reloadData();
+          }, 50);
+        }
+      }
+    });
+    
     this.initializeProjetContext();
   }
 
@@ -84,6 +103,25 @@ export class DepotComponent {
     this.loadAllDepots(); // Charger tous les dépôts pour l'autocomplétion
     this.loadDepots();
     this.loadVoyages(); // Charger les voyages pour calculer la quantité vendue
+  }
+
+  // 🔥 NOUVEAU : Méthode pour recharger toutes les données
+  reloadData() {
+    // Réinitialiser le contexte si on n'est pas sur une page de paramètre
+    const contextId = window.sessionStorage.getItem('projetActifId');
+    if (contextId) {
+      this.contextProjetId = Number(contextId);
+      this.loadProjetDetails(this.contextProjetId, true);
+    } else {
+      this.contextProjetId = null;
+      this.contextProjet = null;
+    }
+    
+    // Recharger toutes les données
+    this.loadAllDepots();
+    this.loadDepots();
+    this.loadVoyages();
+    this.updateBreadcrumb();
   }
 
   loadProjetDetails(projetId: number, isContext: boolean = false) {
@@ -468,68 +506,38 @@ export class DepotComponent {
 
   loadDepots() {
     const targetProjetId = this.contextProjetId || this.projetActifId;
-    console.log('loadDepots() - targetProjetId:', targetProjetId);
+    console.log('📊 loadDepots() - contextProjetId:', this.contextProjetId, 'projetActifId:', this.projetActifId, 'targetProjetId:', targetProjetId);
     
-    if (targetProjetId) {
-      // Utiliser l'endpoint spécifique au projet qui retourne les dépôts avec projetId
-      const url = `${this.basePath}/api/projets/${targetProjetId}/depots`;
-      console.log('loadDepots() - using project-specific endpoint:', url);
-      
-      this.http.get<any[]>(url, { withCredentials: true, responseType: 'json' as 'json' }).subscribe({
-        next: (data) => {
-          console.log('loadDepots() - project-scoped response:', data);
-          if (Array.isArray(data)) {
-            this.depots = data;
-          } else {
-            this.depots = [];
-          }
-          console.log('loadDepots() - depots loaded:', this.depots);
-          this.applyFilter();
-        },
-        error: err => {
-          console.error('Project-scoped depot request failed:', err);
-          this.error = 'Erreur chargement des dépôts: ' + (err.error?.message || err.message);
-          this.depots = [];
-          this.applyFilter();
-        }
-      });
-    } else {
-      // Pas de projet actif, charger tous les dépôts
-      this.depotService.getAllDepots('body').subscribe({
-        next: async (data) => {
-          console.log('loadDepots() - raw response (all depots):', data);
-          if (data instanceof Blob) {
-            const text = await data.text();
-            console.log('loadDepots() - blob text:', text);
-            try {
-              const json = JSON.parse(text);
-              console.log('loadDepots() - parsed json:', json);
-              if (Array.isArray(json)) {
-                this.depots = json;
-              } else {
-                this.depots = [];
-              }
-            } catch (e) {
-              this.error = 'Erreur parsing JSON: ' + e;
-              console.error('Erreur parsing JSON in loadDepots:', e);
-              this.depots = [];
-            }
-          } else if (Array.isArray(data)) {
-            console.log('loadDepots() - json array, length:', data.length);
-            this.depots = data;
-          } else {
-            console.log('loadDepots() - unexpected response:', data);
-            this.depots = [];
-          }
-          console.log('loadDepots() - depots loaded:', this.depots);
-          this.applyFilter();
-        },
-        error: (err) => {
-          this.error = 'Erreur chargement: ' + (err.error?.message || err.message);
-          console.error('Erreur chargement depots:', err);
-        }
-      });
+    if (!targetProjetId) {
+      console.warn('⚠️ Aucun projet actif - liste des dépôts vide');
+      this.depots = [];
+      this.applyFilter();
+      return;
     }
+    
+    // TOUJOURS charger via l'endpoint spécifique au projet pour garantir le filtrage
+    const url = `${this.basePath}/api/projets/${targetProjetId}/depots`;
+    console.log('📤 Appel endpoint projet-dépôts:', url);
+    
+    this.http.get<any[]>(url, { withCredentials: true, responseType: 'json' as 'json' }).subscribe({
+      next: (data) => {
+        console.log('✅ Réponse getDepotsByProjet:', data);
+        if (Array.isArray(data)) {
+          this.depots = data;
+          console.log(`✅ ${data.length} dépôts chargés pour le projet ${targetProjetId}`);
+        } else {
+          this.depots = [];
+          console.warn('⚠️ Réponse non-array:', data);
+        }
+        this.applyFilter();
+      },
+      error: err => {
+        console.error('❌ Erreur chargement dépôts pour projet:', err);
+        this.error = 'Erreur chargement des dépôts: ' + (err.error?.message || err.message);
+        this.depots = [];
+        this.applyFilter();
+      }
+    });
   }
 
   // Charger les voyages

@@ -20,6 +20,7 @@ import { ClientsComponent } from './component/clients/clients.component';
 import { DepotsComponent } from './component/depots/depots.component';
 import { NotificationsComponent } from './component/notifications/notifications.component';
 import { RecapComponent } from './component/recap/recap.component';
+import { DeclarationComponent } from './component/declaration/declaration.component';
 
 // Importation des guards
 import { AuthGuard } from './guards/auth.guard';
@@ -43,6 +44,7 @@ const routes: Routes = [
   { path: 'clients', component: ClientsComponent, canActivate: [AuthGuard] },
   { path: 'depots', component: DepotsComponent, canActivate: [AuthGuard] },
   { path: 'projet', component: ProjetComponent, canActivate: [AuthGuard] },
+  { path: 'declaration', component: DeclarationComponent, canActivate: [AuthGuard] },
   { path: 'projet/:id/parametre', component: ProjetParametreComponent, canActivate: [AuthGuard] },
   { path: 'projet/:id/voyages', component: VoyageComponent, canActivate: [AuthGuard] },
   { path: 'projet/:id/recap', component: RecapComponent, canActivate: [AuthGuard] },

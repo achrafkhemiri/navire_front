@@ -43,6 +43,7 @@ import { DepotsComponent } from './component/depots/depots.component';
 import { RouterModule } from '@angular/router';
 import { AuthErrorInterceptor } from './auth-error.interceptor';
 import { NotificationsComponent } from './component/notifications/notifications.component';
+import { DeclarationComponent } from './component/declaration/declaration.component';
 
 @NgModule({ 
   declarations: [
@@ -71,6 +72,7 @@ import { NotificationsComponent } from './component/notifications/notifications.
   BreadcrumbComponent,
   NotificationsComponent,
   RecapComponent,
+  DeclarationComponent,
   ],
   imports: [
     BrowserModule,

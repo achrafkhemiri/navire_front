@@ -1,7 +1,10 @@
 // ...existing code...
 import { Component } from '@angular/core';
 import { ProjetControllerService } from '../../api/api/projetController.service';
+import { DeclarationControllerService } from '../../api/api/declarationController.service';
 import { ProjetDTO } from '../../api/model/projetDTO';
+import { DeclarationDTO } from '../../api/model/declarationDTO';
+import { ProjetActifService } from '../../service/projet-actif.service';
 
 @Component({
   selector: 'app-projet',
@@ -38,11 +41,14 @@ export class ProjetComponent {
   filteredProjets: ProjetDTO[] = [];
   paginatedProjets: ProjetDTO[] = [];
   selectedProjet: ProjetDTO | null = null;
-  newProjet: ProjetDTO = { nom: '', nomProduit: '', quantiteTotale: 0, nomNavire: '', paysNavire: '', etat: '', dateDebut: '', dateFin: '', active: false };
+  newProjet: ProjetDTO = { nom: '', nomProduit: '', quantiteTotale: 0, nomNavire: '', paysNavire: '', etat: '', port: '', dateDebut: '', dateFin: '', active: false };
   editMode: boolean = false;
   error: string = '';
   projetActif: ProjetDTO | null = null;
   projetFilter: string = '';
+  
+  // Déclarations dynamiques pour le formulaire d'ajout/modification
+  declarations: Array<{numeroDeclaration: string, quantiteManifestee: number}> = [{numeroDeclaration: '', quantiteManifestee: 0}];
   
   // Pagination
   currentPage: number = 1;
@@ -56,11 +62,34 @@ export class ProjetComponent {
   
   Math = Math;
 
-  constructor(private projetService: ProjetControllerService) {
+  constructor(
+    private projetService: ProjetControllerService,
+    private declarationService: DeclarationControllerService,
+    private projetActifService: ProjetActifService
+  ) {
     this.loadProjets();
   }
 
+  // Méthodes pour gérer les déclarations dynamiques
+  ajouterDeclaration(): void {
+    this.declarations.push({numeroDeclaration: '', quantiteManifestee: 0});
+  }
+
+  supprimerDeclaration(index: number): void {
+    if (this.declarations.length > 1) {
+      this.declarations.splice(index, 1);
+    }
+  }
+
+  resetDeclarations(): void {
+    this.declarations = [{numeroDeclaration: '', quantiteManifestee: 0}];
+  }
+
   openAddProjetModal() {
+    // Réinitialiser le formulaire et les déclarations
+    this.newProjet = { nom: '', nomProduit: '', quantiteTotale: 0, nomNavire: '', paysNavire: '', etat: '', port: '', dateDebut: '', dateFin: '', active: false };
+    this.resetDeclarations();
+    
     setTimeout(() => {
       const modal = document.getElementById('addProjetModal');
       if (modal) {
@@ -204,8 +233,10 @@ export class ProjetComponent {
   }
 
   addProjet() {
+    const projetEstActive = this.newProjet.active;
+    
     // Si le projet ajouté est actif, désactive les autres
-    if (this.newProjet.active) {
+    if (projetEstActive) {
       this.projets.forEach(pr => {
         if (pr.active) {
           pr.active = false;
@@ -215,6 +246,7 @@ export class ProjetComponent {
         }
       });
     }
+    
     this.projetService.createProjet(this.newProjet, 'body').subscribe({
       next: async (created) => {
         let projetAjoute: ProjetDTO | undefined = created;
@@ -227,10 +259,37 @@ export class ProjetComponent {
             projetAjoute = undefined;
           }
         }
-        if (projetAjoute) {
+        
+        if (projetAjoute && projetAjoute.id) {
           this.projets.push(projetAjoute);
+          
+          // Créer les déclarations associées au projet
+          const declarationsValides = this.declarations.filter(d => d.numeroDeclaration && d.numeroDeclaration.trim() !== '');
+          if (declarationsValides.length > 0) {
+            const projetId = projetAjoute.id;
+            const projetNom = projetAjoute.nom;
+            declarationsValides.forEach(decl => {
+              const declarationDTO: DeclarationDTO = {
+                numeroDeclaration: decl.numeroDeclaration,
+                quantiteManifestee: decl.quantiteManifestee,
+                projetId: projetId
+              };
+              this.declarationService.createDeclaration(declarationDTO).subscribe({
+                next: () => console.log(`✅ Déclaration ${decl.numeroDeclaration} créée pour le projet ${projetNom}`),
+                error: (err) => console.error('❌ Erreur création déclaration:', err)
+              });
+            });
+          }
+          
+          // Si le projet ajouté est actif, mettre à jour le service
+          if (projetEstActive) {
+            this.projetActifService.setProjetActif(projetAjoute);
+            console.log('✅ Nouveau projet actif défini:', projetAjoute);
+          }
         }
-        this.newProjet = { nom: '', nomProduit: '', quantiteTotale: 0, nomNavire: '', paysNavire: '', etat: '', dateDebut: '', dateFin: '', active: false };
+        
+        this.newProjet = { nom: '', nomProduit: '', quantiteTotale: 0, nomNavire: '', paysNavire: '', etat: '', port: '', dateDebut: '', dateFin: '', active: false };
+        this.resetDeclarations();
         this.loadProjets(); // Recharge la liste pour garantir la cohérence
       },
       error: (err) => this.error = 'Erreur ajout: ' + (err.error?.message || err.message)
@@ -244,19 +303,71 @@ export class ProjetComponent {
 
   updateProjet() {
     if (!this.selectedProjet || !this.selectedProjet.id) return;
+    
+    // 🔥 IMPORTANT : Sauvegarder le projet sélectionné dans une variable locale
+    // car this.selectedProjet sera mis à null avant que le callback async ne termine
+    const projetEnCoursDeMiseAJour = { ...this.selectedProjet };
+    const projetEstActive = this.selectedProjet.active;
+    console.log('🔧 updateProjet() - Projet:', projetEnCoursDeMiseAJour.nom, 'ID:', projetEnCoursDeMiseAJour.id, 'Active:', projetEstActive);
+    
     // Si le projet modifié est actif, désactive les autres
-    if (this.selectedProjet.active) {
+    if (projetEstActive) {
+      console.log('🔄 Désactivation des autres projets...');
       this.projets.forEach(pr => {
-        if (pr.active && this.selectedProjet && pr.id !== this.selectedProjet.id) {
+        if (pr.active && pr.id !== projetEnCoursDeMiseAJour.id) {
           pr.active = false;
+          console.log('  ❌ Désactivation du projet:', pr.nom, 'ID:', pr.id);
           if (pr.id) {
             this.projetService.updateProjet(pr.id, pr, 'body').subscribe();
           }
         }
       });
     }
-    this.projetService.updateProjet(this.selectedProjet.id, this.selectedProjet, 'body').subscribe({
-      next: (updated) => {
+    
+    this.projetService.updateProjet(projetEnCoursDeMiseAJour.id!, projetEnCoursDeMiseAJour, 'body').subscribe({
+      next: async (updated) => {
+        console.log('✅ Projet mis à jour:', updated);
+        console.log('🔍 projetEstActive:', projetEstActive, 'projetEnCoursDeMiseAJour:', projetEnCoursDeMiseAJour);
+        
+        // Si le projet est activé, mettre à jour le service ProjetActifService
+        if (projetEstActive && projetEnCoursDeMiseAJour) {
+          console.log('🔄 Traitement du projet actif...');
+          let projetUpdated: any = updated;
+          
+          // Gérer le cas où updated est un Blob
+          if (updated instanceof Blob) {
+            console.log('📦 Blob détecté, parsing...');
+            const text = await updated.text();
+            console.log('📄 Texte brut du Blob:', text);
+            try {
+              projetUpdated = JSON.parse(text);
+              console.log('✅ Projet parsé:', projetUpdated);
+            } catch (e) {
+              console.error('❌ Erreur parsing projet:', e);
+              projetUpdated = projetEnCoursDeMiseAJour;
+            }
+          } else {
+            console.log('✅ Pas de Blob, projet déjà en objet');
+          }
+          
+          console.log('🔥 Appel setProjetActif avec:', projetUpdated);
+          
+          // 🔥 IMPORTANT : Nettoyer le sessionStorage pour éviter les conflits
+          window.sessionStorage.removeItem('projetActifId');
+          
+          // Mettre à jour le service avec le projet complet
+          this.projetActifService.setProjetActif(projetUpdated);
+          console.log('✅ Projet actif mis à jour:', projetUpdated);
+          
+          // 🔥 Forcer une seconde émission après un court délai pour s'assurer que tous les composants reçoivent la notification
+          setTimeout(() => {
+            this.projetActifService.setProjetActif(projetUpdated);
+            console.log('🔄 Émission forcée du projet actif');
+          }, 100);
+        } else {
+          console.warn('⚠️ Projet non activé ou selectedProjet null - pas de mise à jour du service');
+        }
+        
         this.loadProjets();
         this.selectedProjet = null;
         this.editMode = false;

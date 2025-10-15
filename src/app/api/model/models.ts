@@ -1,6 +1,7 @@
 export * from './camionDTO';
 export * from './chauffeurDTO';
 export * from './clientDTO';
+export * from './declarationDTO';
 export * from './depotDTO';
 export * from './loginDTO';
 export * from './projetClientDTO';

@@ -137,12 +137,25 @@ export class NavbarComponent {
   toggleViewMode() {
     if (this.isAllVoyagesView) {
       // On est en mode "tous les projets", on veut retourner au projet actif
-      // Rediriger vers la page paramètre du projet actif
-      if (this.projetActif && this.projetActif.id) {
-        this.currentProjet = this.projetActif; // Mettre à jour le projet consulté
-        this.router.navigate(['/projet', this.projetActif.id, 'parametre']);
+      // Recharger le projet actif depuis le service pour s'assurer qu'il est à jour
+      const projetActifActuel = this.projetActifService.getProjetActif();
+      
+      if (projetActifActuel && projetActifActuel.id) {
+        this.projetActif = projetActifActuel;
+        this.currentProjet = projetActifActuel; // Mettre à jour le projet consulté
+        
+        // 🔥 IMPORTANT : Mettre à jour le sessionStorage avec le projet actif
+        window.sessionStorage.setItem('projetActifId', String(projetActifActuel.id));
+        
+        // Forcer la mise à jour du service pour déclencher les subscriptions
+        this.projetActifService.setProjetActif(projetActifActuel);
+        
+        this.router.navigate(['/projet', projetActifActuel.id, 'parametre']);
+        console.log('🔄 Retour au projet actif:', projetActifActuel);
       } else {
         // Si pas de projet actif, aller à la liste des projets
+        console.warn('⚠️ Aucun projet actif trouvé');
+        window.sessionStorage.removeItem('projetActifId');
         this.router.navigate(['/projet']);
       }
       this.projetActifService.setViewMode(false);
@@ -150,6 +163,8 @@ export class NavbarComponent {
       // On est en mode "projet actif", on veut voir tous les projets
       // Réinitialiser le projet consulté pour revenir au projet actif
       this.currentProjet = null;
+      // 🔥 Nettoyer le sessionStorage pour éviter les conflits
+      window.sessionStorage.removeItem('projetActifId');
       // Rediriger vers la page liste des projets
       this.router.navigate(['/projet']);
       this.projetActifService.setViewMode(true);

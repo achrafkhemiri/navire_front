@@ -101,6 +101,26 @@ export class ClientComponent {
     private notificationService: NotificationService,
     private quantiteService: QuantiteService
   ) {
+    // 🔥 Écouter les changements du projet actif
+    this.projetActifService.projetActif$.subscribe(projet => {
+      console.log('📡 Notification reçue du service - Nouveau projet:', projet);
+      
+      if (projet && projet.id) {
+        const previousId = this.projetActifId;
+        this.projetActifId = projet.id;
+        this.projetActif = projet;
+        
+        // 🔥 FIX : Recharger si le projet change OU si c'est la première fois
+        if (!previousId || previousId !== projet.id) {
+          console.log('🔄 Rechargement des clients - previousId:', previousId, 'newId:', projet.id);
+          // Attendre un peu pour que la navigation se termine
+          setTimeout(() => {
+            this.reloadData();
+          }, 50);
+        }
+      }
+    });
+    
     this.initializeProjetContext();
   }
 
@@ -123,6 +143,43 @@ export class ClientComponent {
     this.loadAllClients(); // Charger tous les clients pour l'autocomplétion
     this.loadClients();
     this.loadVoyages(); // Charger les voyages pour calculer le reste
+  }
+
+  // 🔥 Méthode pour recharger toutes les données
+  reloadData() {
+    console.log('🔄 [Client] reloadData() - Projet actif:', this.projetActif?.nom, 'ID:', this.projetActifId);
+    
+    // 🔥 IMPORTANT : En mode rechargement, on utilise TOUJOURS le projet actif global
+    // Le sessionStorage n'est utilisé QUE pour la navigation contextuelle (depuis /projet/:id/parametre)
+    const currentUrl = window.location.pathname;
+    const isOnParametrePage = currentUrl.includes('/parametre');
+    
+    if (isOnParametrePage) {
+      // On est sur une page de paramètres, utiliser le contexte sessionStorage
+      const contextId = window.sessionStorage.getItem('projetActifId');
+      if (contextId) {
+        const contextIdNumber = Number(contextId);
+        console.log('📌 [Client] Page paramètre - Contexte:', contextIdNumber);
+        this.contextProjetId = contextIdNumber;
+        if (contextIdNumber !== this.projetActifId) {
+          this.loadProjetDetails(this.contextProjetId, true);
+        } else {
+          this.contextProjet = this.projetActif;
+        }
+      }
+    } else {
+      // On n'est PAS sur une page de paramètres → Mode "Vue Projet Actif"
+      // Ignorer le sessionStorage et utiliser le projet actif global
+      console.log('🏠 [Client] Mode Vue Projet Actif - Projet:', this.projetActif?.nom);
+      this.contextProjetId = null;
+      this.contextProjet = null;
+    }
+    
+    // Recharger toutes les données
+    this.loadAllClients();
+    this.loadClients();
+    this.loadVoyages();
+    this.updateBreadcrumb();
   }
 
   loadProjetDetails(projetId: number, isContext: boolean = false) {
@@ -280,6 +337,15 @@ export class ClientComponent {
     }
     
     const targetProjetId = this.contextProjetId || this.projetActifId;
+    console.log('🔵 addDialogClient() - targetProjetId:', targetProjetId, 'contextProjetId:', this.contextProjetId, 'projetActifId:', this.projetActifId);
+    
+    if (!targetProjetId) {
+      this.showTemporaryAlert(
+        'Aucun projet actif. Veuillez d\'abord sélectionner un projet.',
+        'danger'
+      );
+      return;
+    }
     
     // Si un client existant a été sélectionné, on l'associe au projet
     if (this.selectedExistingClient && this.selectedExistingClient.id) {
@@ -295,6 +361,7 @@ export class ClientComponent {
         return;
       }
       
+      console.log('✅ Association client existant:', this.selectedExistingClient.id, 'au projet:', targetProjetId);
       // Associer le client existant au projet
       this.askQuantiteAndAssociate(this.selectedExistingClient.id);
       this.dialogClient = { nom: '', numero: '' };
@@ -302,33 +369,37 @@ export class ClientComponent {
       return;
     }
     
-    // Sinon, créer un nouveau client
-    if (targetProjetId) {
-      this.dialogClient.projetId = targetProjetId;
-    }
+    // Sinon, créer un nouveau client (SANS projetId - l'association se fait via ProjetClient)
+    console.log('🆕 Création nouveau client:', this.dialogClient.nom, 'pour le projet:', targetProjetId);
    
     this.clientService.createClient(this.dialogClient, 'body').subscribe({
       next: (createdClient) => {
+        console.log('✅ Client créé:', createdClient);
     
         let clientId: number | undefined;
         if (createdClient instanceof Blob) {
           createdClient.text().then(text => {
             try {
               const client = JSON.parse(text);
-             
               clientId = client.id;
+              console.log('➡️ Association client', clientId, 'au projet', targetProjetId);
               this.askQuantiteAndAssociate(clientId);
-            } catch (e) { console.error(e); }
+            } catch (e) { 
+              console.error('❌ Erreur parsing client:', e); 
+            }
           });
         } else {
           clientId = createdClient.id;
-         
+          console.log('➡️ Association client', clientId, 'au projet', targetProjetId);
           this.askQuantiteAndAssociate(clientId);
         }
         this.dialogClient = { nom: '', numero: '' };
         this.closeDialog();
       },
-      error: (err) => this.error = 'Erreur ajout: ' + (err.error?.message || err.message)
+      error: (err) => {
+        console.error('❌ Erreur création client:', err);
+        this.error = 'Erreur ajout: ' + (err.error?.message || err.message);
+      }
     });
   }
 
@@ -349,12 +420,23 @@ export class ClientComponent {
     const targetProjetId = this.contextProjetId || this.projetActifId;
     const clientId = this.pendingClientId;
     
-    if (!clientId || !targetProjetId) return;
+    console.log('🔗 confirmQuantiteAndAssociate() - Projet:', targetProjetId, 'Client:', clientId, 'Quantité:', this.quantiteAutorisee);
+    
+    if (!clientId || !targetProjetId) {
+      console.error('❌ Données manquantes - clientId:', clientId, 'targetProjetId:', targetProjetId);
+      this.showTemporaryAlert('Erreur: Données manquantes pour l\'association.', 'danger');
+      return;
+    }
     
     const quantite = Number(this.quantiteAutorisee) || 0;
     const body = { quantiteAutorisee: quantite };
+    
+    console.log('📤 Appel API addClientToProjet avec body:', body);
+    
     this.projetService.addClientToProjet(targetProjetId, clientId, body).subscribe({
       next: (res) => {
+        console.log('✅ Association créée avec succès:', res);
+        
         // Fermer la modal
         this.closeQuantiteModal();
         
@@ -496,85 +578,55 @@ export class ClientComponent {
 
   loadClients() {
     const targetProjetId = this.contextProjetId || this.projetActifId;
-    if (targetProjetId) {
-      this.clientService.getClientsByProjet(targetProjetId, 'body').subscribe({
-        next: async (data) => {
-          if (data instanceof Blob) {
-            const text = await data.text();
-            try {
-              const json = JSON.parse(text);
-              if (Array.isArray(json)) {
-                this.clients = json;
-              } else {
-                this.clients = [];
-              }
-            } catch (e) {
-              this.error = 'Erreur parsing JSON: ' + e;
-              this.clients = [];
-            }
-          } else if (Array.isArray(data)) {
-            this.clients = data;
-          } else {
-            this.clients = [];
-          }
-          this.applyFilter();
-        },
-        error: (err) => {
-          // fallback to fetching all and filtering client-side
-          console.warn('getClientsByProjet failed, falling back to getAllClients', err);
-          this.clientService.getAllClients('body').subscribe({
-            next: async (data2) => {
-              if (data2 instanceof Blob) {
-                const text = await data2.text();
-                try {
-                  const json = JSON.parse(text);
-                  if (Array.isArray(json)) {
-                    this.clients = json.filter((c: any) => c.projetId === targetProjetId);
-                  } else {
-                    this.clients = [];
-                  }
-                } catch (e) {
-                  this.error = 'Erreur parsing JSON: ' + e;
-                  this.clients = [];
-                }
-              } else if (Array.isArray(data2)) {
-                this.clients = data2.filter(c => c.projetId === targetProjetId);
-              } else {
-                this.clients = [];
-              }
-              this.applyFilter();
-            },
-            error: (err2) => this.error = 'Erreur chargement: ' + (err2.error?.message || err2.message)
-          });
-        }
-      });
-    } else {
-      // No active project: fetch all clients
-      this.clientService.getAllClients('body').subscribe({
-        next: async (data) => {
-          if (data instanceof Blob) {
-            const text = await data.text();
-            try {
-              const json = JSON.parse(text);
-              if (Array.isArray(json)) {
-                this.clients = json;
-              } else {
-                this.clients = [];
-              }
-            } catch (e) {
-              this.error = 'Erreur parsing JSON: ' + e;
-              this.clients = [];
-            }
-          } else if (Array.isArray(data)) {
-            this.clients = data;
-          } else {
-            this.clients = [];
-          }
-          this.applyFilter();
-        },
-        error: (err) => this.error = 'Erreur chargement: ' + (err.error?.message || err.message)
-      });
+    console.log('📊 loadClients() - contextProjetId:', this.contextProjetId, 'projetActifId:', this.projetActifId, 'targetProjetId:', targetProjetId);
+    
+    if (!targetProjetId) {
+      console.warn('⚠️ Aucun projet actif - liste des clients vide');
+      this.clients = [];
+      this.applyFilter();
+      return;
     }
+    
+    // TOUJOURS charger via getClientsByProjet pour garantir le filtrage par projet
+    console.log('📤 Appel getClientsByProjet avec projetId:', targetProjetId);
+    
+    this.clientService.getClientsByProjet(targetProjetId, 'body').subscribe({
+      next: async (data) => {
+        console.log('✅ Réponse getClientsByProjet:', data);
+        
+        if (data instanceof Blob) {
+          const text = await data.text();
+          try {
+            const json = JSON.parse(text);
+            if (Array.isArray(json)) {
+              this.clients = json;
+              console.log(`✅ ${json.length} clients chargés pour le projet ${targetProjetId}`);
+            } else {
+              this.clients = [];
+              console.warn('⚠️ Réponse JSON non-array:', json);
+            }
+          } catch (e) {
+            console.error('❌ Erreur parsing JSON:', e);
+            this.error = 'Erreur parsing JSON: ' + e;
+            this.clients = [];
+          }
+        } else if (Array.isArray(data)) {
+          this.clients = data;
+          console.log(`✅ ${data.length} clients chargés pour le projet ${targetProjetId}`);
+        } else {
+          this.clients = [];
+          console.warn('⚠️ Type de réponse inattendu:', data);
+        }
+        
+        this.applyFilter();
+      },
+      error: (err) => {
+        console.error('❌ Erreur getClientsByProjet:', err);
+        this.error = 'Erreur chargement: ' + (err.error?.message || err.message);
+        this.clients = [];
+        this.applyFilter();
+      }
+    });
   }
 
   applyFilter() {

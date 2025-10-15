@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { CamionControllerService } from '../../api/api/camionController.service';
 import { CamionDTO } from '../../api/model/camionDTO';
 import { ProjetControllerService } from '../../api/api/projetController.service';
+import { ProjetActifService } from '../../service/projet-actif.service';
 import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
 
 @Component({
@@ -21,6 +22,8 @@ export class CamionComponent {
   isSidebarOpen: boolean = true;
   camionFilter: string = '';
   error: string = '';
+  projetActifId: number | null = null;
+  projetActif: any = null;
   // Context project (if visiting a project page)
   contextProjetId: number | null = null;
   contextProjet: any = null;
@@ -40,8 +43,28 @@ export class CamionComponent {
 
   constructor(
     private camionService: CamionControllerService,
-    private projetService: ProjetControllerService
+    private projetService: ProjetControllerService,
+    private projetActifService: ProjetActifService
   ) {
+    // 🔥 Écouter les changements du projet actif
+    this.projetActifService.projetActif$.subscribe(projet => {
+      console.log('📡 [Camion] Notification reçue - Nouveau projet:', projet);
+      
+      if (projet && projet.id) {
+        const previousId = this.projetActifId;
+        this.projetActifId = projet.id;
+        this.projetActif = projet;
+        
+        // 🔥 FIX : Recharger si le projet change OU si c'est la première fois
+        if (!previousId || previousId !== projet.id) {
+          console.log('🔄 [Camion] Rechargement - previousId:', previousId, 'newId:', projet.id);
+          setTimeout(() => {
+            this.reloadData();
+          }, 50);
+        }
+      }
+    });
+    
     // check session context
     const contextId = window.sessionStorage.getItem('projetActifId');
     if (contextId) {
@@ -49,6 +72,35 @@ export class CamionComponent {
       this.loadProjetDetails(this.contextProjetId, true);
     }
     this.loadCamions();
+  }
+
+  // 🔥 Méthode pour recharger toutes les données
+  reloadData() {
+    console.log('🔄 [Camion] reloadData() - Projet actif:', this.projetActif?.nom, 'ID:', this.projetActifId);
+    
+    const currentUrl = window.location.pathname;
+    const isOnParametrePage = currentUrl.includes('/parametre');
+    
+    if (isOnParametrePage) {
+      const contextId = window.sessionStorage.getItem('projetActifId');
+      if (contextId) {
+        const contextIdNumber = Number(contextId);
+        console.log('📌 [Camion] Page paramètre - Contexte:', contextIdNumber);
+        this.contextProjetId = contextIdNumber;
+        if (contextIdNumber !== this.projetActifId) {
+          this.loadProjetDetails(this.contextProjetId, true);
+        } else {
+          this.contextProjet = this.projetActif;
+        }
+      }
+    } else {
+      console.log('🏠 [Camion] Mode Vue Projet Actif - Projet:', this.projetActif?.nom);
+      this.contextProjetId = null;
+      this.contextProjet = null;
+    }
+    
+    this.loadCamions();
+    this.updateBreadcrumb();
   }
 
   canAddData(): boolean {
