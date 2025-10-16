@@ -141,8 +141,15 @@
 
 .page-subtitle {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.95);
   margin: 0;
+  line-height: 1.6;
+}
+
+.page-subtitle strong {
+  color: #ffffff;
+  font-weight: 700;
+  margin-right: 4px;
 }
 
 .page-actions {
@@ -208,6 +215,80 @@
 
 .autocomplete-container {
   position: relative;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 16px;
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-btn.print-btn {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.action-btn.print-btn:hover:not(:disabled) {
+  background: #065f46;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(6, 95, 70, 0.3);
+}
+
+.action-btn.dechargement-btn {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.action-btn.dechargement-btn:hover:not(:disabled) {
+  background: #d97706;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
+}
+
+.action-btn.edit-btn {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.action-btn.edit-btn:hover:not(:disabled) {
+  background: #0284c7;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+}
+
+.action-btn.delete-btn {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.action-btn.delete-btn:hover:not(:disabled) {
+  background: #dc2626;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
 }
 
 /* Dialog Styles */

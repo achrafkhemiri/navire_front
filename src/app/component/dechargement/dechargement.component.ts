@@ -1,10 +1,16 @@
 import { Component, OnInit } from '@angular/core';
 import { DechargementControllerService } from '../../api/api/dechargementController.service';
+import { ChargementControllerService } from '../../api/api/chargementController.service';
 import { ClientControllerService } from '../../api/api/clientController.service';
 import { DepotControllerService } from '../../api/api/depotController.service';
+import { CamionControllerService } from '../../api/api/camionController.service';
+import { ChauffeurControllerService } from '../../api/api/chauffeurController.service';
 import { DechargementDTO } from '../../api/model/dechargementDTO';
+import { ChargementDTO } from '../../api/model/chargementDTO';
 import { ClientDTO } from '../../api/model/clientDTO';
 import { DepotDTO } from '../../api/model/depotDTO';
+import { CamionDTO } from '../../api/model/camionDTO';
+import { ChauffeurDTO } from '../../api/model/chauffeurDTO';
 import * as XLSX from 'xlsx';
 
 @Component({
@@ -18,6 +24,9 @@ export class DechargementComponent implements OnInit {
   paginatedDechargements: DechargementDTO[] = [];
   clients: ClientDTO[] = [];
   depots: DepotDTO[] = [];
+  chargements: ChargementDTO[] = [];
+  camions: CamionDTO[] = [];
+  chauffeurs: ChauffeurDTO[] = [];
   
   // Filters
   activeFilter: string = 'all';
@@ -38,8 +47,12 @@ export class DechargementComponent implements OnInit {
   totalPages: number = 1;
   
   // Sorting
-  sortColumn: string = 'dateChargement';
+  sortColumn: string = 'dateDechargement';
   sortDirection: 'asc' | 'desc' = 'desc';
+  
+  // Delete confirmation
+  showDeleteDialog: boolean = false;
+  dechargementToDelete: DechargementDTO | null = null;
   
   error: string = '';
   isSidebarOpen: boolean = true;
@@ -56,14 +69,20 @@ export class DechargementComponent implements OnInit {
 
   constructor(
     private dechargementService: DechargementControllerService,
+    private chargementService: ChargementControllerService,
     private clientService: ClientControllerService,
-    private depotService: DepotControllerService
+    private depotService: DepotControllerService,
+    private camionService: CamionControllerService,
+    private chauffeurService: ChauffeurControllerService
   ) {}
 
   ngOnInit(): void {
     this.loadDechargements();
     this.loadClients();
     this.loadDepots();
+    this.loadChargements();
+    this.loadCamions();
+    this.loadChauffeurs();
   }
 
   loadDechargements(): void {
@@ -181,7 +200,10 @@ export class DechargementComponent implements OnInit {
       let aValue: any;
       let bValue: any;
 
-      if (this.sortColumn === 'dateChargement') {
+      if (this.sortColumn === 'dateDechargement') {
+        aValue = a.dateDechargement ? new Date(a.dateDechargement).getTime() : 0;
+        bValue = b.dateDechargement ? new Date(b.dateDechargement).getTime() : 0;
+      } else if (this.sortColumn === 'dateChargement') {
         aValue = a.dateChargement ? new Date(a.dateChargement).getTime() : 0;
         bValue = b.dateChargement ? new Date(b.dateChargement).getTime() : 0;
       } else if (this.sortColumn === 'numTicket') {
@@ -232,6 +254,57 @@ export class DechargementComponent implements OnInit {
     }
     
     return pages;
+  }
+
+  loadChargements(): void {
+    this.chargementService.getAllChargements().subscribe({
+      next: async (data) => {
+        if (data instanceof Blob) {
+          const text = await data.text();
+          const parsed = JSON.parse(text);
+          this.chargements = Array.isArray(parsed) ? parsed : [];
+        } else {
+          this.chargements = Array.isArray(data) ? data : [];
+        }
+      },
+      error: (err) => {
+        console.error('Erreur chargement chargements:', err);
+      }
+    });
+  }
+
+  loadCamions(): void {
+    this.camionService.getAllCamions().subscribe({
+      next: async (data) => {
+        if (data instanceof Blob) {
+          const text = await data.text();
+          const parsed = JSON.parse(text);
+          this.camions = Array.isArray(parsed) ? parsed : [];
+        } else {
+          this.camions = Array.isArray(data) ? data : [];
+        }
+      },
+      error: (err) => {
+        console.error('Erreur chargement camions:', err);
+      }
+    });
+  }
+
+  loadChauffeurs(): void {
+    this.chauffeurService.getAllChauffeurs().subscribe({
+      next: async (data) => {
+        if (data instanceof Blob) {
+          const text = await data.text();
+          const parsed = JSON.parse(text);
+          this.chauffeurs = Array.isArray(parsed) ? parsed : [];
+        } else {
+          this.chauffeurs = Array.isArray(data) ? data : [];
+        }
+      },
+      error: (err) => {
+        console.error('Erreur chargement chauffeurs:', err);
+      }
+    });
   }
 
   loadClients(): void {
@@ -329,7 +402,7 @@ export class DechargementComponent implements OnInit {
 
   exportToExcel(): void {
     const dataToExport = this.filteredDechargements.map(dech => ({
-      'Date': this.formatDateTime(dech.dateChargement),
+      'Date Déchargement': this.formatDateTime(dech.dateDechargement),
       'N° Ticket': dech.numTicket,
       'Bon Livraison': dech.numBonLivraison || '-',
       'Société': dech.societe || '-',
@@ -380,7 +453,7 @@ export class DechargementComponent implements OnInit {
         <table>
           <thead>
             <tr>
-              <th>Date</th>
+              <th>Date Déchargement</th>
               <th>N° Ticket</th>
               <th>Bon Livraison</th>
               <th>Société</th>
@@ -394,7 +467,7 @@ export class DechargementComponent implements OnInit {
           <tbody>
             ${this.filteredDechargements.map(dech => `
               <tr>
-                <td>${this.formatDateTime(dech.dateChargement)}</td>
+                <td>${this.formatDateTime(dech.dateDechargement)}</td>
                 <td><span class="badge badge-info">${dech.numTicket}</span></td>
                 <td>${dech.numBonLivraison || '-'}</td>
                 <td>${dech.societe || '-'}</td>
@@ -423,14 +496,27 @@ export class DechargementComponent implements OnInit {
   }
 
   printDechargement(dech: DechargementDTO): void {
+    // Récupérer le chargement associé
+    const chargement = this.chargements.find(c => c.id === dech.chargementId);
+    const camion = chargement ? this.camions.find(c => c.id === chargement.camionId) : null;
+    const chauffeur = chargement ? this.chauffeurs.find(c => c.id === chargement.chauffeurId) : null;
+
     // Date et heure formatées
-    const dateFormatted = new Date(dech.dateChargement!).toLocaleString('fr-FR', {
+    const dateDechargementFormatted = dech.dateDechargement ? new Date(dech.dateDechargement).toLocaleString('fr-FR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
-    });
+    }) : 'N/A';
+    
+    const dateChargementFormatted = chargement ? new Date(chargement.dateChargement!).toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }) : 'N/A';
     
     const now = new Date().toLocaleString('fr-FR', {
       day: '2-digit',
@@ -592,8 +678,8 @@ export class DechargementComponent implements OnInit {
             <span class="value">${dech.numBonLivraison || 'N/A'}</span>
           </div>
           <div class="row">
-            <span class="label">Date/Heure:</span>
-            <span class="value">${dateFormatted}</span>
+            <span class="label">Date Déchargement:</span>
+            <span class="value">${dateDechargementFormatted}</span>
           </div>
           <div class="row">
             <span class="label">Imprimé le:</span>
@@ -601,11 +687,49 @@ export class DechargementComponent implements OnInit {
           </div>
         </div>
         
+        ${chargement ? `
         <div class="section">
-          <div style="font-weight: bold; margin-bottom: 5px;">TRANSPORT</div>
+          <div style="font-weight: bold; margin-bottom: 5px; text-align: center; background: #f0f0f0; padding: 5px; border-radius: 4px;">
+            📦 INFORMATIONS CHARGEMENT
+          </div>
+          <div class="row">
+            <span class="label">N° Chargement:</span>
+            <span class="value">#${chargement.id}</span>
+          </div>
+          <div class="row">
+            <span class="label">Date Chargement:</span>
+            <span class="value">${dateChargementFormatted}</span>
+          </div>
           <div class="row">
             <span class="label">Société:</span>
-            <span class="value">${dech.societe || 'N/A'}</span>
+            <span class="value">${chargement.societe || 'N/A'}</span>
+          </div>
+          ${camion ? `
+          <div class="row">
+            <span class="label">Camion:</span>
+            <span class="value">${camion.matricule}</span>
+          </div>
+          ` : ''}
+          ${chauffeur ? `
+          <div class="row">
+            <span class="label">Chauffeur:</span>
+            <span class="value">${chauffeur.nom}</span>
+          </div>
+          ` : ''}
+          ${chauffeur?.numCin ? `
+          <div class="row">
+            <span class="label">CIN:</span>
+            <span class="value">${chauffeur.numCin}</span>
+          </div>
+          ` : ''}
+        </div>
+        ` : ''}
+        
+        <div class="section">
+          <div style="font-weight: bold; margin-bottom: 5px;">📍 TRANSPORT</div>
+          <div class="row">
+            <span class="label">Société:</span>
+            <span class="value">${dech.societe || chargement?.societe || 'N/A'}</span>
           </div>
         </div>
         
@@ -660,15 +784,27 @@ export class DechargementComponent implements OnInit {
     alert('Fonction d\'édition en cours de développement');
   }
 
-  deleteDechargement(dech: DechargementDTO): void {
-    if (confirm(`Voulez-vous vraiment supprimer le déchargement ${dech.numTicket} ?`)) {
-      this.dechargementService.deleteDechargement(dech.id!).subscribe({
+  openDeleteDialog(dech: DechargementDTO): void {
+    this.dechargementToDelete = dech;
+    this.showDeleteDialog = true;
+  }
+
+  closeDeleteDialog(): void {
+    this.showDeleteDialog = false;
+    this.dechargementToDelete = null;
+  }
+
+  confirmDelete(): void {
+    if (this.dechargementToDelete && this.dechargementToDelete.id) {
+      this.dechargementService.deleteDechargement(this.dechargementToDelete.id).subscribe({
         next: () => {
           this.loadDechargements();
+          this.closeDeleteDialog();
         },
         error: (err) => {
           console.error('Erreur lors de la suppression:', err);
-          alert('Erreur lors de la suppression du déchargement');
+          this.error = 'Erreur lors de la suppression du déchargement';
+          this.closeDeleteDialog();
         }
       });
     }

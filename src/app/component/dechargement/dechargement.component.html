@@ -152,13 +152,13 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th (click)="sortBy('dateChargement')" class="sortable date-column">
+            <th (click)="sortBy('dateDechargement')" class="sortable date-column">
               <span class="th-content">
-                Date
+                Date Déchargement
                 <i class="bi sort-icon" [ngClass]="{
-                  'bi-chevron-down': sortColumn === 'dateChargement' && sortDirection === 'desc',
-                  'bi-chevron-up': sortColumn === 'dateChargement' && sortDirection === 'asc',
-                  'bi-chevron-expand': sortColumn !== 'dateChargement'
+                  'bi-chevron-down': sortColumn === 'dateDechargement' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'dateDechargement' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'dateDechargement'
                 }"></i>
               </span>
             </th>
@@ -185,8 +185,8 @@
         <tbody>
           <tr *ngFor="let dech of paginatedDechargements">
             <td class="date-cell">
-              <div class="date-line">{{ formatDateOnly(dech.dateChargement) }}</div>
-              <div class="time-line">{{ formatTimeOnly(dech.dateChargement) }}</div>
+              <div class="date-line">{{ formatDateOnly(dech.dateDechargement) }}</div>
+              <div class="time-line">{{ formatTimeOnly(dech.dateDechargement) }}</div>
             </td>
             <td><span class="badge badge-info">{{ dech.numTicket }}</span></td>
             <td>{{ dech.numBonLivraison || '-' }}</td>
@@ -218,7 +218,7 @@
                 <button class="action-btn print-btn" (click)="printDechargement(dech)" title="Imprimer">
                   <i class="bi bi-printer"></i>
                 </button>
-                <button class="action-btn delete-btn" (click)="deleteDechargement(dech)" title="Supprimer">
+                <button class="action-btn delete-btn" (click)="openDeleteDialog(dech)" title="Supprimer">
                   <i class="bi bi-trash"></i>
                 </button>
               </div>
@@ -277,6 +277,57 @@
           title="Dernière page">
           <i class="bi bi-chevron-double-right"></i>
         </button>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-backdrop" *ngIf="showDeleteDialog" (click)="closeDeleteDialog()"></div>
+    <div class="modal-dialog" *ngIf="showDeleteDialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>
+            <i class="bi bi-exclamation-triangle-fill" style="color: #dc2626;"></i>
+            Confirmer la suppression
+          </h3>
+          <button class="close-btn" (click)="closeDeleteDialog()">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>Êtes-vous sûr de vouloir supprimer ce déchargement ?</p>
+          <div class="delete-info" *ngIf="dechargementToDelete">
+            <div class="info-row">
+              <strong>N° Ticket:</strong>
+              <span>{{ dechargementToDelete.numTicket }}</span>
+            </div>
+            <div class="info-row" *ngIf="dechargementToDelete.clientId">
+              <strong>Client:</strong>
+              <span>{{ getClientName(dechargementToDelete.clientId) }}</span>
+            </div>
+            <div class="info-row" *ngIf="dechargementToDelete.depotId">
+              <strong>Dépôt:</strong>
+              <span>{{ getDepotName(dechargementToDelete.depotId) }}</span>
+            </div>
+            <div class="info-row">
+              <strong>Poids Net:</strong>
+              <span>{{ calculatePoidsNet(dechargementToDelete).toFixed(2) }} T</span>
+            </div>
+          </div>
+          <p style="color: #dc2626; margin-top: 16px;">
+            <i class="bi bi-exclamation-circle"></i>
+            Cette action est irréversible.
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" (click)="closeDeleteDialog()">
+            <i class="bi bi-x-circle"></i>
+            Annuler
+          </button>
+          <button class="btn btn-danger" (click)="confirmDelete()">
+            <i class="bi bi-trash"></i>
+            Supprimer
+          </button>
+        </div>
       </div>
     </div>
   </main>

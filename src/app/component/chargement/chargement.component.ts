@@ -6,6 +6,8 @@ import { ChargementDTO } from '../../api/model/chargementDTO';
 import { ChauffeurControllerService } from '../../api/api/chauffeurController.service';
 import { CamionControllerService } from '../../api/api/camionController.service';
 import { ProjetControllerService } from '../../api/api/projetController.service';
+import { ClientControllerService } from '../../api/api/clientController.service';
+import { DepotControllerService } from '../../api/api/depotController.service';
 import { ChauffeurDTO } from '../../api/model/chauffeurDTO';
 import { CamionDTO } from '../../api/model/camionDTO';
 import { ProjetDTO } from '../../api/model/projetDTO';
@@ -39,6 +41,8 @@ export class ChargementComponent {
   isSidebarOpen: boolean = true;
   showAddDialog: boolean = false;
   showDechargementDialog: boolean = false;
+  showDeleteDialog: boolean = false;
+  chargementToDelete: ChargementDTO | null = null;
   chargementFilter: string = '';
   
   // Dialog dechargement
@@ -57,6 +61,17 @@ export class ChargementComponent {
   selectedChargementForDechargement: ChargementDTO | null = null;
   clients: any[] = [];
   depots: any[] = [];
+  projetsClients: any[] = [];
+  projetsDepots: any[] = [];
+  dechargements: any[] = [];
+  
+  // Recherche client/depot dans dechargement
+  clientSearchInput: string = '';
+  depotSearchInput: string = '';
+  filteredClientsSearch: any[] = [];
+  filteredDepotsSearch: any[] = [];
+  showClientDropdown: boolean = false;
+  showDepotDropdown: boolean = false;
   
   // Camion search/create
   camionSearchInput: string = '';
@@ -76,6 +91,17 @@ export class ChargementComponent {
   filteredSocietes: string[] = [];
   showSocieteDropdown: boolean = false;
   allSocietes: string[] = [];
+  
+  // Informations du projet (extraites des chargements)
+  projetInfo: {
+    produit: string;
+    navire: string;
+    port: string;
+  } = {
+    produit: '',
+    navire: '',
+    port: ''
+  };
   
   // Pagination
   currentPage: number = 1;
@@ -102,6 +128,8 @@ export class ChargementComponent {
     private chauffeurService: ChauffeurControllerService,
     private camionService: CamionControllerService,
     private projetService: ProjetControllerService,
+    private clientService: ClientControllerService,
+    private depotService: DepotControllerService,
     private projetActifService: ProjetActifService,
     private http: HttpClient,
     private route: ActivatedRoute,
@@ -197,6 +225,25 @@ export class ChargementComponent {
     this.breadcrumbItems.push({ label: 'Chargements' });
   }
 
+  // Générer la date et heure actuelle pour la Tunisie (UTC+1)
+  getTunisiaDateTime(): string {
+    const now = new Date();
+    // Tunisie est UTC+1 (ajouter 1 heure)
+    const tunisiaOffset = 1; // heures
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const tunisiaTime = new Date(utcTime + (3600000 * tunisiaOffset));
+    
+    // Format: yyyy-MM-ddTHH:mm:ss
+    const year = tunisiaTime.getFullYear();
+    const month = String(tunisiaTime.getMonth() + 1).padStart(2, '0');
+    const day = String(tunisiaTime.getDate()).padStart(2, '0');
+    const hours = String(tunisiaTime.getHours()).padStart(2, '0');
+    const minutes = String(tunisiaTime.getMinutes()).padStart(2, '0');
+    const seconds = String(tunisiaTime.getSeconds()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+  }
+
   loadProjetDetails(id: number, isContext: boolean = false) {
     this.projetService.getProjetById(id).subscribe({
       next: (projet) => {
@@ -250,6 +297,9 @@ export class ChargementComponent {
           // Filtrer les chargements déjà déchargés
           await this.filterChargementsDecharges();
           
+          // Extraire les informations du projet depuis le premier chargement
+          this.extractProjetInfo();
+          
           console.log('📦 [loadChargements] Chargements après conversion:', this.chargements.length, 'éléments');
           this.applyFilter();
         },
@@ -295,6 +345,9 @@ export class ChargementComponent {
           // Filtrer les chargements déjà déchargés
           await this.filterChargementsDecharges();
           
+          // Extraire les informations du projet depuis le premier chargement
+          this.extractProjetInfo();
+          
           console.log('📦 [loadChargements] Chargements après conversion:', this.chargements.length, 'éléments');
           this.applyFilter();
         },
@@ -306,6 +359,26 @@ export class ChargementComponent {
           this.applyFilter();
         }
       });
+    }
+  }
+
+  // Extraire les informations du projet depuis le premier chargement
+  extractProjetInfo(): void {
+    if (this.chargements && this.chargements.length > 0) {
+      const firstChargement = this.chargements[0];
+      this.projetInfo = {
+        produit: firstChargement.produit || 'N/A',
+        navire: firstChargement.navire || 'N/A',
+        port: firstChargement.port || 'N/A'
+      };
+      console.log('✅ Informations du projet extraites:', this.projetInfo);
+    } else {
+      this.projetInfo = {
+        produit: 'N/A',
+        navire: 'N/A',
+        port: 'N/A'
+      };
+      console.log('⚠️ Aucun chargement disponible pour extraire les informations');
     }
   }
 
@@ -358,35 +431,122 @@ export class ChargementComponent {
       poidsDepot: 0,
       _type: 'client'
     };
+    this.clientSearchInput = '';
+    this.depotSearchInput = '';
     this.showDechargementDialog = true;
     this.loadClientsAndDepots();
+    this.loadDechargements();
   }
 
   loadClientsAndDepots() {
-    // Charger les clients
-    this.http.get(`${this.basePath}/api/clients`).subscribe({
-      next: async (data: any) => {
+    const projetId = this.contextProjetId || this.projetActifId;
+    
+    if (!projetId) {
+      console.warn('⚠️ Aucun projet actif, impossible de charger les clients/dépôts');
+      return;
+    }
+
+    // Charger les clients du projet avec leurs quantités autorisées
+    console.log(`📥 Chargement des clients du projet ${projetId}...`);
+    this.clientService.getClientsByProjet(projetId, 'body').subscribe({
+      next: async (data) => {
+        let clientsData: any[] = [];
+        
         if (data instanceof Blob) {
           const text = await data.text();
-          this.clients = JSON.parse(text);
+          try {
+            const parsed = JSON.parse(text);
+            clientsData = Array.isArray(parsed) ? parsed : [];
+          } catch (e) {
+            console.error('❌ Erreur parsing clients:', e);
+            clientsData = [];
+          }
         } else {
-          this.clients = Array.isArray(data) ? data : [];
+          clientsData = Array.isArray(data) ? data : [];
         }
+        
+        // Stocker les clients
+        this.clients = clientsData;
+        
+        // Convertir les clients en ProjetClientDTO pour les calculs
+        this.projetsClients = clientsData.map(client => ({
+          id: client.id,
+          projetId: projetId,
+          clientId: client.id,
+          quantiteAutorisee: client.quantitesAutoriseesParProjet?.[projetId] || 0
+        }));
+        
+        console.log('✅ Clients chargés:', this.clients.length);
+        console.log('✅ Projets-clients créés:', this.projetsClients.length);
       },
-      error: (err) => console.error('Erreur chargement clients:', err)
+      error: (err) => {
+        console.error('❌ Erreur chargement clients du projet:', err);
+        this.clients = [];
+        this.projetsClients = [];
+      }
     });
 
-    // Charger les dépôts
-    this.http.get(`${this.basePath}/api/depots`).subscribe({
+    // Charger les dépôts du projet
+    console.log(`📥 Chargement des dépôts du projet ${projetId}...`);
+    const depotUrl = `${this.basePath}/api/projets/${projetId}/depots`;
+    console.log(`🔗 URL dépôts: ${depotUrl}`);
+    
+    this.http.get(depotUrl).subscribe({
       next: async (data: any) => {
+        let depotsData: any[] = [];
+        
         if (data instanceof Blob) {
           const text = await data.text();
-          this.depots = JSON.parse(text);
+          try {
+            const parsed = JSON.parse(text);
+            depotsData = Array.isArray(parsed) ? parsed : [];
+          } catch (e) {
+            console.error('❌ Erreur parsing dépôts:', e);
+            depotsData = [];
+          }
         } else {
-          this.depots = Array.isArray(data) ? data : [];
+          depotsData = Array.isArray(data) ? data : [];
         }
+        
+        // Stocker les dépôts
+        this.depots = depotsData;
+        
+        // Créer les projetsDepots pour cohérence avec les clients
+        this.projetsDepots = depotsData.map((depot: any) => ({
+          id: depot.id,
+          projetId: projetId,
+          depotId: depot.id
+        }));
+        
+        console.log('✅ Dépôts chargés:', this.depots.length);
+        console.log('✅ Projets-dépôts créés:', this.projetsDepots.length);
       },
-      error: (err) => console.error('Erreur chargement dépôts:', err)
+      error: (err: any) => {
+        console.error('❌ Erreur chargement dépôts du projet:', err);
+        this.depots = [];
+        this.projetsDepots = [];
+      }
+    });
+  }
+
+  loadDechargements() {
+    const projetId = this.contextProjetId || this.projetActifId;
+    if (!projetId) return;
+
+    this.dechargementService.getAllDechargements().subscribe({
+      next: async (data: any) => {
+        let allDechargements: any[] = [];
+        if (data instanceof Blob) {
+          const text = await data.text();
+          allDechargements = JSON.parse(text);
+        } else {
+          allDechargements = data;
+        }
+        // Filtrer les déchargements du projet actuel
+        this.dechargements = allDechargements.filter(d => d.projetId === projetId);
+        console.log('✅ Déchargements chargés:', this.dechargements.length);
+      },
+      error: (err) => console.error('❌ Erreur chargement déchargements:', err)
     });
   }
 
@@ -417,6 +577,9 @@ export class ChargementComponent {
       this.dialogDechargement.poidsClient = null;
     }
 
+    // Générer la date et heure de Tunisie automatiquement
+    const dateDechargement = this.getTunisiaDateTime();
+
     const dechargementDTO = {
       chargementId: this.dialogDechargement.chargementId,
       numTicket: this.dialogDechargement.numTicket,
@@ -424,7 +587,8 @@ export class ChargementComponent {
       poidCamionVide: this.dialogDechargement.poidCamionVide,
       poidComplet: this.dialogDechargement.poidComplet,
       clientId: this.dialogDechargement.clientId,
-      depotId: this.dialogDechargement.depotId
+      depotId: this.dialogDechargement.depotId,
+      dateDechargement: dateDechargement
     };
 
     this.dechargementService.createDechargement(dechargementDTO).subscribe({
@@ -442,6 +606,10 @@ export class ChargementComponent {
 
   closeDechargementDialog() {
     this.showDechargementDialog = false;
+    this.clientSearchInput = '';
+    this.depotSearchInput = '';
+    this.showClientDropdown = false;
+    this.showDepotDropdown = false;
     this.error = '';
   }
 
@@ -449,6 +617,88 @@ export class ChargementComponent {
     const poidVide = this.dialogDechargement.poidCamionVide || 0;
     const poidComplet = this.dialogDechargement.poidComplet || 0;
     return poidComplet - poidVide;
+  }
+
+  // Recherche client
+  onClientSearchInput() {
+    if (this.clientSearchInput.trim().length >= 2) {
+      this.filteredClientsSearch = this.clients.filter(c =>
+        c.nom?.toLowerCase().includes(this.clientSearchInput.toLowerCase()) ||
+        c.numero?.toLowerCase().includes(this.clientSearchInput.toLowerCase())
+      );
+      this.showClientDropdown = true;
+    } else {
+      this.filteredClientsSearch = [];
+      this.showClientDropdown = false;
+    }
+  }
+
+  selectClient(client: any) {
+    this.dialogDechargement.clientId = client.id;
+    this.clientSearchInput = `${client.nom} (${client.numero || 'N/A'})`;
+    this.showClientDropdown = false;
+  }
+
+  // Recherche dépôt
+  onDepotSearchInput() {
+    if (this.depotSearchInput.trim().length >= 2) {
+      this.filteredDepotsSearch = this.depots.filter(d =>
+        d.nom?.toLowerCase().includes(this.depotSearchInput.toLowerCase())
+      );
+      this.showDepotDropdown = true;
+    } else {
+      this.filteredDepotsSearch = [];
+      this.showDepotDropdown = false;
+    }
+  }
+
+  selectDepot(depot: any) {
+    this.dialogDechargement.depotId = depot.id;
+    this.depotSearchInput = depot.nom;
+    this.showDepotDropdown = false;
+  }
+
+  // Obtenir la quantité autorisée pour un client
+  getQuantiteAutorisee(clientId: number | undefined): number {
+    if (!clientId) return 0;
+    const projetId = this.contextProjetId || this.projetActifId;
+    if (!projetId) return 0;
+    
+    const projetClient = this.projetsClients.find(
+      pc => pc.projetId === projetId && pc.clientId === clientId
+    );
+    
+    return projetClient?.quantiteAutorisee || 0;
+  }
+
+  // Calculer le total déjà livré pour un client (via déchargements)
+  getTotalLivreClient(clientId: number): number {
+    const projetId = this.contextProjetId || this.projetActifId;
+    if (!projetId) return 0;
+    
+    return this.dechargements
+      .filter(d => d.clientId === clientId)
+      .reduce((sum, d) => {
+        // Calculer le poids net (poidComplet - poidCamionVide)
+        const poidsNet = (d.poidComplet || 0) - (d.poidCamionVide || 0);
+        return sum + poidsNet;
+      }, 0);
+  }
+
+  // Calculer le reste pour un client
+  getResteClient(clientId: number): number {
+    const quantiteAutorisee = this.getQuantiteAutorisee(clientId);
+    const totalLivre = this.getTotalLivreClient(clientId);
+    return quantiteAutorisee - totalLivre;
+  }
+
+  // Obtenir la couleur selon le pourcentage restant
+  getResteColor(reste: number, quantiteAutorisee: number): string {
+    if (quantiteAutorisee === 0) return '#64748b';
+    const pourcentage = (reste / quantiteAutorisee) * 100;
+    if (pourcentage > 30) return '#10b981'; // Vert
+    if (pourcentage > 10) return '#f59e0b'; // Orange
+    return '#ef4444'; // Rouge
   }
 
   loadChauffeurs() {
@@ -543,12 +793,15 @@ export class ChargementComponent {
     if (!this.canAddData()) return;
     
     this.editMode = false;
+    // Générer automatiquement la date et heure de Tunisie (UTC+1)
+    const tunisiaDate = this.getTunisiaDateTime();
+    
     this.dialogChargement = {
       camionId: 0,
       chauffeurId: 0,
       societe: '',
       projetId: this.contextProjetId || this.projetActifId || 0,
-      dateChargement: new Date().toISOString().slice(0, 16) // Format: yyyy-MM-ddTHH:mm for datetime-local
+      dateChargement: tunisiaDate
     };
     this.camionSearchInput = '';
     this.chauffeurSearchInput = '';
@@ -585,26 +838,24 @@ export class ChargementComponent {
 
   saveChargement() {
     if (!this.dialogChargement.camionId || !this.dialogChargement.chauffeurId || 
-        !this.dialogChargement.societe || !this.dialogChargement.dateChargement || 
-        !this.dialogChargement.projetId) {
+        !this.dialogChargement.societe || !this.dialogChargement.projetId) {
       this.error = 'Veuillez remplir tous les champs obligatoires';
       console.error('Validation échouée:', {
         camionId: this.dialogChargement.camionId,
         chauffeurId: this.dialogChargement.chauffeurId,
         societe: this.dialogChargement.societe,
-        dateChargement: this.dialogChargement.dateChargement,
         projetId: this.dialogChargement.projetId
       });
       return;
     }
 
-    // Convertir la date au format attendu par le backend (yyyy-MM-dd'T'HH:mm:ss)
+    // Générer automatiquement la date et heure de Tunisie si pas en mode édition
     const chargementToSave = { ...this.dialogChargement };
-    if (chargementToSave.dateChargement) {
-      // Si le format est yyyy-MM-ddTHH:mm (datetime-local), ajouter :00 pour les secondes
-      if (chargementToSave.dateChargement.length === 16) {
-        chargementToSave.dateChargement = chargementToSave.dateChargement + ':00';
-      }
+    if (!this.editMode) {
+      chargementToSave.dateChargement = this.getTunisiaDateTime();
+    } else if (chargementToSave.dateChargement && chargementToSave.dateChargement.length === 16) {
+      // En mode édition, si le format est yyyy-MM-ddTHH:mm, ajouter :00 pour les secondes
+      chargementToSave.dateChargement = chargementToSave.dateChargement + ':00';
     }
 
     if (this.editMode && this.selectedChargement) {
@@ -637,18 +888,30 @@ export class ChargementComponent {
     }
   }
 
-  deleteChargement(id: number) {
+  openDeleteDialog(chargement: ChargementDTO) {
     if (!this.canAddData()) return;
+    this.chargementToDelete = chargement;
+    this.showDeleteDialog = true;
+  }
+
+  closeDeleteDialog() {
+    this.showDeleteDialog = false;
+    this.chargementToDelete = null;
+  }
+
+  confirmDelete() {
+    if (!this.chargementToDelete || !this.chargementToDelete.id) return;
     
-    if (confirm('Êtes-vous sûr de vouloir supprimer ce chargement ?')) {
-      this.chargementService.deleteChargement(id).subscribe({
-        next: () => this.loadChargements(),
-        error: (err) => {
-          console.error('Erreur suppression:', err);
-          alert('Erreur lors de la suppression');
-        }
-      });
-    }
+    this.chargementService.deleteChargement(this.chargementToDelete.id).subscribe({
+      next: () => {
+        this.loadChargements();
+        this.closeDeleteDialog();
+      },
+      error: (err) => {
+        console.error('Erreur suppression:', err);
+        this.error = 'Erreur lors de la suppression du chargement';
+      }
+    });
   }
 
   // Recherche Camion
@@ -1217,11 +1480,7 @@ export class ChargementComponent {
         
         <div class="barcode">*${chargement.id}*</div>
         
-        <div class="footer">
-          <div>Merci pour votre confiance</div>
-          <div style="margin-top: 5px;">──────────────────────</div>
-          <div style="margin-top: 5px;">Document généré automatiquement</div>
-        </div>
+       
         </div>
       </body>
       </html>
@@ -1234,10 +1493,12 @@ export class ChargementComponent {
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent) {
     const target = event.target as HTMLElement;
-    if (!target.closest('.autocomplete-container')) {
+    if (!target.closest('.autocomplete-container') && !target.closest('.client-search-container') && !target.closest('.depot-search-container')) {
       this.showCamionDropdown = false;
       this.showChauffeurDropdown = false;
       this.showSocieteDropdown = false;
+      this.showClientDropdown = false;
+      this.showDepotDropdown = false;
     }
   }
 }

@@ -22,6 +22,7 @@ export interface DechargementDTO {
     poidComplet?: number;
     clientId: number;
     depotId: number;
+    dateDechargement?: string;
     
     // Données du chargement (lecture seule)
     camionId?: number;
