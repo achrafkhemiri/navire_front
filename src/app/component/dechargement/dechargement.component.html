@@ -1,0 +1,283 @@
+<app-navbar [isSidebarOpen]="isSidebarOpen" [sidebarWidth]="220" [sidebarClosedWidth]="70"></app-navbar>
+
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+  <app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+
+  <main class="content">
+    <app-breadcrumb [items]="breadcrumbItems" [showBackButton]="true"></app-breadcrumb>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="page-header-content">
+        <div class="page-icon">
+          <i class="bi bi-box-arrow-down"></i>
+        </div>
+        <div class="page-title-section">
+          <h1 class="page-title">Gestion des Déchargements</h1>
+          <p class="page-subtitle">
+            <span *ngIf="allProduits.length > 0" class="info-badge"><i class="bi bi-box"></i> {{ allProduits.join(', ') }}</span>
+            <span *ngIf="allProjets.length > 0" class="info-badge"><i class="bi bi-folder"></i> {{ allProjets.join(', ') }}</span>
+            <span *ngIf="allNavires.length > 0" class="info-badge"><i class="bi bi-truck-front"></i> {{ allNavires.join(', ') }}</span>
+            <span *ngIf="allPorts.length > 0" class="info-badge"><i class="bi bi-geo-alt"></i> {{ allPorts.join(', ') }}</span>
+            <span *ngIf="allProduits.length === 0 && allProjets.length === 0 && allNavires.length === 0 && allPorts.length === 0">Consultation et suivi des déchargements effectués</span>
+          </p>
+        </div>
+      </div>
+      <div class="page-actions">
+        <button class="action-button export-btn" (click)="exportToExcel()">
+          <i class="bi bi-file-earmark-excel"></i>
+          <span>Exporter</span>
+        </button>
+        <button class="action-button print-btn" (click)="printTable()">
+          <i class="bi bi-printer"></i>
+          <span>Imprimer</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Error Message -->
+    <div *ngIf="error" class="error-message">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      <span>{{ error }}</span>
+    </div>
+
+    <!-- Filters Section -->
+    <div class="filters-section">
+      <div class="filter-buttons">
+        <button 
+          class="filter-btn" 
+          [class.active]="activeFilter === 'all'"
+          (click)="setFilter('all')"
+        >
+          <i class="bi bi-grid-fill"></i>
+          <span>Tous</span>
+          <span class="badge">{{ allDechargementsCount }}</span>
+        </button>
+        <button 
+          class="filter-btn" 
+          [class.active]="activeFilter === 'societe'"
+          (click)="setFilter('societe')"
+        >
+          <i class="bi bi-building-fill"></i>
+          <span>Par Société</span>
+        </button>
+        <button 
+          class="filter-btn" 
+          [class.active]="activeFilter === 'projet'"
+          (click)="setFilter('projet')"
+        >
+          <i class="bi bi-folder-fill"></i>
+          <span>Par Projet</span>
+        </button>
+        <button 
+          class="filter-btn" 
+          [class.active]="activeFilter === 'produit'"
+          (click)="setFilter('produit')"
+        >
+          <i class="bi bi-box-fill"></i>
+          <span>Par Produit</span>
+        </button>
+      </div>
+
+      <!-- Filter Details -->
+      <div *ngIf="activeFilter === 'societe'" class="filter-details">
+        <label>
+          <i class="bi bi-building-fill"></i> Sélectionner une société
+        </label>
+        <select 
+          [(ngModel)]="selectedSociete" 
+          (change)="applyFilter()">
+          <option [ngValue]="null">-- Toutes les sociétés --</option>
+          <option *ngFor="let societe of allSocietes" [ngValue]="societe">
+            {{ societe }}
+          </option>
+        </select>
+      </div>
+
+      <div *ngIf="activeFilter === 'projet'" class="filter-details">
+        <label>
+          <i class="bi bi-folder-fill"></i> Sélectionner un projet
+        </label>
+        <select 
+          [(ngModel)]="selectedProjet" 
+          (change)="applyFilter()">
+          <option [ngValue]="null">-- Tous les projets --</option>
+          <option *ngFor="let projet of allProjets" [ngValue]="projet">
+            {{ projet }}
+          </option>
+        </select>
+      </div>
+
+      <div *ngIf="activeFilter === 'produit'" class="filter-details">
+        <label>
+          <i class="bi bi-box-fill"></i> Sélectionner un produit
+        </label>
+        <select 
+          [(ngModel)]="selectedProduit" 
+          (change)="applyFilter()">
+          <option [ngValue]="null">-- Tous les produits --</option>
+          <option *ngFor="let produit of allProduits" [ngValue]="produit">
+            {{ produit }}
+          </option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar-section">
+      <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input 
+          type="text" 
+          class="search-input" 
+          placeholder="Rechercher par ticket, bon de livraison, client, dépôt..." 
+          [(ngModel)]="searchFilter" 
+          (input)="applyFilter()"
+        />
+      </div>
+      <div class="toolbar-right">
+        <span class="results-count">{{ filteredDechargements.length }} résultat(s)</span>
+        <div class="page-size-selector">
+          <span>Afficher</span>
+          <select [(ngModel)]="pageSize" (change)="changePageSize()" class="page-size-select">
+            <option *ngFor="let size of pageSizes" [value]="size">{{ size }}</option>
+          </select>
+          <span>lignes</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table Container -->
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th (click)="sortBy('dateChargement')" class="sortable date-column">
+              <span class="th-content">
+                Date
+                <i class="bi sort-icon" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'dateChargement' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'dateChargement' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'dateChargement'
+                }"></i>
+              </span>
+            </th>
+            <th (click)="sortBy('numTicket')" class="sortable">
+              <span class="th-content">
+                N° Ticket
+                <i class="bi sort-icon" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'numTicket' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'numTicket' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'numTicket'
+                }"></i>
+              </span>
+            </th>
+            <th>N° Bon<br>Livraison</th>
+            <th>Société</th>
+            <th>Client</th>
+            <th>Dépôt</th>
+            <th>Poids Vide<br>(T)</th>
+            <th>Poids Complet<br>(T)</th>
+            <th>Poids Net<br>(T)</th>
+            <th class="actions-column">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let dech of paginatedDechargements">
+            <td class="date-cell">
+              <div class="date-line">{{ formatDateOnly(dech.dateChargement) }}</div>
+              <div class="time-line">{{ formatTimeOnly(dech.dateChargement) }}</div>
+            </td>
+            <td><span class="badge badge-info">{{ dech.numTicket }}</span></td>
+            <td>{{ dech.numBonLivraison || '-' }}</td>
+            <td>{{ dech.societe || '-' }}</td>
+            <td>
+              <span *ngIf="dech.clientId" class="badge badge-success">
+                {{ getClientName(dech.clientId) }}
+              </span>
+              <span *ngIf="!dech.clientId">-</span>
+            </td>
+            <td>
+              <span *ngIf="dech.depotId" class="badge badge-warning">
+                {{ getDepotName(dech.depotId) }}
+              </span>
+              <span *ngIf="!dech.depotId">-</span>
+            </td>
+            <td>{{ dech.poidCamionVide?.toFixed(2) }}</td>
+            <td>{{ dech.poidComplet?.toFixed(2) }}</td>
+            <td>
+              <strong style="color: #667eea;">
+                {{ calculatePoidsNet(dech).toFixed(2) }}
+              </strong>
+            </td>
+            <td class="actions-cell">
+              <div class="action-buttons">
+                <button class="action-btn edit-btn" (click)="editDechargement(dech)" title="Modifier">
+                  <i class="bi bi-pencil-square"></i>
+                </button>
+                <button class="action-btn print-btn" (click)="printDechargement(dech)" title="Imprimer">
+                  <i class="bi bi-printer"></i>
+                </button>
+                <button class="action-btn delete-btn" (click)="deleteDechargement(dech)" title="Supprimer">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          <tr *ngIf="paginatedDechargements.length === 0">
+            <td colspan="9" style="text-align: center; padding: 40px; color: #94a3b8;">
+              <i class="bi bi-inbox" style="font-size: 48px; display: block; margin-bottom: 16px;"></i>
+              {{ searchFilter ? 'Aucun résultat trouvé' : 'Aucun déchargement enregistré' }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-container" *ngIf="filteredDechargements.length > 0">
+      <div class="pagination-info">
+        Affichage de {{ (currentPage - 1) * pageSize + 1 }} à {{ Math.min(currentPage * pageSize, filteredDechargements.length) }} sur {{ filteredDechargements.length }} entrées
+      </div>
+      <div class="pagination-controls">
+        <button 
+          class="page-btn" 
+          (click)="goToPage(1)" 
+          [disabled]="currentPage === 1"
+          title="Première page">
+          <i class="bi bi-chevron-double-left"></i>
+        </button>
+        <button 
+          class="page-btn" 
+          (click)="goToPage(currentPage - 1)" 
+          [disabled]="currentPage === 1"
+          title="Page précédente">
+          <i class="bi bi-chevron-left"></i>
+        </button>
+        
+        <button 
+          *ngFor="let page of getPageNumbers()" 
+          class="page-btn" 
+          [class.active]="page === currentPage"
+          (click)="goToPage(page)">
+          {{ page }}
+        </button>
+        
+        <button 
+          class="page-btn" 
+          (click)="goToPage(currentPage + 1)" 
+          [disabled]="currentPage === totalPages"
+          title="Page suivante">
+          <i class="bi bi-chevron-right"></i>
+        </button>
+        <button 
+          class="page-btn" 
+          (click)="goToPage(totalPages)" 
+          [disabled]="currentPage === totalPages"
+          title="Dernière page">
+          <i class="bi bi-chevron-double-right"></i>
+        </button>
+      </div>
+    </div>
+  </main>
+</div>

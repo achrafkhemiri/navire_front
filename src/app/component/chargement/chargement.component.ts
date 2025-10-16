@@ -1,6 +1,7 @@
 import { Component, HostListener, Inject, ChangeDetectorRef } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ChargementControllerService } from '../../api/api/chargementController.service';
+import { DechargementControllerService } from '../../api/api/dechargementController.service';
 import { ChargementDTO } from '../../api/model/chargementDTO';
 import { ChauffeurControllerService } from '../../api/api/chauffeurController.service';
 import { CamionControllerService } from '../../api/api/camionController.service';
@@ -37,7 +38,25 @@ export class ChargementComponent {
   projets: ProjetDTO[] = [];
   isSidebarOpen: boolean = true;
   showAddDialog: boolean = false;
+  showDechargementDialog: boolean = false;
   chargementFilter: string = '';
+  
+  // Dialog dechargement
+  dialogDechargement: any = {
+    chargementId: 0,
+    numTicket: '',
+    numBonLivraison: '',
+    poidCamionVide: 0,
+    poidComplet: 0,
+    clientId: undefined,
+    depotId: undefined,
+    poidsClient: 0,
+    poidsDepot: 0,
+    _type: 'client' // 'client' ou 'depot'
+  };
+  selectedChargementForDechargement: ChargementDTO | null = null;
+  clients: any[] = [];
+  depots: any[] = [];
   
   // Camion search/create
   camionSearchInput: string = '';
@@ -79,12 +98,14 @@ export class ChargementComponent {
 
   constructor(
     private chargementService: ChargementControllerService,
+    private dechargementService: DechargementControllerService,
     private chauffeurService: ChauffeurControllerService,
     private camionService: CamionControllerService,
     private projetService: ProjetControllerService,
     private projetActifService: ProjetActifService,
     private http: HttpClient,
     private route: ActivatedRoute,
+    private router: Router,
     private cdr: ChangeDetectorRef,
     @Inject(BASE_PATH) private basePath: string
   ) {
@@ -226,6 +247,9 @@ export class ChargementComponent {
             this.chargements = Array.isArray(data) ? data : [];
           }
           
+          // Filtrer les chargements déjà déchargés
+          await this.filterChargementsDecharges();
+          
           console.log('📦 [loadChargements] Chargements après conversion:', this.chargements.length, 'éléments');
           this.applyFilter();
         },
@@ -268,6 +292,9 @@ export class ChargementComponent {
             this.chargements = Array.isArray(data) ? data : [];
           }
           
+          // Filtrer les chargements déjà déchargés
+          await this.filterChargementsDecharges();
+          
           console.log('📦 [loadChargements] Chargements après conversion:', this.chargements.length, 'éléments');
           this.applyFilter();
         },
@@ -280,6 +307,148 @@ export class ChargementComponent {
         }
       });
     }
+  }
+
+  async filterChargementsDecharges() {
+    try {
+      const response = await this.dechargementService.getAllDechargements().toPromise();
+      let dechargements: any[] = [];
+      
+      // Gérer le cas où la réponse est un Blob
+      if (response instanceof Blob) {
+        const text = await response.text();
+        try {
+          dechargements = JSON.parse(text);
+        } catch (e) {
+          console.error('❌ Erreur parsing déchargements Blob:', e);
+          return; // En cas d'erreur, on continue avec tous les chargements
+        }
+      } else if (Array.isArray(response)) {
+        dechargements = response;
+      }
+      
+      const chargementsDechargesIds = new Set<number>();
+      dechargements.forEach((dechargement: any) => {
+        if (dechargement.chargementId) {
+          chargementsDechargesIds.add(dechargement.chargementId);
+        }
+      });
+      
+      // Filtrer les chargements qui ne sont pas déchargés
+      const beforeCount = this.chargements.length;
+      this.chargements = this.chargements.filter(chg => !chargementsDechargesIds.has(chg.id!));
+      console.log(`✅ Chargements filtrés: ${beforeCount} → ${this.chargements.length} (${beforeCount - this.chargements.length} déchargés cachés)`);
+    } catch (err) {
+      console.error('❌ Erreur lors du filtrage des déchargements:', err);
+      // En cas d'erreur, on continue avec tous les chargements
+    }
+  }
+
+  openDechargementForm(chargement: ChargementDTO) {
+    this.selectedChargementForDechargement = chargement;
+    this.dialogDechargement = {
+      chargementId: chargement.id,
+      numTicket: '',
+      numBonLivraison: '',
+      poidCamionVide: 0,
+      poidComplet: 0,
+      clientId: undefined,
+      depotId: undefined,
+      poidsClient: 0,
+      poidsDepot: 0,
+      _type: 'client'
+    };
+    this.showDechargementDialog = true;
+    this.loadClientsAndDepots();
+  }
+
+  loadClientsAndDepots() {
+    // Charger les clients
+    this.http.get(`${this.basePath}/api/clients`).subscribe({
+      next: async (data: any) => {
+        if (data instanceof Blob) {
+          const text = await data.text();
+          this.clients = JSON.parse(text);
+        } else {
+          this.clients = Array.isArray(data) ? data : [];
+        }
+      },
+      error: (err) => console.error('Erreur chargement clients:', err)
+    });
+
+    // Charger les dépôts
+    this.http.get(`${this.basePath}/api/depots`).subscribe({
+      next: async (data: any) => {
+        if (data instanceof Blob) {
+          const text = await data.text();
+          this.depots = JSON.parse(text);
+        } else {
+          this.depots = Array.isArray(data) ? data : [];
+        }
+      },
+      error: (err) => console.error('Erreur chargement dépôts:', err)
+    });
+  }
+
+  saveDechargement() {
+    if (!this.dialogDechargement.numTicket) {
+      this.error = 'Le numéro de ticket est obligatoire';
+      return;
+    }
+
+    if (this.dialogDechargement._type === 'client' && !this.dialogDechargement.clientId) {
+      this.error = 'Veuillez sélectionner un client';
+      return;
+    }
+
+    if (this.dialogDechargement._type === 'depot' && !this.dialogDechargement.depotId) {
+      this.error = 'Veuillez sélectionner un dépôt';
+      return;
+    }
+
+    // Calculer le poids selon le type
+    if (this.dialogDechargement._type === 'client') {
+      this.dialogDechargement.poidsClient = this.dialogDechargement.poidComplet - this.dialogDechargement.poidCamionVide;
+      this.dialogDechargement.depotId = null;
+      this.dialogDechargement.poidsDepot = null;
+    } else {
+      this.dialogDechargement.poidsDepot = this.dialogDechargement.poidComplet - this.dialogDechargement.poidCamionVide;
+      this.dialogDechargement.clientId = null;
+      this.dialogDechargement.poidsClient = null;
+    }
+
+    const dechargementDTO = {
+      chargementId: this.dialogDechargement.chargementId,
+      numTicket: this.dialogDechargement.numTicket,
+      numBonLivraison: this.dialogDechargement.numBonLivraison,
+      poidCamionVide: this.dialogDechargement.poidCamionVide,
+      poidComplet: this.dialogDechargement.poidComplet,
+      clientId: this.dialogDechargement.clientId,
+      depotId: this.dialogDechargement.depotId
+    };
+
+    this.dechargementService.createDechargement(dechargementDTO).subscribe({
+      next: () => {
+        this.showDechargementDialog = false;
+        this.error = '';
+        this.loadChargements(); // Recharger pour retirer le chargement déchargé
+      },
+      error: (err) => {
+        console.error('Erreur création déchargement:', err);
+        this.error = 'Erreur lors de la création du déchargement';
+      }
+    });
+  }
+
+  closeDechargementDialog() {
+    this.showDechargementDialog = false;
+    this.error = '';
+  }
+
+  calculatePoids() {
+    const poidVide = this.dialogDechargement.poidCamionVide || 0;
+    const poidComplet = this.dialogDechargement.poidComplet || 0;
+    return poidComplet - poidVide;
   }
 
   loadChauffeurs() {

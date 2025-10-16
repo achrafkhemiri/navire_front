@@ -15,6 +15,7 @@ import { DepotComponent } from './component/depot/depot.component';
 import { ProjetComponent } from './component/projet/projet.component';
 import { VoyageComponent } from './component/voyage/voyage.component';
 import { ChargementComponent } from './component/chargement/chargement.component';
+import { DechargementComponent } from './component/dechargement/dechargement.component';
 import { ProjetClientComponent } from './component/projet-client/projet-client.component';
 import { ProjetListComponent } from './projet-list/projet-list.component';
 import { ClientsComponent } from './component/clients/clients.component';
@@ -52,6 +53,7 @@ const routes: Routes = [
   { path: 'projet/:id/recap', component: RecapComponent, canActivate: [AuthGuard] },
   { path: 'voyage', component: VoyageComponent, canActivate: [AuthGuard] },
   { path: 'chargement', component: ChargementComponent, canActivate: [AuthGuard] },
+  { path: 'dechargement', component: DechargementComponent, canActivate: [AuthGuard] },
   { path: 'recap', component: RecapComponent, canActivate: [AuthGuard] },
   { path: 'projet-client', component: ProjetClientComponent, canActivate: [AuthGuard] },
   { path: 'notifications', component: NotificationsComponent, canActivate: [AuthGuard] },

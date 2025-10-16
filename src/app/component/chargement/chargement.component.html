@@ -255,6 +255,15 @@
                 <i class="bi bi-printer-fill"></i>
               </button>
               <button 
+                class="action-btn dechargement-btn" 
+                (click)="openDechargementForm(chg)" 
+                [disabled]="!canAddData()" 
+                [title]="!canAddData() ? 'Ce projet n\'est pas actif' : 'Créer un déchargement'"
+                style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);"
+              >
+                <i class="bi bi-box-arrow-down"></i>
+              </button>
+              <button 
                 class="action-btn edit-btn" 
                 (click)="openEditDialog(chg)" 
                 [disabled]="!canAddData()" 
@@ -509,6 +518,146 @@
           </button>
           <button (click)="saveChargement()" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;">
             {{ editMode ? 'Modifier' : 'Créer' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dialog Déchargement -->
+    <div class="dialog-backdrop" *ngIf="showDechargementDialog" (click)="closeDechargementDialog()">
+      <div class="dialog-modal" (click)="$event.stopPropagation()" style="max-width: 550px; max-height: 90vh; overflow-y: auto;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+          <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+            <i class="bi bi-box-arrow-down" style="font-size: 24px; color: white;"></i>
+          </div>
+          <h3 style="margin: 0; font-size: 24px; font-weight: 700; color: #1e293b;">Créer un déchargement</h3>
+        </div>
+        
+        <div *ngIf="error" style="background: #fee2e2; color: #dc2626; padding: 12px 16px; border-radius: 10px; margin-bottom: 20px; font-size: 13px; border-left: 4px solid #dc2626;">
+          <i class="bi bi-exclamation-triangle-fill" style="margin-right: 8px;"></i>{{ error }}
+        </div>
+
+        <!-- Informations du chargement (readonly) -->
+        <div style="background: #f8fafc; padding: 16px; border-radius: 12px; margin-bottom: 16px; border: 2px solid #e2e8f0;">
+          <div style="font-size: 12px; font-weight: 600; color: #667eea; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+            <i class="bi bi-info-circle-fill"></i> Informations du chargement
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+            <div>
+              <div style="color: #64748b; margin-bottom: 4px;">Date</div>
+              <div style="font-weight: 600; color: #1e293b;">{{ formatDateTime(selectedChargementForDechargement?.dateChargement) }}</div>
+            </div>
+            <div>
+              <div style="color: #64748b; margin-bottom: 4px;">Société</div>
+              <div style="font-weight: 600; color: #1e293b;">{{ selectedChargementForDechargement?.societe }}</div>
+            </div>
+            <div>
+              <div style="color: #64748b; margin-bottom: 4px;">Projet</div>
+              <div style="font-weight: 600; color: #1e293b;">{{ selectedChargementForDechargement?.nomProjet }}</div>
+            </div>
+            <div>
+              <div style="color: #64748b; margin-bottom: 4px;">Produit</div>
+              <div style="font-weight: 600; color: #1e293b;">{{ selectedChargementForDechargement?.produit }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Informations du déchargement -->
+        <div style="background: #f8fafc; padding: 16px; border-radius: 12px; margin-bottom: 16px;">
+          <div style="font-size: 12px; font-weight: 600; color: #f59e0b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+            <i class="bi bi-file-text"></i> Informations du déchargement
+          </div>
+          
+          <label style="display: block; margin-top: 12px; font-weight: 500; color: #4a5568; font-size: 13px;">Numéro de ticket *</label>
+          <input [(ngModel)]="dialogDechargement.numTicket" placeholder="Entrer le numéro de ticket" style="background: white; width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;" />
+          
+          <label style="display: block; margin-top: 12px; font-weight: 500; color: #4a5568; font-size: 13px;">Numéro de bon de livraison</label>
+          <input [(ngModel)]="dialogDechargement.numBonLivraison" placeholder="Entrer le numéro de bon" style="background: white; width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;" />
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+            <div>
+              <label style="display: block; font-weight: 500; color: #4a5568; font-size: 13px;">Poids camion vide (T)</label>
+              <input [(ngModel)]="dialogDechargement.poidCamionVide" type="number" step="0.01" placeholder="0.00" style="background: white; width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;" />
+            </div>
+            <div>
+              <label style="display: block; font-weight: 500; color: #4a5568; font-size: 13px;">Poids complet (T)</label>
+              <input [(ngModel)]="dialogDechargement.poidComplet" type="number" step="0.01" placeholder="0.00" style="background: white; width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;" />
+            </div>
+          </div>
+
+          <label style="display: block; margin-top: 12px; font-weight: 500; color: #64748b; font-size: 13px;">
+            <i class="bi bi-calculator"></i> Poids net (calculé automatiquement)
+          </label>
+          <input 
+            [value]="calculatePoids()" 
+            type="number" 
+            disabled 
+            style="background: #f1f5f9; color: #667eea; font-weight: 600; width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; cursor: not-allowed;" 
+          />
+        </div>
+
+        <!-- Type de destination -->
+        <div style="margin-bottom: 16px;">
+          <div style="font-size: 12px; font-weight: 600; color: #667eea; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+            <i class="bi bi-geo-alt"></i> Destination
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <button 
+              type="button"
+              [style.background]="dialogDechargement._type === 'client' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f1f5f9'"
+              [style.color]="dialogDechargement._type === 'client' ? 'white' : '#64748b'"
+              [style.border]="dialogDechargement._type === 'client' ? 'none' : '2px solid #e2e8f0'"
+              style="padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px;"
+              (click)="dialogDechargement._type = 'client'; dialogDechargement.depotId = undefined;"
+            >
+              <i class="bi bi-person-fill" style="font-size: 18px;"></i> Client
+            </button>
+            <button 
+              type="button"
+              [style.background]="dialogDechargement._type === 'depot' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f1f5f9'"
+              [style.color]="dialogDechargement._type === 'depot' ? 'white' : '#64748b'"
+              [style.border]="dialogDechargement._type === 'depot' ? 'none' : '2px solid #e2e8f0'"
+              style="padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px;"
+              (click)="dialogDechargement._type = 'depot'; dialogDechargement.clientId = undefined;"
+            >
+              <i class="bi bi-building" style="font-size: 18px;"></i> Dépôt
+            </button>
+          </div>
+        </div>
+
+        <!-- Client -->
+        <div *ngIf="dialogDechargement._type === 'client'" style="background: #f0fdf4; padding: 16px; border-radius: 12px; margin-bottom: 16px; border: 2px solid #86efac;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #15803d; font-size: 13px;">
+            <i class="bi bi-person-check-fill"></i> Client *
+          </label>
+          <select [(ngModel)]="dialogDechargement.clientId" style="background: white; width: 100%; padding: 10px 14px; border: 2px solid #86efac; border-radius: 8px; font-size: 14px;">
+            <option [ngValue]="undefined">-- Sélectionner un client --</option>
+            <option *ngFor="let client of clients" [ngValue]="client.id">
+              {{ client.nom }} ({{ client.numero }})
+            </option>
+          </select>
+        </div>
+
+        <!-- Dépôt -->
+        <div *ngIf="dialogDechargement._type === 'depot'" style="background: #fef3c7; padding: 16px; border-radius: 12px; margin-bottom: 16px; border: 2px solid #fcd34d;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #92400e; font-size: 13px;">
+            <i class="bi bi-building"></i> Dépôt *
+          </label>
+          <select [(ngModel)]="dialogDechargement.depotId" style="background: white; width: 100%; padding: 10px 14px; border: 2px solid #fcd34d; border-radius: 8px; font-size: 14px;">
+            <option [ngValue]="undefined">-- Sélectionner un dépôt --</option>
+            <option *ngFor="let depot of depots" [ngValue]="depot.id">
+              {{ depot.nom }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Buttons -->
+        <div style="display: flex; gap: 12px; margin-top: 24px;">
+          <button (click)="closeDechargementDialog()" style="flex: 1; padding: 12px; background: #f1f5f9; color: #64748b; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;">
+            Annuler
+          </button>
+          <button (click)="saveDechargement()" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;">
+            Créer le déchargement
           </button>
         </div>
       </div>
