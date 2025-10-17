@@ -87,7 +87,7 @@
           </div>
           <div *ngIf="selectedDate" class="filter-info-message">
             <i class="bi bi-info-circle-fill"></i>
-            <span>Affichage des quantités vendues jusqu'au {{ formatDate(selectedDate) }}</span>
+            <span><strong>Calcul cumulatif :</strong> Les quantités incluent tous les voyages jusqu'au {{ formatDate(selectedDate) }} à <strong>7h00 du lendemain</strong> (journée de travail complète)</span>
           </div>
         </div>
       </div>

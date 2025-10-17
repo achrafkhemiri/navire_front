@@ -14,18 +14,7 @@
       <span>{{ projetActif?.nom || 'Projet Actif' }}</span>
     </div>
     <ul class="nav-list">
-      <li class="nav-item">
-        <a routerLink="/client" routerLinkActive="active">
-          <i class="bi bi-person-badge"></i>
-          <span class="nav-text">Clients</span>
-        </a>
-      </li>
-      <li class="nav-item">
-        <a routerLink="/depot" routerLinkActive="active">
-          <i class="bi bi-building"></i>
-          <span class="nav-text">Dépôts</span>
-        </a>
-      </li>
+      
       <li class="nav-item">
         <a routerLink="/chargement" routerLinkActive="active">
           <i class="bi bi-box-seam"></i>
@@ -50,10 +39,22 @@
           <span class="nav-text">Récapitulatif</span>
         </a>
       </li>
-      <li class="nav-item">
+      <!-- <li class="nav-item">
         <a routerLink="/declaration" routerLinkActive="active">
           <i class="bi bi-file-text"></i>
           <span class="nav-text">Déclarations</span>
+        </a>
+      </li> -->
+      <li class="nav-item">
+        <a routerLink="/client" routerLinkActive="active">
+          <i class="bi bi-person-badge"></i>
+          <span class="nav-text">Clients</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a routerLink="/depot" routerLinkActive="active">
+          <i class="bi bi-building"></i>
+          <span class="nav-text">Dépôts</span>
         </a>
       </li>
       <li class="nav-item">

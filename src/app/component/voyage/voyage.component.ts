@@ -265,7 +265,7 @@ export class VoyageComponent {
   loadClients() {
     const projetId = this.contextProjetId || this.projetActifId;
     
-    // Si on a un projet actif, charger seulement les clients de ce projet
+    // 🔥 TOUJOURS charger seulement les clients du projet actif
     if (projetId) {
       console.log('📥 Chargement des clients pour le projet:', projetId);
       this.clientService.getClientsByProjet(projetId, 'body').subscribe({
@@ -288,30 +288,13 @@ export class VoyageComponent {
         error: (err) => {
           console.error('❌ Erreur chargement clients du projet:', err);
           this.error = 'Erreur chargement clients: ' + (err.error?.message || err.message);
+          this.clients = [];
         }
       });
     } else {
-      // Sinon charger tous les clients
-      this.clientService.getAllClients('body').subscribe({
-        next: (data) => {
-          if (data instanceof Blob) {
-            const reader = new FileReader();
-            reader.onload = () => {
-              try {
-                this.clients = JSON.parse(reader.result as string);
-                console.log('✅ Tous les clients chargés:', this.clients.length);
-              } catch (e) {
-                this.error = 'Erreur parsing clients: ' + e;
-              }
-            };
-            reader.readAsText(data);
-          } else {
-            this.clients = data;
-            console.log('✅ Tous les clients chargés:', this.clients.length);
-          }
-        },
-        error: (err) => this.error = 'Erreur chargement clients: ' + (err.error?.message || err.message)
-      });
+      // 🔥 Si pas de projet actif, vider la liste au lieu de charger tous les clients
+      console.warn('⚠️ Pas de projet actif, impossible de charger les clients');
+      this.clients = [];
     }
   }
 
@@ -407,6 +390,57 @@ export class VoyageComponent {
       }, 0);
     
     return quantiteTotale - totalLivre;
+  }
+
+  // Calculer le reste du projet au moment actuel (pour affichage dynamique)
+  // Cette méthode affiche toujours le reste ACTUEL du projet, pas celui stocké lors de la création du voyage
+  getResteProjetActuel(): number {
+    return this.getResteProjet();
+  }
+
+  // Calculer le reste pour un voyage spécifique (après ce voyage)
+  // Le reste = Quantité totale - Somme de tous les voyages du même projet créés AVANT OU AU MOMENT de ce voyage
+  getResteForVoyage(voyage: VoyageDTO): number {
+    const projet = this.contextProjet || this.projetActif;
+    if (!projet) return 0;
+    
+    const quantiteTotale = projet.quantiteTotale || 0;
+    
+    // Récupérer la date du voyage actuel
+    const voyageDate = voyage.date ? new Date(voyage.date).getTime() : Date.now();
+    
+    // Calculer le total des livraisons JUSQU'À ce voyage (inclus)
+    const totalLivreJusquAVoyage = this.voyages
+      .filter(v => {
+        if (v.projetId !== projet.id) return false;
+        
+        // Comparer les dates : inclure tous les voyages créés avant ou au même moment
+        const vDate = v.date ? new Date(v.date).getTime() : 0;
+        return vDate <= voyageDate;
+      })
+      .reduce((sum, v) => {
+        return sum + (v.poidsClient || 0) + (v.poidsDepot || 0);
+      }, 0);
+    
+    return quantiteTotale - totalLivreJusquAVoyage;
+  }
+
+  // Obtenir la couleur du reste pour un voyage (vert/orange/rouge selon le pourcentage restant)
+  getResteColorForVoyage(voyage: VoyageDTO): string {
+    const projet = this.contextProjet || this.projetActif;
+    if (!projet) return '#64748b'; // Gris par défaut
+    
+    const reste = this.getResteForVoyage(voyage);
+    const quantiteTotale = projet.quantiteTotale || 0;
+    
+    if (quantiteTotale === 0) return '#64748b';
+    
+    const pourcentage = (reste / quantiteTotale) * 100;
+    
+    if (pourcentage > 50) return '#10b981'; // Vert
+    if (pourcentage > 20) return '#f59e0b'; // Orange
+    if (pourcentage >= 0) return '#ef4444'; // Rouge
+    return '#dc2626'; // Rouge foncé (négatif - dépassement)
   }
 
   // Obtenir le nom et numéro d'un client
@@ -843,8 +877,21 @@ export class VoyageComponent {
 
 
   openAddDialog() {
-    const today = new Date().toISOString().split('T')[0];
-    this.dialogVoyage = { numBonLivraison: '', numTicket: '', reste: 0, date: today, poidsClient: 0, poidsDepot: 0, societe: '', _type: 'client' };
+    // 🕐 Définir automatiquement la date et heure actuelle
+    const now = new Date();
+    const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    
+    this.dialogVoyage = { 
+      numBonLivraison: '', 
+      numTicket: '', 
+      reste: 0, 
+      date: localDateTime,  // Date automatique (pas de champ visible)
+      poidsClient: 0, 
+      poidsDepot: 0, 
+      societe: '', 
+      _type: 'client' 
+    };
+    
     this.showAddDialog = true;
     this.editMode = false;
     
@@ -859,15 +906,29 @@ export class VoyageComponent {
     console.log('🔄 Rechargement des projets clients...');
     this.loadProjetsClients();
     
-    // Debug: afficher le projet actif
+    // Debug: afficher le projet actif et les clients disponibles
     const projetId = this.contextProjetId || this.projetActifId;
     console.log('📌 Projet actif:', projetId);
     console.log('📌 Context projet:', this.contextProjet);
     console.log('📌 Projet actif:', this.projetActif);
+    console.log('👥 Clients du projet disponibles:', this.clients.length, this.clients);
   }
 
   selectVoyage(vg: VoyageDTO) {
     this.dialogVoyage = { ...vg };
+    
+    // Convertir la date au format datetime-local si elle existe
+    if (vg.date) {
+      const dateStr = vg.date.toString();
+      if (dateStr.includes('T')) {
+        // Si la date contient déjà un T, prendre les 16 premiers caractères (YYYY-MM-DDTHH:mm)
+        this.dialogVoyage.date = dateStr.slice(0, 16);
+      } else {
+        // Si c'est juste une date, ajouter l'heure 00:00
+        this.dialogVoyage.date = dateStr + 'T00:00';
+      }
+    }
+    
     this.selectedVoyage = vg;
     this.editMode = true;
     this.showAddDialog = false;
@@ -1092,7 +1153,23 @@ export class VoyageComponent {
     
     // Filtres par boutons
     if (this.activeFilter === 'date' && this.selectedDate) {
-      voyagesFiltrés = voyagesFiltrés.filter(vg => vg.date === this.selectedDate);
+      voyagesFiltrés = voyagesFiltrés.filter(vg => {
+        if (!vg.date) return false;
+        
+        // Journée de travail : de 7h du jour sélectionné à 7h du lendemain
+        const selectedDateObj = new Date(this.selectedDate + 'T00:00:00');
+        const startWorkDay = new Date(selectedDateObj);
+        startWorkDay.setHours(7, 0, 0, 0); // 7h00 du jour sélectionné
+        
+        const endWorkDay = new Date(selectedDateObj);
+        endWorkDay.setDate(endWorkDay.getDate() + 1);
+        endWorkDay.setHours(7, 0, 0, 0); // 7h00 du lendemain
+        
+        const voyageDateTime = new Date(vg.date);
+        
+        // Le voyage est inclus s'il est entre 7h du jour sélectionné et 7h du lendemain
+        return voyageDateTime >= startWorkDay && voyageDateTime < endWorkDay;
+      });
     } else if (this.activeFilter === 'client' && this.selectedClientId) {
       voyagesFiltrés = voyagesFiltrés.filter(vg => vg.clientId === this.selectedClientId);
     } else if (this.activeFilter === 'depot' && this.selectedDepotId) {
@@ -1100,6 +1177,17 @@ export class VoyageComponent {
     }
     
     this.filteredVoyages = voyagesFiltrés;
+    
+    // Si aucun tri manuel n'est actif, maintenir l'ordre par date décroissante
+    if (!this.sortColumn) {
+      this.filteredVoyages.sort((a, b) => {
+        if (!a.date && !b.date) return 0;
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      });
+    }
+    
     this.updatePagination();
   }
   
@@ -1127,6 +1215,14 @@ export class VoyageComponent {
     }
     
     this.applyFilter();
+  }
+  
+  // 🔥 Obtenir le nombre total de voyages du projet actif uniquement
+  getTotalVoyagesProjet(): number {
+    if (this.projetActifId) {
+      return this.voyages.filter(vg => vg.projetId === this.projetActifId).length;
+    }
+    return this.voyages.length;
   }
   
   getFilterCount(filterType: 'date' | 'client' | 'depot'): number {
@@ -1174,11 +1270,17 @@ export class VoyageComponent {
     if (this.activeFilter === 'all') {
       return 'Total des voyages';
     } else if (this.activeFilter === 'date' && this.selectedDate) {
-      // Formater la date en français
+      // Formater la date en français avec indication de la plage horaire
       const date = new Date(this.selectedDate);
       const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
       const dateFormatted = date.toLocaleDateString('fr-FR', options);
-      return `Total des voyages du ${dateFormatted}`;
+      
+      // Date du lendemain pour affichage
+      const nextDate = new Date(date);
+      nextDate.setDate(nextDate.getDate() + 1);
+      const nextDateFormatted = nextDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+      
+      return `Total des voyages du ${dateFormatted} (7h) au ${nextDateFormatted} (7h)`;
     } else if (this.activeFilter === 'client' && this.selectedClientId) {
       const client = this.clients.find(c => c.id === this.selectedClientId);
       if (client) {
@@ -1281,6 +1383,8 @@ export class VoyageComponent {
             reader.onload = () => {
               try {
                 this.voyages = JSON.parse(reader.result as string);
+                // Trier par date décroissante (le plus récent en premier)
+                this.sortVoyagesByDateDesc();
               } catch (e) {
                 this.error = 'Erreur parsing: ' + e;
               }
@@ -1290,6 +1394,8 @@ export class VoyageComponent {
             reader.readAsText(data);
           } else {
             this.voyages = data;
+            // Trier par date décroissante (le plus récent en premier)
+            this.sortVoyagesByDateDesc();
             this.applyFilter();
             this.extractUniqueSocietes();
           }
@@ -1307,6 +1413,8 @@ export class VoyageComponent {
             reader.onload = () => {
               try {
                 this.voyages = JSON.parse(reader.result as string);
+                // Trier par date décroissante (le plus récent en premier)
+                this.sortVoyagesByDateDesc();
               } catch (e) {
                 this.error = 'Erreur parsing: ' + e;
               }
@@ -1315,12 +1423,29 @@ export class VoyageComponent {
             reader.readAsText(data);
         } else {
           this.voyages = data;
+          // Trier par date décroissante (le plus récent en premier)
+          this.sortVoyagesByDateDesc();
           this.applyFilter();
         }
         // Extraire toutes les sociétés uniques
         this.extractUniqueSocietes();
       },
       error: (err) => this.error = 'Erreur chargement: ' + (err.error?.message || err.message)
+    });
+  }
+
+  // Trier les voyages par date décroissante (le plus récent en premier)
+  sortVoyagesByDateDesc(): void {
+    this.voyages.sort((a, b) => {
+      if (!a.date && !b.date) return 0;
+      if (!a.date) return 1; // Les voyages sans date vont à la fin
+      if (!b.date) return -1;
+      
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      
+      // Ordre décroissant : le plus récent (dateB) avant l'ancien (dateA)
+      return dateB - dateA;
     });
   }
 
@@ -1391,7 +1516,7 @@ export class VoyageComponent {
     }
   }
 
-  // Filtrer les clients selon l'input de recherche
+  // Filtrer les clients selon l'input de recherche (seulement les clients du projet actif)
   onClientSearchInput(): void {
     const searchValue = this.clientSearchInput.trim().toLowerCase();
     
@@ -1401,13 +1526,17 @@ export class VoyageComponent {
       return;
     }
     
-    // Filtrer les clients par nom ou numéro
+    // Filtrer UNIQUEMENT les clients du projet actif (this.clients est déjà filtré par loadClients())
     this.filteredClientsSearch = this.clients.filter(client =>
       client.nom?.toLowerCase().includes(searchValue) ||
       client.numero?.toLowerCase().includes(searchValue)
     );
     
     this.showClientDropdown = true;
+    
+    console.log('🔍 Recherche client dans projet:', this.contextProjetId || this.projetActifId);
+    console.log('📋 Clients disponibles:', this.clients.length);
+    console.log('🎯 Résultats filtrés:', this.filteredClientsSearch.length);
   }
 
   // Sélectionner un client existant
@@ -1485,7 +1614,7 @@ export class VoyageComponent {
       return {
         'N° Bon de Livraison': voyage.numBonLivraison || '',
         'N° Ticket': voyage.numTicket || '',
-        'Date': voyage.date ? new Date(voyage.date).toLocaleDateString('fr-FR') : '',
+        'Date': voyage.date ? this.formatDateTime(voyage.date) : '',
         'Chauffeur': chauffeur?.nom || '',
         'Camion': camion?.matricule || '',
         'Société': voyage.societe || '',
@@ -1506,7 +1635,7 @@ export class VoyageComponent {
     const columnWidths = [
       { wch: 20 }, // N° Bon de Livraison
       { wch: 15 }, // N° Ticket
-      { wch: 12 }, // Date
+      { wch: 18 }, // Date avec heure
       { wch: 20 }, // Chauffeur
       { wch: 15 }, // Camion
       { wch: 20 }, // Société
@@ -1532,5 +1661,28 @@ export class VoyageComponent {
 
     // Télécharger le fichier
     XLSX.writeFile(workbook, fileName);
+  }
+
+  // Formater la date pour l'affichage dans le tableau
+  formatDateTime(date: string | undefined): string {
+    if (!date) return '-';
+    
+    try {
+      const dateObj = new Date(date);
+      
+      // Vérifier si la date est valide
+      if (isNaN(dateObj.getTime())) return date;
+      
+      // Formater: JJ/MM/AAAA HH:mm
+      const day = dateObj.getDate().toString().padStart(2, '0');
+      const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+      const year = dateObj.getFullYear();
+      const hours = dateObj.getHours().toString().padStart(2, '0');
+      const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+      
+      return `${day}/${month}/${year} ${hours}:${minutes}`;
+    } catch (e) {
+      return date;
+    }
   }
 }

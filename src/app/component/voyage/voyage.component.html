@@ -35,10 +35,10 @@
           class="filter-btn" 
           [class.active]="activeFilter === 'all'"
           (click)="setFilter('all')"
-          style="flex: 1; min-width: 150px;">
+          style="flex: 1; min-width: 180px;">
           <i class="bi bi-list-ul"></i>
           <span>Tous les voyages</span>
-          <span class="filter-badge">{{ voyages.length }}</span>
+          <span class="filter-badge">{{ getTotalVoyagesProjet() }}</span>
         </button>
         <button 
           class="filter-btn" 
@@ -80,6 +80,12 @@
           (change)="applyFilter()"
           style="width: 100%; max-width: 300px; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
         />
+        <div style="margin-top: 12px; padding: 12px; background: #e0e7ff; border-radius: 8px; display: flex; align-items: center; gap: 8px;">
+          <i class="bi bi-info-circle-fill" style="color: #667eea; font-size: 16px;"></i>
+          <div style="font-size: 13px; color: #4338ca; line-height: 1.4;">
+            <strong>Journée de travail :</strong> Les totaux incluent les voyages du jour sélectionné à <strong>7h00</strong> jusqu'au lendemain à <strong>7h00</strong>
+          </div>
+        </div>
       </div>
       
       <!-- Client Filter -->
@@ -266,10 +272,10 @@
             <td style="background: #dbeafe;">{{ vg.poidsClient || '-' }}</td>
             <td>{{ getCamionInfo(vg.camionId, vg.societe) }}</td>
             <td>{{ getChauffeurInfo(vg.chauffeurId) }}</td>
-            <td>{{ vg.date }}</td>
+            <td>{{ formatDateTime(vg.date) }}</td>
             <td>
-              <span [style.color]="vg.clientId ? getResteColor(vg.reste || 0, getQuantiteAutorisee(vg.clientId)) : '#64748b'" style="font-weight: 600;">
-                {{ vg.reste || 0 }}
+              <span [style.color]="getResteColorForVoyage(vg)" style="font-weight: 600;">
+                {{ getResteForVoyage(vg) | number:'1.0-2' }}
               </span>
             </td>
             <td class="actions-cell">
@@ -347,6 +353,8 @@
           
           <label style="display: block; margin-top: 12px; font-weight: 500; color: #4a5568; font-size: 13px;">Numéro de ticket *</label>
           <input [(ngModel)]="dialogVoyage.numTicket" placeholder="Entrer le numéro de ticket" style="background: white;" />
+          
+          <!-- ⏰ Date définie automatiquement (pas de champ de saisie) -->
           
           <label style="display: block; margin-top: 12px; font-weight: 500; color: #64748b; font-size: 13px;">
             <i class="bi bi-calculator"></i> Reste (calculé automatiquement)

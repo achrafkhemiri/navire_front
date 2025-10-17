@@ -1308,7 +1308,7 @@ export class ChargementComponent {
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>Facture Chargement #${chargement.id}</title>
+        <title>Bon de Chargement #${chargement.id}</title>
         <style>
           @page {
             size: 80mm auto;
@@ -1427,7 +1427,7 @@ export class ChargementComponent {
       </head>
       <body>
         <button class="print-button" onclick="window.print()">
-          <i class="bi bi-printer-fill"></i> Imprimer la facture
+          <i class="bi bi-printer-fill"></i> Imprimer le bon
         </button>
         
         <div class="receipt-container">
@@ -1439,13 +1439,9 @@ export class ChargementComponent {
           </div>
         </div>
         
-        <div class="receipt-title">FACTURE CHARGEMENT</div>
+        <div class="receipt-title">BON DE CHARGEMENT</div>
         
         <div class="section">
-          <div class="row">
-            <span class="label">N° Facture:</span>
-            <span class="value">#${chargement.id}</span>
-          </div>
           <div class="row">
             <span class="label">Date/Heure:</span>
             <span class="value">${dateFormatted}</span>
@@ -1459,14 +1455,6 @@ export class ChargementComponent {
         <div class="section">
           <div style="font-weight: bold; margin-bottom: 5px;">TRANSPORT</div>
           <div class="row">
-            <span class="label">Société:</span>
-            <span class="value">${chargement.societe || 'N/A'}</span>
-          </div>
-          <div class="row">
-            <span class="label">Camion:</span>
-            <span class="value">${camion?.matricule || 'N/A'}</span>
-          </div>
-          <div class="row">
             <span class="label">Chauffeur:</span>
             <span class="value">${chauffeur?.nom || 'N/A'}</span>
           </div>
@@ -1476,6 +1464,14 @@ export class ChargementComponent {
             <span class="value">${chauffeur.numCin}</span>
           </div>
           ` : ''}
+          <div class="row">
+            <span class="label">Matricule camion:</span>
+            <span class="value">${camion?.matricule || 'N/A'}</span>
+          </div>
+          <div class="row">
+            <span class="label">Société:</span>
+            <span class="value">${chargement.societe || 'N/A'}</span>
+          </div>
         </div>
         
         <div class="barcode">*${chargement.id}*</div>

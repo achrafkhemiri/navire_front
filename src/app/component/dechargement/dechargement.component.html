@@ -176,9 +176,9 @@
             <th>Société</th>
             <th>Client</th>
             <th>Dépôt</th>
-            <th>Poids Vide<br>(T)</th>
-            <th>Poids Complet<br>(T)</th>
-            <th>Poids Net<br>(T)</th>
+            <th>Poids Vide</th>
+            <th>Poids Complet</th>
+            <th>Poids Net</th>
             <th class="actions-column">Actions</th>
           </tr>
         </thead>
@@ -203,11 +203,11 @@
               </span>
               <span *ngIf="!dech.depotId">-</span>
             </td>
-            <td>{{ dech.poidCamionVide?.toFixed(2) }}</td>
-            <td>{{ dech.poidComplet?.toFixed(2) }}</td>
+            <td>{{ dech.poidCamionVide?.toFixed(0) }}</td>
+            <td>{{ dech.poidComplet?.toFixed(0) }}</td>
             <td>
               <strong style="color: #667eea;">
-                {{ calculatePoidsNet(dech).toFixed(2) }}
+                {{ calculatePoidsNet(dech).toFixed(0) }}
               </strong>
             </td>
             <td class="actions-cell">
@@ -310,7 +310,7 @@
             </div>
             <div class="info-row">
               <strong>Poids Net:</strong>
-              <span>{{ calculatePoidsNet(dechargementToDelete).toFixed(2) }} T</span>
+              <span>{{ calculatePoidsNet(dechargementToDelete).toFixed(0) }}</span>
             </div>
           </div>
           <p style="color: #dc2626; margin-top: 16px;">

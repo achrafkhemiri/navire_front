@@ -595,11 +595,22 @@ export class DepotComponent {
   getTotalLivreDepot(depotId: number | undefined): number {
     if (!depotId) return 0;
     
-    let voyagesDepot = this.voyages.filter(v => v.depotId === depotId);
+    let voyagesDepot = this.voyages.filter(v => v.depotId === depotId && v.poidsDepot);
     
-    // Appliquer le filtre par date si actif
+    // Appliquer le filtre par date si actif - calcul cumulatif avec journée 7h-7h
     if (this.dateFilterActive && this.selectedDate) {
-      voyagesDepot = voyagesDepot.filter(v => v.date && v.date <= this.selectedDate!);
+      // Date limite : fin de la journée de travail = 7h du lendemain
+      const selectedDateObj = new Date(this.selectedDate + 'T00:00:00');
+      const endWorkDay = new Date(selectedDateObj);
+      endWorkDay.setDate(endWorkDay.getDate() + 1);
+      endWorkDay.setHours(7, 0, 0, 0); // 7h00 du lendemain = fin de la journée du jour sélectionné
+      
+      voyagesDepot = voyagesDepot.filter(v => {
+        if (!v.date) return false;
+        const voyageDateTime = new Date(v.date);
+        // Inclure tous les voyages AVANT la fin de la journée sélectionnée
+        return voyageDateTime < endWorkDay;
+      });
     }
     
     return voyagesDepot.reduce((sum, v) => sum + (v.poidsDepot || 0), 0);

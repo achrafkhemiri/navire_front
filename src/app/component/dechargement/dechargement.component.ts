@@ -408,9 +408,9 @@ export class DechargementComponent implements OnInit {
       'Société': dech.societe || '-',
       'Client': this.getClientName(dech.clientId),
       'Dépôt': this.getDepotName(dech.depotId),
-      'Poids Vide (T)': dech.poidCamionVide?.toFixed(2),
-      'Poids Complet (T)': dech.poidComplet?.toFixed(2),
-      'Poids Net (T)': this.calculatePoidsNet(dech).toFixed(2)
+      'Poids Vide': dech.poidCamionVide?.toFixed(0),
+      'Poids Complet': dech.poidComplet?.toFixed(0),
+      'Poids Net': this.calculatePoidsNet(dech).toFixed(0)
     }));
 
     const ws: XLSX.WorkSheet = XLSX.utils.json_to_sheet(dataToExport);
@@ -473,9 +473,9 @@ export class DechargementComponent implements OnInit {
                 <td>${dech.societe || '-'}</td>
                 <td>${dech.clientId ? `<span class="badge badge-success">${this.getClientName(dech.clientId)}</span>` : '-'}</td>
                 <td>${dech.depotId ? `<span class="badge badge-warning">${this.getDepotName(dech.depotId)}</span>` : '-'}</td>
-                <td>${dech.poidCamionVide?.toFixed(2)} T</td>
-                <td>${dech.poidComplet?.toFixed(2)} T</td>
-                <td><strong>${this.calculatePoidsNet(dech).toFixed(2)} T</strong></td>
+                <td>${dech.poidCamionVide?.toFixed(0)}</td>
+                <td>${dech.poidComplet?.toFixed(0)}</td>
+                <td><strong>${this.calculatePoidsNet(dech).toFixed(0)}</strong></td>
               </tr>
             `).join('')}
           </tbody>
@@ -531,7 +531,7 @@ export class DechargementComponent implements OnInit {
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>Facture Déchargement #${dech.id}</title>
+        <title>Bon de Déchargement #${dech.id}</title>
         <style>
           @page {
             size: 80mm auto;
@@ -650,7 +650,7 @@ export class DechargementComponent implements OnInit {
       </head>
       <body>
         <button class="print-button" onclick="window.print()">
-          <i class="bi bi-printer-fill"></i> Imprimer la facture
+          <i class="bi bi-printer-fill"></i> Imprimer le bon
         </button>
         
         <div class="receipt-container">
@@ -662,13 +662,7 @@ export class DechargementComponent implements OnInit {
           </div>
         </div>
         
-        <div class="receipt-title">FACTURE DÉCHARGEMENT</div>
-        
         <div class="section">
-          <div class="row">
-            <span class="label">N° Facture:</span>
-            <span class="value">#${dech.id}</span>
-          </div>
           <div class="row">
             <span class="label">N° Ticket:</span>
             <span class="value">${dech.numTicket}</span>
@@ -677,37 +671,10 @@ export class DechargementComponent implements OnInit {
             <span class="label">N° Bon Livraison:</span>
             <span class="value">${dech.numBonLivraison || 'N/A'}</span>
           </div>
+          ${chargement ? `
           <div class="row">
-            <span class="label">Date Déchargement:</span>
-            <span class="value">${dateDechargementFormatted}</span>
-          </div>
-          <div class="row">
-            <span class="label">Imprimé le:</span>
-            <span class="value">${now}</span>
-          </div>
-        </div>
-        
-        ${chargement ? `
-        <div class="section">
-          <div style="font-weight: bold; margin-bottom: 5px; text-align: center; background: #f0f0f0; padding: 5px; border-radius: 4px;">
-            📦 INFORMATIONS CHARGEMENT
-          </div>
-          <div class="row">
-            <span class="label">N° Chargement:</span>
-            <span class="value">#${chargement.id}</span>
-          </div>
-          <div class="row">
-            <span class="label">Date Chargement:</span>
+            <span class="label">Date chargement:</span>
             <span class="value">${dateChargementFormatted}</span>
-          </div>
-          <div class="row">
-            <span class="label">Société:</span>
-            <span class="value">${chargement.societe || 'N/A'}</span>
-          </div>
-          ${camion ? `
-          <div class="row">
-            <span class="label">Camion:</span>
-            <span class="value">${camion.matricule}</span>
           </div>
           ` : ''}
           ${chauffeur ? `
@@ -722,19 +689,25 @@ export class DechargementComponent implements OnInit {
             <span class="value">${chauffeur.numCin}</span>
           </div>
           ` : ''}
-        </div>
-        ` : ''}
-        
-        <div class="section">
-          <div style="font-weight: bold; margin-bottom: 5px;">📍 TRANSPORT</div>
+          ${camion ? `
+          <div class="row">
+            <span class="label">Matricule camion:</span>
+            <span class="value">${camion.matricule}</span>
+          </div>
+          ` : ''}
+          ${chargement ? `
           <div class="row">
             <span class="label">Société:</span>
-            <span class="value">${dech.societe || chargement?.societe || 'N/A'}</span>
+            <span class="value">${chargement.societe || 'N/A'}</span>
           </div>
+          ` : ''}
         </div>
         
         <div class="section">
-          <div style="font-weight: bold; margin-bottom: 5px;">DESTINATION</div>
+          <div class="row">
+            <span class="label">Date Déchargement:</span>
+            <span class="value">${dateDechargementFormatted}</span>
+          </div>
           <div class="row">
             <span class="label">Client:</span>
             <span class="value">${dech.clientId ? this.getClientName(dech.clientId) : 'N/A'}</span>
@@ -743,31 +716,20 @@ export class DechargementComponent implements OnInit {
             <span class="label">Dépôt:</span>
             <span class="value">${dech.depotId ? this.getDepotName(dech.depotId) : 'N/A'}</span>
           </div>
-        </div>
-        
-        <div class="section">
-          <div style="font-weight: bold; margin-bottom: 5px;">POIDS</div>
           <div class="row">
             <span class="label">Poids Vide:</span>
-            <span class="value">${dech.poidCamionVide?.toFixed(2)} T</span>
+            <span class="value">${dech.poidCamionVide?.toFixed(0)}</span>
           </div>
           <div class="row">
             <span class="label">Poids Complet:</span>
-            <span class="value">${dech.poidComplet?.toFixed(2)} T</span>
+            <span class="value">${dech.poidComplet?.toFixed(0)}</span>
           </div>
           <div class="row" style="font-size: 12px; font-weight: bold; margin-top: 5px;">
             <span class="label">POIDS NET:</span>
-            <span class="value">${this.calculatePoidsNet(dech).toFixed(2)} T</span>
+            <span class="value">${this.calculatePoidsNet(dech).toFixed(0)}</span>
           </div>
         </div>
         
-        <div class="barcode">*${dech.id}*</div>
-        
-        <div class="footer">
-          <div>Merci pour votre confiance</div>
-          <div style="margin-top: 5px;">──────────────────────</div>
-          <div style="margin-top: 5px;">Document généré automatiquement</div>
-        </div>
         </div>
       </body>
       </html>

@@ -793,9 +793,20 @@ export class ClientComponent {
     
     let filteredVoyages = this.voyages.filter(v => v.clientId === clientId && v.poidsClient);
     
-    // Si un filtre de date est actif, ne prendre que les voyages jusqu'à cette date
+    // Si un filtre de date est actif, calculer jusqu'à la fin de la journée sélectionnée (7h du lendemain)
     if (this.dateFilterActive && this.selectedDate) {
-      filteredVoyages = filteredVoyages.filter(v => v.date && v.date <= this.selectedDate!);
+      // Date limite : fin de la journée de travail = 7h du lendemain
+      const selectedDateObj = new Date(this.selectedDate + 'T00:00:00');
+      const endWorkDay = new Date(selectedDateObj);
+      endWorkDay.setDate(endWorkDay.getDate() + 1);
+      endWorkDay.setHours(7, 0, 0, 0); // 7h00 du lendemain = fin de la journée du jour sélectionné
+      
+      filteredVoyages = filteredVoyages.filter(v => {
+        if (!v.date) return false;
+        const voyageDateTime = new Date(v.date);
+        // Inclure tous les voyages AVANT la fin de la journée sélectionnée
+        return voyageDateTime < endWorkDay;
+      });
     }
     
     return filteredVoyages.reduce((sum, v) => sum + (v.poidsClient || 0), 0);
