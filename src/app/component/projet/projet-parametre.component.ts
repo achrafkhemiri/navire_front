@@ -43,6 +43,14 @@ export class ProjetParametreComponent implements OnInit {
     });
   }
 
+  // Liste des sociétés du projet (à afficher dans le header)
+  get societesList(): string[] {
+    const set = this.projet?.societeNoms as Set<string> | string[] | undefined;
+    if (!set) return [];
+    const arr = Array.isArray(set) ? set : Array.from(set);
+    return arr.filter((s: string) => !!s && s.trim() !== '');
+  }
+
   private loadProjet(id: number) {
     this.projetControllerService.getProjetById(id, 'body').subscribe({
       next: async (data) => {

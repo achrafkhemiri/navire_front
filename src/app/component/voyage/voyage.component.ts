@@ -35,7 +35,7 @@ export class VoyageComponent {
   contextProjet: any = null;
   breadcrumbItems: BreadcrumbItem[] = [];
   selectedVoyage: VoyageDTO | null = null;
-  dialogVoyage: VoyageDTO & { _type?: 'client' | 'depot' } = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0, _type: undefined };
+  dialogVoyage: VoyageDTO & { _type?: 'client' | 'depot' } = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0, societe: '', societeP: undefined, _type: undefined };
   editMode: boolean = false;
   error: string = '';
   chauffeurs: ChauffeurDTO[] = [];
@@ -89,12 +89,31 @@ export class VoyageComponent {
   sortDirection: 'asc' | 'desc' = 'asc';
   
   // Filtres
-  activeFilter: 'all' | 'date' | 'client' | 'depot' = 'all';
+  activeFilter: 'all' | 'date' | 'client' | 'depot' | 'societeP' = 'all';
   selectedDate: string | null = null;
   selectedClientId: number | null = null;
   selectedDepotId: number | null = null;
+  selectedSocieteP: string | null = null;
+  
+  // Date max pour le filtre (aujourd'hui)
+  today: string = '';
   
   Math = Math;
+  Array = Array; // Pour utiliser Array.from dans le template
+
+  // Sociétés normalisées pour l'en-tête
+  get societesList(): string[] {
+    const proj = (this.contextProjet || this.projetActif) as any;
+    const set = proj?.societeNoms as Set<string> | string[] | undefined;
+    if (!set) return [];
+    try {
+      return Array.isArray(set)
+        ? (set as string[]).filter(Boolean)
+        : Array.from(set as Set<string>).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
 
   constructor(
     private voyageService: VoyageControllerService,
@@ -148,6 +167,8 @@ export class VoyageComponent {
     this.loadClients();
     this.loadDepots();
     this.loadProjetsClients();
+    // Initialiser la date du jour au format yyyy-MM-dd
+    this.today = this.getTodayString();
   }
 
   // 🔥 Méthode pour recharger toutes les données
@@ -889,6 +910,7 @@ export class VoyageComponent {
       poidsClient: 0, 
       poidsDepot: 0, 
       societe: '', 
+      societeP: undefined,
       _type: 'client' 
     };
     
@@ -912,6 +934,14 @@ export class VoyageComponent {
     console.log('📌 Context projet:', this.contextProjet);
     console.log('📌 Projet actif:', this.projetActif);
     console.log('👥 Clients du projet disponibles:', this.clients.length, this.clients);
+
+    // Pré-sélectionner la Société Projet si une seule société est disponible
+    try {
+      const societes = this.societesList;
+      if (societes && societes.length === 1) {
+        this.dialogVoyage.societeP = societes[0];
+      }
+    } catch {}
   }
 
   selectVoyage(vg: VoyageDTO) {
@@ -953,6 +983,11 @@ export class VoyageComponent {
     if (vg.societe) {
       this.societeSearchInput = vg.societe;
     }
+
+    // s'assurer que la Société Projet est portée dans le dialogue
+    if (vg.societeP) {
+      this.dialogVoyage.societeP = vg.societeP;
+    }
   }
 
   async addDialogVoyage() {
@@ -976,6 +1011,12 @@ export class VoyageComponent {
     }
     if (!this.dialogVoyage.date) {
       this.error = 'La date est obligatoire.';
+      return;
+    }
+
+    // Société Projet obligatoire
+    if (!this.dialogVoyage.societeP || !this.dialogVoyage.societeP.trim()) {
+      this.error = 'La Société Projet est obligatoire.';
       return;
     }
     
@@ -1025,6 +1066,7 @@ export class VoyageComponent {
       reste: this.dialogVoyage.reste != null ? Number(this.dialogVoyage.reste) : 0,
       date: this.dialogVoyage.date ? this.dialogVoyage.date : undefined,
       societe: this.dialogVoyage.societe?.trim() || undefined,
+      societeP: this.dialogVoyage.societeP?.trim(),
       poidsClient: undefined as number | undefined,
       poidsDepot: undefined as number | undefined,
       chauffeurId: this.dialogVoyage.chauffeurId,
@@ -1056,7 +1098,7 @@ export class VoyageComponent {
     this.voyageService.createVoyage(payload, 'body').subscribe({
       next: (createdVoyage) => {
         console.log('Voyage créé:', createdVoyage);
-        this.dialogVoyage = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0, societe: '', _type: undefined };
+        this.dialogVoyage = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0, societe: '', societeP: undefined, _type: undefined };
         this.error = '';
         this.closeDialog();
         // Recharger la liste pour afficher le nouveau voyage
@@ -1083,7 +1125,7 @@ export class VoyageComponent {
       await this.createAndSelectCamion();
     }
     
-    const requiredFields = ['camionId', 'chauffeurId', 'clientId', 'depotId', 'projetId', 'userId'];
+    const requiredFields = ['camionId', 'chauffeurId', 'clientId', 'depotId', 'projetId', 'userId', 'societeP'];
     for (const field of requiredFields) {
       if (this.dialogVoyage[field as keyof VoyageDTO] == null) {
         this.error = `Le champ ${field} est obligatoire.`;
@@ -1097,7 +1139,7 @@ export class VoyageComponent {
     }
     this.voyageService.updateVoyage(this.dialogVoyage.id, this.dialogVoyage, 'body').subscribe({
       next: () => {
-        this.dialogVoyage = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0, societe: '' };
+        this.dialogVoyage = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0, societe: '', societeP: undefined };
         this.selectedVoyage = null;
         this.editMode = false;
         this.loadVoyages();
@@ -1123,7 +1165,7 @@ export class VoyageComponent {
   closeDialog() {
     this.showAddDialog = false;
     this.editMode = false;
-    this.dialogVoyage = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0, societe: '' };
+    this.dialogVoyage = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0, societe: '', societeP: undefined };
     this.selectedVoyage = null;
     this.error = '';
     
@@ -1134,6 +1176,10 @@ export class VoyageComponent {
   }
 
   applyFilter() {
+    // Ne pas permettre une date future
+    if (this.selectedDate && this.today && this.selectedDate > this.today) {
+      this.selectedDate = this.today;
+    }
     const filter = this.voyageFilter.trim().toLowerCase();
     let voyagesFiltrés = this.voyages;
     
@@ -1147,33 +1193,33 @@ export class VoyageComponent {
       voyagesFiltrés = voyagesFiltrés.filter(vg =>
         (vg.numBonLivraison?.toLowerCase().includes(filter) || false) ||
         (vg.numTicket?.toLowerCase().includes(filter) || false) ||
-        (vg.societe?.toLowerCase().includes(filter) || false)
+        (vg.societe?.toLowerCase().includes(filter) || false) ||
+        (vg.societeP?.toLowerCase().includes(filter) || false)
       );
     }
     
-    // Filtres par boutons
-    if (this.activeFilter === 'date' && this.selectedDate) {
+    // Filtres complémentaires (intersection)
+    if (this.selectedDate) {
       voyagesFiltrés = voyagesFiltrés.filter(vg => {
         if (!vg.date) return false;
-        
-        // Journée de travail : de 7h du jour sélectionné à 7h du lendemain
         const selectedDateObj = new Date(this.selectedDate + 'T00:00:00');
         const startWorkDay = new Date(selectedDateObj);
-        startWorkDay.setHours(7, 0, 0, 0); // 7h00 du jour sélectionné
-        
+        startWorkDay.setHours(7, 0, 0, 0);
         const endWorkDay = new Date(selectedDateObj);
         endWorkDay.setDate(endWorkDay.getDate() + 1);
-        endWorkDay.setHours(7, 0, 0, 0); // 7h00 du lendemain
-        
+        endWorkDay.setHours(6, 0, 0, 0); // Fin de journée de travail à 6h du lendemain (exclusif)
         const voyageDateTime = new Date(vg.date);
-        
-        // Le voyage est inclus s'il est entre 7h du jour sélectionné et 7h du lendemain
         return voyageDateTime >= startWorkDay && voyageDateTime < endWorkDay;
       });
-    } else if (this.activeFilter === 'client' && this.selectedClientId) {
+    }
+    if (this.selectedClientId) {
       voyagesFiltrés = voyagesFiltrés.filter(vg => vg.clientId === this.selectedClientId);
-    } else if (this.activeFilter === 'depot' && this.selectedDepotId) {
+    }
+    if (this.selectedDepotId) {
       voyagesFiltrés = voyagesFiltrés.filter(vg => vg.depotId === this.selectedDepotId);
+    }
+    if (this.selectedSocieteP) {
+      voyagesFiltrés = voyagesFiltrés.filter(vg => vg.societeP === this.selectedSocieteP);
     }
     
     this.filteredVoyages = voyagesFiltrés;
@@ -1191,7 +1237,7 @@ export class VoyageComponent {
     this.updatePagination();
   }
   
-  setFilter(filterType: 'all' | 'date' | 'client' | 'depot') {
+  setFilter(filterType: 'all' | 'date' | 'client' | 'depot' | 'societeP') {
     this.activeFilter = filterType;
     
     // Réinitialiser les filtres spécifiques quand on change de type
@@ -1199,19 +1245,11 @@ export class VoyageComponent {
       this.selectedDate = null;
       this.selectedClientId = null;
       this.selectedDepotId = null;
+      this.selectedSocieteP = null;
     } else if (filterType === 'date') {
-      this.selectedClientId = null;
-      this.selectedDepotId = null;
-      // Initialiser avec la date d'aujourd'hui si aucune date n'est sélectionnée
       if (!this.selectedDate) {
         this.selectedDate = new Date().toISOString().split('T')[0];
       }
-    } else if (filterType === 'client') {
-      this.selectedDate = null;
-      this.selectedDepotId = null;
-    } else if (filterType === 'depot') {
-      this.selectedDate = null;
-      this.selectedClientId = null;
     }
     
     this.applyFilter();
@@ -1225,7 +1263,7 @@ export class VoyageComponent {
     return this.voyages.length;
   }
   
-  getFilterCount(filterType: 'date' | 'client' | 'depot'): number {
+  getFilterCount(filterType: 'date' | 'client' | 'depot' | 'societeP'): number {
     let voyagesFiltrés = this.voyages;
     
     if (this.projetActifId) {
@@ -1241,9 +1279,30 @@ export class VoyageComponent {
     } else if (filterType === 'depot') {
       // Compter les voyages avec un dépôt
       return voyagesFiltrés.filter(vg => vg.depotId).length;
+    } else if (filterType === 'societeP') {
+      return voyagesFiltrés.filter(vg => vg.societeP).length;
     }
     
     return 0;
+  }
+
+  // Effacer un filtre spécifique sans toucher aux autres
+  clearFilter(filterType: 'date' | 'client' | 'depot' | 'societeP') {
+    switch (filterType) {
+      case 'date':
+        this.selectedDate = null;
+        break;
+      case 'client':
+        this.selectedClientId = null;
+        break;
+      case 'depot':
+        this.selectedDepotId = null;
+        break;
+      case 'societeP':
+        this.selectedSocieteP = null;
+        break;
+    }
+    this.applyFilter();
   }
   
   getTotalWeight(): number {
@@ -1618,13 +1677,14 @@ export class VoyageComponent {
         'Chauffeur': chauffeur?.nom || '',
         'Camion': camion?.matricule || '',
         'Société': voyage.societe || '',
+        'Société Projet': voyage.societeP || '',
         'Dépôt': depot?.nom || '',
         'Poids Dépôt (kg)': voyage.poidsDepot || 0,
         'Client': client?.nom || '',
         'N° Client': client?.numero || '',
         'Poids Client (kg)': voyage.poidsClient || 0,
         'Reste (kg)': voyage.reste || 0,
-        'Projet': projet?.nom || ''
+        'Projet': projet?.societeNoms ? Array.from(projet.societeNoms).join(', ') : 'Aucune société'
       };
     });
 
@@ -1639,6 +1699,7 @@ export class VoyageComponent {
       { wch: 20 }, // Chauffeur
       { wch: 15 }, // Camion
       { wch: 20 }, // Société
+      { wch: 22 }, // Société Projet
       { wch: 20 }, // Dépôt
       { wch: 15 }, // Poids Dépôt
       { wch: 25 }, // Client
@@ -1684,5 +1745,14 @@ export class VoyageComponent {
     } catch (e) {
       return date;
     }
+  }
+
+  // Helper: retourne aujourd'hui au format yyyy-MM-dd (heure locale)
+  private getTodayString(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 }

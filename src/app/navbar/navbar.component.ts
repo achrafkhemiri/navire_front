@@ -104,28 +104,33 @@ export class NavbarComponent {
 
   private subscribeStreams() {
     this.projetActifService.projetActif$.subscribe(p => { 
+      console.log('🔔 Navbar reçoit notification de projet actif:', p);
       
       // Ne pas écraser projetActif si p est null, un objet vide, ou un objet incomplet (sans nom)
       if (!p) {
         this.projetActif = null;
+        console.log('❌ Projet actif mis à null');
       } else if (p && Object.keys(p).length > 0) {
-        // Vérifier si l'objet a un nom (projet complet)
-        if (p.nom) {
+        // Vérifier si l'objet a un nomNavire (projet complet)
+        if (p.nomNavire || p.nomProduit) {
           // Projet complet, on met à jour
           this.projetActif = p;
+          console.log('✅ Navbar - Projet actif mis à jour:', this.projetActif);
         } else if (p.id && !this.projetActif) {
           // Objet avec seulement ID et pas de projet actif existant
           // Accepter temporairement mais charger les détails
           this.projetActif = p;
+          console.log('⚠️ Projet actif incomplet, chargement des détails...');
           this.loadProjectForDisplay(p.id);
         } else {
           // Objet incomplet et on a déjà un projet actif → ignorer
-          console.warn('Projet actif incomplet ignoré:', p, '- Garde l\'actuel:', this.projetActif);
+          console.warn('⚠️ Projet actif incomplet ignoré:', p, '- Garde l\'actuel:', this.projetActif);
         }
       }
     });
     this.projetActifService.viewMode$.subscribe(mode => { 
-      this.isAllVoyagesView = mode; 
+      this.isAllVoyagesView = mode;
+      console.log('🔔 Navbar - Mode vue changé:', mode ? 'Tous les projets' : 'Projet spécifique');
     });
   }
 
@@ -201,8 +206,30 @@ export class NavbarComponent {
       projet = this.currentProjet || this.projetActif;
     }
     
+    // Si pas de projet, retourner message par défaut
+    if (!projet) {
+      return 'Aucun projet';
+    }
     
-    const display = projet?.nom || 'Aucun projet';
-    return display;
+    // Format: "Navire - Date début"
+    const navire = projet.nomNavire || 'Sans navire';
+    const dateDebut = projet.dateDebut ? this.formatDate(projet.dateDebut) : 'Sans date';
+    
+    return `${navire} - ${dateDebut}`;
+  }
+  
+  // Méthode pour formater la date (YYYY-MM-DD -> DD/MM/YYYY)
+  private formatDate(dateStr: string): string {
+    if (!dateStr) return 'Sans date';
+    
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+      return dateStr;
+    } catch (e) {
+      return dateStr;
+    }
   }
 }

@@ -139,6 +139,41 @@
   letter-spacing: -0.5px;
 }
 
+.badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+}
+
+.info-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.info-badge i {
+  font-size: 14px;
+}
+
+.info-badge .badge-label {
+  opacity: 0.9;
+  font-weight: 600;
+}
+
+.info-badge .badge-value {
+  font-weight: 700;
+  margin-left: 4px;
+}
+
 .page-subtitle {
   font-size: 14px;
   color: rgba(255, 255, 255, 0.95);
@@ -350,3 +385,17 @@
   border-color: #667eea;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
+
+/* Ensure badges inside the dialog project info panel use dark text on light bg */
+.project-info-panel .info-badge {
+  background: rgba(102, 126, 234, 0.08);
+  color: #1f2937; /* slate-800 */
+  border-color: rgba(102, 126, 234, 0.25);
+}
+
+.project-info-panel .info-badge i {
+  color: #374151; /* gray-700 */
+}
+
+.project-info-panel .badge-label { color: #374151; }
+.project-info-panel .badge-value { color: #111827; } /* gray-900 */

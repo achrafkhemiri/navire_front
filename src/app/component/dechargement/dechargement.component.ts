@@ -11,6 +11,7 @@ import { ClientDTO } from '../../api/model/clientDTO';
 import { DepotDTO } from '../../api/model/depotDTO';
 import { CamionDTO } from '../../api/model/camionDTO';
 import { ChauffeurDTO } from '../../api/model/chauffeurDTO';
+import { ProjetActifService } from '../../service/projet-actif.service';
 import * as XLSX from 'xlsx';
 
 @Component({
@@ -34,6 +35,9 @@ export class DechargementComponent implements OnInit {
   selectedSociete: string | null = null;
   selectedProjet: string | null = null;
   selectedProduit: string | null = null;
+  selectedDate: string | null = null; // yyyy-MM-dd
+  // Date max pour le filtre (aujourd'hui)
+  today: string = '';
   allSocietes: string[] = [];
   allProjets: string[] = [];
   allProduits: string[] = [];
@@ -63,6 +67,23 @@ export class DechargementComponent implements OnInit {
     { label: 'Déchargements', route: '/dechargement' }
   ];
 
+  // Contexte projet
+  projetActif: any = null;
+
+  // Sociétés du projet actif (normalisées)
+  get societesList(): string[] {
+    const proj = this.projetActif as any;
+    const set = proj?.societeNoms as Set<string> | string[] | undefined;
+    if (!set) return [];
+    try {
+      return Array.isArray(set)
+        ? (set as string[]).filter(Boolean)
+        : Array.from(set as Set<string>).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
   get allDechargementsCount(): number {
     return this.dechargements.length;
   }
@@ -73,10 +94,22 @@ export class DechargementComponent implements OnInit {
     private clientService: ClientControllerService,
     private depotService: DepotControllerService,
     private camionService: CamionControllerService,
-    private chauffeurService: ChauffeurControllerService
+    private chauffeurService: ChauffeurControllerService,
+    private projetActifService: ProjetActifService
   ) {}
 
   ngOnInit(): void {
+    // Initialiser la date du jour pour limiter les sélections futures
+    this.today = this.getTodayString();
+    // Charger le projet actif pour l'afficher dans l'en-tête même s'il n'y a pas de données
+    const storedProjet = this.projetActifService.getProjetActif();
+    if (storedProjet) {
+      this.projetActif = storedProjet;
+    }
+    this.projetActifService.projetActif$.subscribe(p => {
+      if (p) this.projetActif = p;
+    });
+
     this.loadDechargements();
     this.loadClients();
     this.loadDepots();
@@ -142,12 +175,32 @@ export class DechargementComponent implements OnInit {
       this.selectedSociete = null;
       this.selectedProjet = null;
       this.selectedProduit = null;
+      this.selectedDate = null;
     }
     this.applyFilter();
   }
 
   applyFilter(): void {
+    // Ne pas permettre une date future dans le filtre
+    if (this.selectedDate && this.today && this.selectedDate > this.today) {
+      this.selectedDate = this.today;
+    }
     this.filteredDechargements = this.dechargements.filter(dech => {
+      // Filter by date (workday window: 07:00 to next day 06:00)
+      if (this.selectedDate) {
+        const selectedDateObj = new Date(this.selectedDate + 'T00:00:00');
+        const startWorkDay = new Date(selectedDateObj);
+        startWorkDay.setHours(7, 0, 0, 0);
+        const endWorkDay = new Date(selectedDateObj);
+        endWorkDay.setDate(endWorkDay.getDate() + 1);
+        endWorkDay.setHours(6, 0, 0, 0);
+
+        const dechDate = dech.dateDechargement ? new Date(dech.dateDechargement) : null;
+        const chgDate = dech.dateChargement ? new Date(dech.dateChargement) : null;
+        const inWindow = (dechDate && dechDate >= startWorkDay && dechDate < endWorkDay) ||
+                         (chgDate && chgDate >= startWorkDay && chgDate < endWorkDay);
+        if (!inWindow) return false;
+      }
       // Filter by société
       if (this.selectedSociete && dech.societe !== this.selectedSociete) {
         return false;
@@ -182,6 +235,34 @@ export class DechargementComponent implements OnInit {
 
     this.sortData();
     this.updatePagination();
+  }
+
+  // Helper: retourne aujourd'hui au format yyyy-MM-dd (heure locale)
+  private getTodayString(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  // Effacer un filtre spécifique
+  clearFilter(filterType: 'societe' | 'projet' | 'produit' | 'date') {
+    switch (filterType) {
+      case 'societe':
+        this.selectedSociete = null;
+        break;
+      case 'projet':
+        this.selectedProjet = null;
+        break;
+      case 'produit':
+        this.selectedProduit = null;
+        break;
+      case 'date':
+        this.selectedDate = null;
+        break;
+    }
+    this.applyFilter();
   }
 
   sortBy(column: string): void {

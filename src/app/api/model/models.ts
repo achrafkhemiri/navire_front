@@ -8,4 +8,5 @@ export * from './depotDTO';
 export * from './loginDTO';
 export * from './projetClientDTO';
 export * from './projetDTO';
+export * from './societeDTO';
 export * from './voyageDTO';

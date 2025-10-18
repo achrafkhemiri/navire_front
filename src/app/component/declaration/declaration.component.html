@@ -21,7 +21,7 @@
         [value]="selectedProjetId || ''">
         <option value="">-- Sélectionner un projet --</option>
         <option *ngFor="let projet of projets" [value]="projet.id">
-          {{ projet.nom }}
+          {{ projet.societeNoms ? Array.from(projet.societeNoms).join(', ') : 'Aucune société' }}
         </option>
       </select>
     </div>

@@ -114,11 +114,15 @@ export class ChargementComponent {
   sortDirection: 'asc' | 'desc' = 'asc';
   
   // Filtres
-  activeFilter: 'all' | 'date' | 'camion' | 'chauffeur' | 'societe' = 'all';
+  activeFilter: 'all' | 'date' | 'camion' | 'chauffeur' | 'societe' | 'societeP' = 'all';
   selectedDate: string | null = null;
   selectedCamionId: number | null = null;
   selectedChauffeurId: number | null = null;
   selectedSociete: string | null = null;
+  selectedSocieteP: string | null = null;
+  
+  // Date max pour le filtre (aujourd'hui)
+  today: string = '';
   
   Math = Math;
 
@@ -153,6 +157,15 @@ export class ChargementComponent {
     });
     
     this.initializeProjetContext();
+  }
+
+  // Sociétés du projet actif/contexte pour affichage dans le header
+  get societesList(): string[] {
+    const proj = this.contextProjet || this.projetActif;
+    const set = proj?.societeNoms as Set<string> | string[] | undefined;
+    if (!set) return [];
+    const arr = Array.isArray(set) ? set : Array.from(set);
+    return arr.filter((s: string) => !!s && s.trim() !== '');
   }
 
   initializeProjetContext() {
@@ -195,6 +208,8 @@ export class ChargementComponent {
   }
 
   ngOnInit() {
+    // Initialiser la date du jour au format yyyy-MM-dd
+    this.today = this.getTodayString();
     this.updateBreadcrumb();
   }
 
@@ -253,7 +268,8 @@ export class ChargementComponent {
           this.projetActif = projet;
         }
         this.updateBreadcrumb();
-        console.log('✅ [Chargement] Projet chargé:', projet.nom, '- Active:', projet.active, '- canAddData():', this.canAddData());
+        const projetSocietes = projet.societeNoms ? Array.from(projet.societeNoms).join(', ') : 'Aucune société';
+        console.log('✅ [Chargement] Projet chargé:', projetSocietes, '- Active:', projet.active, '- canAddData():', this.canAddData());
       },
       error: (err) => console.error('❌ Erreur chargement projet:', err)
     });
@@ -800,6 +816,7 @@ export class ChargementComponent {
       camionId: 0,
       chauffeurId: 0,
       societe: '',
+      societeP: this.societesList.length === 1 ? this.societesList[0] : undefined,
       projetId: this.contextProjetId || this.projetActifId || 0,
       dateChargement: tunisiaDate
     };
@@ -838,12 +855,14 @@ export class ChargementComponent {
 
   saveChargement() {
     if (!this.dialogChargement.camionId || !this.dialogChargement.chauffeurId || 
-        !this.dialogChargement.societe || !this.dialogChargement.projetId) {
+        !this.dialogChargement.societe || !this.dialogChargement.projetId ||
+        !this.dialogChargement.societeP) {
       this.error = 'Veuillez remplir tous les champs obligatoires';
       console.error('Validation échouée:', {
         camionId: this.dialogChargement.camionId,
         chauffeurId: this.dialogChargement.chauffeurId,
         societe: this.dialogChargement.societe,
+        societeP: this.dialogChargement.societeP,
         projetId: this.dialogChargement.projetId
       });
       return;
@@ -1106,7 +1125,7 @@ export class ChargementComponent {
   }
 
   // Filtres
-  setFilter(filter: 'all' | 'date' | 'camion' | 'chauffeur' | 'societe') {
+  setFilter(filter: 'all' | 'date' | 'camion' | 'chauffeur' | 'societe' | 'societeP') {
     this.activeFilter = filter;
     
     if (filter === 'all') {
@@ -1114,6 +1133,7 @@ export class ChargementComponent {
       this.selectedCamionId = null;
       this.selectedChauffeurId = null;
       this.selectedSociete = null;
+      this.selectedSocieteP = null;
     }
     
     this.applyFilter();
@@ -1142,15 +1162,36 @@ export class ChargementComponent {
       );
     }
 
-    // Filtres spécifiques
-    if (this.activeFilter === 'date' && this.selectedDate) {
-      filtered = filtered.filter(c => c.dateChargement === this.selectedDate);
-    } else if (this.activeFilter === 'camion' && this.selectedCamionId) {
+    // S'assurer qu'on ne filtre pas avec une date future
+    if (this.selectedDate && this.today && this.selectedDate > this.today) {
+      this.selectedDate = this.today;
+    }
+
+    // Filtres complémentaires (intersection)
+    if (this.selectedDate) {
+      filtered = filtered.filter(c => {
+        if (!c.dateChargement) return false;
+        const selectedDateObj = new Date(this.selectedDate + 'T00:00:00');
+        const startWorkDay = new Date(selectedDateObj);
+        startWorkDay.setHours(7, 0, 0, 0);
+        const endWorkDay = new Date(selectedDateObj);
+        endWorkDay.setDate(endWorkDay.getDate() + 1);
+        endWorkDay.setHours(6, 0, 0, 0); // jusqu'à 6h du lendemain
+        const chargeDateTime = new Date(c.dateChargement);
+        return chargeDateTime >= startWorkDay && chargeDateTime < endWorkDay;
+      });
+    }
+    if (this.selectedCamionId) {
       filtered = filtered.filter(c => c.camionId === this.selectedCamionId);
-    } else if (this.activeFilter === 'chauffeur' && this.selectedChauffeurId) {
+    }
+    if (this.selectedChauffeurId) {
       filtered = filtered.filter(c => c.chauffeurId === this.selectedChauffeurId);
-    } else if (this.activeFilter === 'societe' && this.selectedSociete) {
+    }
+    if (this.selectedSociete) {
       filtered = filtered.filter(c => c.societe === this.selectedSociete);
+    }
+    if (this.selectedSocieteP) {
+      filtered = filtered.filter(c => c.societeP === this.selectedSocieteP);
     }
 
     this.filteredChargements = filtered;
@@ -1160,16 +1201,49 @@ export class ChargementComponent {
     this.updatePagination();
   }
 
-  getFilterCount(filter: string): number {
+  // Helper: retourne aujourd'hui au format yyyy-MM-dd (heure locale)
+  private getTodayString(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  // Effacer un filtre spécifique sans toucher aux autres
+  clearFilter(filter: 'date' | 'camion' | 'chauffeur' | 'societe' | 'societeP') {
+    switch (filter) {
+      case 'date':
+        this.selectedDate = null;
+        break;
+      case 'camion':
+        this.selectedCamionId = null;
+        break;
+      case 'chauffeur':
+        this.selectedChauffeurId = null;
+        break;
+      case 'societe':
+        this.selectedSociete = null;
+        break;
+      case 'societeP':
+        this.selectedSocieteP = null;
+        break;
+    }
+    this.applyFilter();
+  }
+
+  getFilterCount(filter: 'date' | 'camion' | 'chauffeur' | 'societe' | 'societeP'): number {
     switch(filter) {
       case 'date':
-        return this.selectedDate ? this.chargements.filter(c => c.dateChargement === this.selectedDate).length : 0;
+        return this.chargements.filter(c => !!c.dateChargement).length;
       case 'camion':
-        return this.selectedCamionId ? this.chargements.filter(c => c.camionId === this.selectedCamionId).length : 0;
+        return this.chargements.filter(c => !!c.camionId).length;
       case 'chauffeur':
-        return this.selectedChauffeurId ? this.chargements.filter(c => c.chauffeurId === this.selectedChauffeurId).length : 0;
+        return this.chargements.filter(c => !!c.chauffeurId).length;
       case 'societe':
-        return this.selectedSociete ? this.chargements.filter(c => c.societe === this.selectedSociete).length : 0;
+        return this.chargements.filter(c => !!c.societe).length;
+      case 'societeP':
+        return this.chargements.filter(c => !!c.societeP).length;
       default:
         return 0;
     }

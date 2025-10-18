@@ -56,6 +56,8 @@ export class DepotComponent {
   // Date Filter
   dateFilterActive: boolean = false;
   selectedDate: string | null = null;
+  // Date max pour le filtre (aujourd'hui)
+  today: string = '';
   
   Math = Math;
 
@@ -87,6 +89,8 @@ export class DepotComponent {
     });
     
     this.initializeProjetContext();
+    // Initialiser la date du jour
+    this.today = this.getTodayString();
   }
 
   initializeProjetContext() {
@@ -417,6 +421,51 @@ export class DepotComponent {
     this.filteredDepots = depotsFiltrés;
     this.updatePagination();
   }
+
+  // Total livré pour un dépôt, avec option de filtre par journée de travail [07:00, 06:00)
+  getTotalLivreDepot(depotId?: number): number {
+    if (!depotId || !this.voyages) return 0;
+    let voyagesFiltrés = this.voyages.filter(v => v.depotId === depotId && v.poidsDepot);
+
+    if (this.dateFilterActive && this.selectedDate) {
+      const selectedDateObj = new Date(this.selectedDate + 'T00:00:00');
+      const startWorkDay = new Date(selectedDateObj);
+      startWorkDay.setHours(7, 0, 0, 0);
+      const endWorkDay = new Date(selectedDateObj);
+      endWorkDay.setDate(endWorkDay.getDate() + 1);
+      endWorkDay.setHours(6, 0, 0, 0);
+      voyagesFiltrés = voyagesFiltrés.filter(v => {
+        if (!v.date) return false;
+        const d = new Date(v.date);
+        return d >= startWorkDay && d < endWorkDay;
+      });
+    }
+    return voyagesFiltrés.reduce((sum, v) => sum + (v.poidsDepot || 0), 0);
+  }
+
+  toggleDateFilter() {
+    this.dateFilterActive = !this.dateFilterActive;
+    if (this.dateFilterActive && !this.selectedDate) {
+      // Utiliser la date locale formatée pour éviter les décalages de fuseau
+      this.selectedDate = this.today;
+    }
+    this.updatePagination();
+  }
+
+  onDateFilterChange() {
+    // Empêcher la sélection d'une date future
+    if (this.selectedDate && this.today && this.selectedDate > this.today) {
+      this.selectedDate = this.today;
+    }
+    this.updatePagination();
+  }
+
+  clearDateFilter() {
+    this.dateFilterActive = false;
+    this.selectedDate = null;
+    this.updatePagination();
+  }
+  
   
   sortBy(column: string) {
     if (this.sortColumn === column) {
@@ -591,53 +640,20 @@ export class DepotComponent {
     }
   }
 
-  // Calculer la quantité totale livrée au dépôt
-  getTotalLivreDepot(depotId: number | undefined): number {
-    if (!depotId) return 0;
-    
-    let voyagesDepot = this.voyages.filter(v => v.depotId === depotId && v.poidsDepot);
-    
-    // Appliquer le filtre par date si actif - calcul cumulatif avec journée 7h-7h
-    if (this.dateFilterActive && this.selectedDate) {
-      // Date limite : fin de la journée de travail = 7h du lendemain
-      const selectedDateObj = new Date(this.selectedDate + 'T00:00:00');
-      const endWorkDay = new Date(selectedDateObj);
-      endWorkDay.setDate(endWorkDay.getDate() + 1);
-      endWorkDay.setHours(7, 0, 0, 0); // 7h00 du lendemain = fin de la journée du jour sélectionné
-      
-      voyagesDepot = voyagesDepot.filter(v => {
-        if (!v.date) return false;
-        const voyageDateTime = new Date(v.date);
-        // Inclure tous les voyages AVANT la fin de la journée sélectionnée
-        return voyageDateTime < endWorkDay;
-      });
-    }
-    
-    return voyagesDepot.reduce((sum, v) => sum + (v.poidsDepot || 0), 0);
-  }
-
-  // Gestion du filtre par date
-  toggleDateFilter() {
-    this.dateFilterActive = !this.dateFilterActive;
-    if (!this.dateFilterActive) {
-      this.selectedDate = null;
-    }
-  }
-
-  onDateFilterChange() {
-    // Le filtre est automatiquement appliqué via getTotalLivreDepot
-    this.updatePagination();
-  }
-
-  clearDateFilter() {
-    this.dateFilterActive = false;
-    this.selectedDate = null;
-    this.updatePagination();
-  }
+  // Calcul cumulé legacy supprimé: méthodes remplacées par version fenêtre [07:00, 06:00)
 
   formatDate(date: string | null): string {
     if (!date) return '';
     const d = new Date(date);
     return d.toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
+  // Helper: retourne aujourd'hui au format yyyy-MM-dd (heure locale)
+  private getTodayString(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 }

@@ -14,13 +14,39 @@
         </div>
         <div class="page-title-section">
           <h1 class="page-title">Gestion des Déchargements</h1>
-          <p class="page-subtitle">
-            <span *ngIf="allProduits.length > 0" class="info-badge"><i class="bi bi-box"></i> {{ allProduits.join(', ') }}</span>
-            <span *ngIf="allProjets.length > 0" class="info-badge"><i class="bi bi-folder"></i> {{ allProjets.join(', ') }}</span>
-            <span *ngIf="allNavires.length > 0" class="info-badge"><i class="bi bi-truck-front"></i> {{ allNavires.join(', ') }}</span>
-            <span *ngIf="allPorts.length > 0" class="info-badge"><i class="bi bi-geo-alt"></i> {{ allPorts.join(', ') }}</span>
-            <span *ngIf="allProduits.length === 0 && allProjets.length === 0 && allNavires.length === 0 && allPorts.length === 0">Consultation et suivi des déchargements effectués</span>
+          <!-- Si un projet est actif, afficher ses détails même sans données -->
+          <p class="page-subtitle badges-row" *ngIf="projetActif; else dechAggregates">
+            <span class="info-badge" *ngIf="projetActif?.nomNavire">
+              <i class="bi bi-truck-front"></i>
+              <span class="badge-label">Navire</span>
+              <span class="badge-value">{{ projetActif?.nomNavire }}</span>
+            </span>
+            <span class="info-badge" *ngIf="projetActif?.port">
+              <i class="bi bi-geo-alt"></i>
+              <span class="badge-label">Port</span>
+              <span class="badge-value">{{ projetActif?.port }}</span>
+            </span>
+            <span class="info-badge" *ngIf="projetActif?.nomProduit">
+              <i class="bi bi-box"></i>
+              <span class="badge-label">Produit</span>
+              <span class="badge-value">{{ projetActif?.nomProduit }}</span>
+            </span>
+            <span class="info-badge" *ngIf="societesList.length">
+              <i class="bi bi-buildings"></i>
+              <span class="badge-label">Sociétés</span>
+              <span class="badge-value">{{ societesList.join(', ') }}</span>
+            </span>
           </p>
+          <!-- Sinon, fallback aux agrégats calculés -->
+          <ng-template #dechAggregates>
+            <p class="page-subtitle badges-row">
+              <span class="info-badge" *ngIf="allNavires.length > 0"><i class="bi bi-truck-front"></i> <span class="badge-label">Navires</span> <span class="badge-value">{{ allNavires.join(', ') }}</span></span>
+              <span class="info-badge" *ngIf="allPorts.length > 0"><i class="bi bi-geo-alt"></i> <span class="badge-label">Ports</span> <span class="badge-value">{{ allPorts.join(', ') }}</span></span>
+              <span class="info-badge" *ngIf="allProduits.length > 0"><i class="bi bi-box"></i> <span class="badge-label">Produits</span> <span class="badge-value">{{ allProduits.join(', ') }}</span></span>
+              <span class="info-badge" *ngIf="allProjets.length > 0"><i class="bi bi-folder"></i> <span class="badge-label">Projets</span> <span class="badge-value">{{ allProjets.join(', ') }}</span></span>
+              <span *ngIf="allProduits.length === 0 && allProjets.length === 0 && allNavires.length === 0 && allPorts.length === 0">Consultation et suivi des déchargements effectués</span>
+            </p>
+          </ng-template>
         </div>
       </div>
       <div class="page-actions">
@@ -55,11 +81,19 @@
         </button>
         <button 
           class="filter-btn" 
+          [class.active]="activeFilter === 'date'"
+          (click)="setFilter('date')"
+        >
+          <i class="bi bi-calendar-check"></i>
+          <span>Par Date</span>
+        </button>
+        <button 
+          class="filter-btn" 
           [class.active]="activeFilter === 'societe'"
           (click)="setFilter('societe')"
         >
           <i class="bi bi-building-fill"></i>
-          <span>Par Société</span>
+          <span>Par Transporteur</span>
         </button>
         <button 
           class="filter-btn" 
@@ -80,6 +114,36 @@
       </div>
 
       <!-- Filter Details -->
+      <div *ngIf="activeFilter === 'date'" class="filter-details">
+        <div class="date-filter-card">
+          <div class="date-input-group">
+            <label class="date-filter-label">
+              <i class="bi bi-calendar-event"></i>
+              Sélectionner une date
+            </label>
+            <div class="date-row">
+              <input 
+                type="date" 
+                [(ngModel)]="selectedDate" 
+                (change)="applyFilter()"
+                [max]="today"
+                class="date-input"
+              />
+              <button class="clear-filter-btn" (click)="clearFilter('date')">
+                <i class="bi bi-x-circle"></i>
+                Effacer
+              </button>
+            </div>
+          </div>
+          <div class="filter-info-message">
+            <i class="bi bi-info-circle-fill"></i>
+            <span>
+              <strong>Journée de travail :</strong> de <strong>7h00</strong> au jour sélectionné à <strong>6h00</strong> le lendemain
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div *ngIf="activeFilter === 'societe'" class="filter-details">
         <label>
           <i class="bi bi-building-fill"></i> Sélectionner une société
@@ -92,6 +156,7 @@
             {{ societe }}
           </option>
         </select>
+          <button class="btn btn-link" (click)="clearFilter('societe')">Effacer</button>
       </div>
 
       <div *ngIf="activeFilter === 'projet'" class="filter-details">
@@ -106,6 +171,7 @@
             {{ projet }}
           </option>
         </select>
+          <button class="btn btn-link" (click)="clearFilter('projet')">Effacer</button>
       </div>
 
       <div *ngIf="activeFilter === 'produit'" class="filter-details">
@@ -120,6 +186,7 @@
             {{ produit }}
           </option>
         </select>
+          <button class="btn btn-link" (click)="clearFilter('produit')">Effacer</button>
       </div>
     </div>
 
@@ -173,11 +240,11 @@
               </span>
             </th>
             <th>N° Bon<br>Livraison</th>
-            <th>Société</th>
+            <th>Transporteur</th>
             <th>Client</th>
             <th>Dépôt</th>
-            <th>Poids Vide</th>
-            <th>Poids Complet</th>
+            <th>Poids Tar</th>
+            <th>Poids Brut</th>
             <th>Poids Net</th>
             <th class="actions-column">Actions</th>
           </tr>

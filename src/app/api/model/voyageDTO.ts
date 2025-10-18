@@ -30,5 +30,6 @@ export interface VoyageDTO {
     quantite?: number;
     projetClientId?: number;
     societe?: string;
+    societeP?: string;
 }
 

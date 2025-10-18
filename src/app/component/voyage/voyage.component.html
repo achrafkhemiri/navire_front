@@ -13,7 +13,31 @@
         </div>
         <div>
           <h1 class="page-title">Voyages</h1>
-          <p class="page-subtitle">{{ filteredVoyages.length }} voyage(s) trouvé(s)</p>
+          <p class="page-subtitle badges-row" *ngIf="projetActif || contextProjet; else voyageHeaderPlaceholder">
+            <span class="info-badge" *ngIf="(contextProjet || projetActif)?.nomNavire">
+              <i class="bi bi-truck-front"></i>
+              <span class="badge-label">Navire</span>
+              <span class="badge-value">{{ (contextProjet || projetActif)?.nomNavire }}</span>
+            </span>
+            <span class="info-badge" *ngIf="(contextProjet || projetActif)?.port">
+              <i class="bi bi-geo-alt"></i>
+              <span class="badge-label">Port</span>
+              <span class="badge-value">{{ (contextProjet || projetActif)?.port }}</span>
+            </span>
+            <span class="info-badge" *ngIf="(contextProjet || projetActif)?.nomProduit">
+              <i class="bi bi-box"></i>
+              <span class="badge-label">Produit</span>
+              <span class="badge-value">{{ (contextProjet || projetActif)?.nomProduit }}</span>
+            </span>
+            <span class="info-badge" *ngIf="societesList.length">
+              <i class="bi bi-buildings"></i>
+              <span class="badge-label">Sociétés :</span>
+              <span class="badge-value">{{ societesList.join(', ') }}</span>
+            </span>
+          </p>
+          <ng-template #voyageHeaderPlaceholder>
+            <p class="page-subtitle">{{ filteredVoyages.length }} voyage(s) trouvé(s)</p>
+          </ng-template>
         </div>
       </div>
       <div style="display: flex; gap: 12px;">
@@ -67,6 +91,15 @@
           <span>Par dépôt</span>
           <span class="filter-badge">{{ getFilterCount('depot') }}</span>
         </button>
+        <button 
+          class="filter-btn" 
+          [class.active]="activeFilter === 'societeP'"
+          (click)="setFilter('societeP')"
+          style="flex: 1; min-width: 180px;">
+          <i class="bi bi-buildings"></i>
+          <span>Par Société </span>
+          <span class="filter-badge">{{ getFilterCount('societeP') }}</span>
+        </button>
       </div>
       
       <!-- Date Filter -->
@@ -78,14 +111,16 @@
           type="date" 
           [(ngModel)]="selectedDate" 
           (change)="applyFilter()"
+          [max]="today"
           style="width: 100%; max-width: 300px; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
         />
         <div style="margin-top: 12px; padding: 12px; background: #e0e7ff; border-radius: 8px; display: flex; align-items: center; gap: 8px;">
           <i class="bi bi-info-circle-fill" style="color: #667eea; font-size: 16px;"></i>
           <div style="font-size: 13px; color: #4338ca; line-height: 1.4;">
-            <strong>Journée de travail :</strong> Les totaux incluent les voyages du jour sélectionné à <strong>7h00</strong> jusqu'au lendemain à <strong>7h00</strong>
+            <strong>Journée de travail :</strong> Les totaux incluent les voyages du jour sélectionné de <strong>7h00</strong> jusqu'au lendemain à <strong>6h00</strong>
           </div>
         </div>
+        <button class="btn btn-link" style="margin-top: 8px; color: #4338ca;" (click)="clearFilter('date')">Effacer</button>
       </div>
       
       <!-- Client Filter -->
@@ -102,6 +137,7 @@
             {{ client.nom }} ({{ client.numero || 'N/A' }})
           </option>
         </select>
+        <button class="btn btn-link" style="margin-top: 8px; color: #047857;" (click)="clearFilter('client')">Effacer</button>
       </div>
       
       <!-- Depot Filter -->
@@ -118,6 +154,24 @@
             {{ depot.nom }}
           </option>
         </select>
+        <button class="btn btn-link" style="margin-top: 8px; color: #b45309;" (click)="clearFilter('depot')">Effacer</button>
+      </div>
+
+      <!-- Société Projet Filter -->
+      <div *ngIf="activeFilter === 'societeP'" class="filter-details" style="margin-top: 16px; padding: 16px; background: #f1f5f9; border-radius: 12px; border-left: 4px solid #64748b;">
+        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b; font-size: 14px;">
+          <i class="bi bi-buildings"></i> Sélectionner une société 
+        </label>
+        <select 
+          [(ngModel)]="selectedSocieteP" 
+          (change)="applyFilter()"
+          style="width: 100%; max-width: 400px; padding: 10px 14px; border: 2px solid #cbd5e1; border-radius: 8px; font-size: 14px; background: white;">
+          <option [ngValue]="null">-- Toutes les sociétés --</option>
+          <option *ngFor="let s of societesList" [ngValue]="s">
+            {{ s }}
+          </option>
+        </select>
+        <button class="btn btn-link" style="margin-top: 8px; color: #334155;" (click)="clearFilter('societeP')">Effacer</button>
       </div>
     </div>
 
@@ -259,6 +313,7 @@
                 }"></i>
               </div>
             </th>
+            <th>Société </th>
             <th class="actions-header">Actions</th>
           </tr>
         </thead>
@@ -278,6 +333,7 @@
                 {{ getResteForVoyage(vg) | number:'1.0-2' }}
               </span>
             </td>
+            <td>{{ vg.societeP || '-' }}</td>
             <td class="actions-cell">
               <button class="action-btn edit-btn" (click)="selectVoyage(vg)" [disabled]="!canAddData()" [title]="!canAddData() ? 'Ce projet n\'est pas actif' : 'Modifier'">
                 <i class="bi bi-pencil-fill"></i>
@@ -288,7 +344,7 @@
             </td>
           </tr>
           <tr *ngIf="paginatedVoyages.length === 0" class="no-data-row">
-            <td colspan="11">
+            <td colspan="12">
               <div class="no-data">
                 <i class="bi bi-inbox"></i>
                 <p>Aucun voyage trouvé</p>
@@ -371,6 +427,15 @@
               style="cursor: not-allowed;" 
             />
           </div>
+          
+          <!-- Société Projet (obligatoire) -->
+          <label style="display: block; margin-top: 12px; font-weight: 500; color: #4a5568; font-size: 13px;">
+            <i class="bi bi-buildings"></i> Société *
+          </label>
+          <select [(ngModel)]="dialogVoyage.societeP" style="background: white;">
+            <option [ngValue]="undefined" disabled>-- Sélectionner un Transporteur --</option>
+            <option *ngFor="let s of societesList" [ngValue]="s">{{ s }}</option>
+          </select>
         </div>
         
         <!-- Section: Type de destination -->
@@ -648,14 +713,14 @@
           </div>
           
           <label style="display: block; margin-top: 12px; font-weight: 500; color: #4a5568; font-size: 13px;">
-            <i class="bi bi-building"></i> Société
+            <i class="bi bi-building"></i> Transporteur *
           </label>
           <div class="societe-search-container" style="position: relative;">
             <input 
               [(ngModel)]="societeSearchInput" 
               (input)="onSocieteSearchInput()"
               (focus)="onSocieteSearchInput()"
-              placeholder="Entrer le nom de la société" 
+              placeholder="Entrer le nom de Transporteur" 
               style="background: white;"
               autocomplete="off"
             />
@@ -676,7 +741,7 @@
                  (mousedown)="$event.preventDefault()"
                  style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; margin-top: 4px; padding: 12px; text-align: center;">
                 <div style="color: #64748b; font-size: 13px;">
-                  <i class="bi bi-info-circle"></i> Nouvelle société "{{ societeSearchInput }}"
+                  <i class="bi bi-info-circle"></i> Nouvelle Transporteur "{{ societeSearchInput }}"
                 </div>
                 <div style="margin-top: 8px; font-size: 12px; color: #10b981;">
                   <i class="bi bi-check-circle"></i> Sera créée automatiquement
@@ -691,7 +756,7 @@
           </label>
           <select [(ngModel)]="dialogVoyage.projetId" [disabled]="!!projetActifId" style="background: white;">
             <option [ngValue]="null" disabled>-- Sélectionner un projet --</option>
-            <option *ngFor="let pr of projets" [ngValue]="pr.id">{{ pr.nom }}</option>
+            <option *ngFor="let pr of projets" [ngValue]="pr.id">{{ pr.societeNoms ? Array.from(pr.societeNoms).join(', ') : 'Aucune société' }}</option>
           </select>
         </div>
         

@@ -71,6 +71,33 @@
   align-items: center;
 }
 
+.badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.info-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.info-badge i {
+  font-size: 14px;
+}
+
+.info-badge .badge-label { opacity: 0.9; font-weight: 600; }
+.info-badge .badge-value { font-weight: 700; margin-left: 4px; }
+
 .info-badge {
   display: inline-flex;
   align-items: center;
@@ -237,6 +264,84 @@
   outline: none;
   border-color: #f59e0b;
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+}
+
+/* Date filter card styles */
+.date-filter-card {
+  background: #fff7ed; /* amber-50 */
+  border: 1px solid #fde68a; /* amber-300 */
+  border-left-width: 4px;
+  border-left-color: #f59e0b; /* amber-500 */
+  padding: 16px;
+  border-radius: 10px;
+}
+
+.date-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.date-filter-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #92400e; /* amber-800 */
+}
+
+.date-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.date-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 10px 14px;
+  border: 2px solid #fbbf24; /* amber-400 */
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+  color: #1f2937;
+}
+
+.date-input:focus {
+  outline: none;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+}
+
+.clear-filter-btn {
+  padding: 10px 16px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.clear-filter-btn:hover { background: #dc2626; }
+.clear-filter-btn:active { transform: translateY(1px); }
+
+.filter-info-message {
+  margin-top: 12px;
+  padding: 12px;
+  background: #e0e7ff; /* indigo-100 */
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #4338ca; /* indigo-700 */
+  font-size: 13px;
 }
 
 /* Toolbar Section */

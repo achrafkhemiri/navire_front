@@ -88,6 +88,8 @@ export class ClientComponent {
   // Date Filter
   dateFilterActive: boolean = false;
   selectedDate: string | null = null;
+  // Date max pour le filtre (aujourd'hui)
+  today: string = '';
   
   // Expose Math to template
   Math = Math;
@@ -122,6 +124,8 @@ export class ClientComponent {
     });
     
     this.initializeProjetContext();
+    // Initialiser la date du jour
+    this.today = this.getTodayString();
   }
 
   initializeProjetContext() {
@@ -323,11 +327,22 @@ export class ClientComponent {
     }, 200);
   }
 
+  
+
   selectClient(cl: ClientDTO) {
     this.dialogClient = { ...cl };
     this.selectedClient = cl;
     this.editMode = true;
     this.showAddClient = false;
+  }
+
+  // Helper: retourne aujourd'hui au format yyyy-MM-dd (heure locale)
+  private getTodayString(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth()+1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   addDialogClient() {
@@ -793,19 +808,19 @@ export class ClientComponent {
     
     let filteredVoyages = this.voyages.filter(v => v.clientId === clientId && v.poidsClient);
     
-    // Si un filtre de date est actif, calculer jusqu'à la fin de la journée sélectionnée (7h du lendemain)
+    // Si un filtre de date est actif, filtrer dans la fenêtre [07:00 du jour, 06:00 du lendemain)
     if (this.dateFilterActive && this.selectedDate) {
-      // Date limite : fin de la journée de travail = 7h du lendemain
       const selectedDateObj = new Date(this.selectedDate + 'T00:00:00');
+      const startWorkDay = new Date(selectedDateObj);
+      startWorkDay.setHours(7, 0, 0, 0);
       const endWorkDay = new Date(selectedDateObj);
       endWorkDay.setDate(endWorkDay.getDate() + 1);
-      endWorkDay.setHours(7, 0, 0, 0); // 7h00 du lendemain = fin de la journée du jour sélectionné
+      endWorkDay.setHours(6, 0, 0, 0);
       
       filteredVoyages = filteredVoyages.filter(v => {
         if (!v.date) return false;
         const voyageDateTime = new Date(v.date);
-        // Inclure tous les voyages AVANT la fin de la journée sélectionnée
-        return voyageDateTime < endWorkDay;
+        return voyageDateTime >= startWorkDay && voyageDateTime < endWorkDay;
       });
     }
     
@@ -892,14 +907,20 @@ export class ClientComponent {
   toggleDateFilter() {
     this.dateFilterActive = !this.dateFilterActive;
     if (this.dateFilterActive && !this.selectedDate) {
-      // Initialiser avec la date d'aujourd'hui
-      this.selectedDate = new Date().toISOString().split('T')[0];
+      // Initialiser avec la date d'aujourd'hui (locale)
+      this.selectedDate = this.today;
     }
     this.updatePagination();
   }
   
   // Gérer le changement de date
   onDateFilterChange() {
+    // Clamp future dates
+    if (this.selectedDate && this.today && this.selectedDate > this.today) {
+      this.selectedDate = this.today;
+    }
+    // Relancer le filtrage ou au moins la pagination
+    this.applyFilter();
     this.updatePagination();
   }
   

@@ -11,7 +11,6 @@
 
 export interface ProjetDTO { 
     id?: number;
-    nom: string;
     nomProduit: string;
     quantiteTotale: number;
     nomNavire: string;
@@ -21,5 +20,6 @@ export interface ProjetDTO {
     dateDebut?: string;
     dateFin?: string;
     active?: boolean;
+    societeNoms?: Set<string>;
 }
 

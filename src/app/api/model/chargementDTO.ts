@@ -18,6 +18,7 @@ export interface ChargementDTO {
     camionId: number;
     chauffeurId: number;
     societe: string;
+    societeP?: string;
     projetId: number;
     nomProjet?: string;
     produit?: string;

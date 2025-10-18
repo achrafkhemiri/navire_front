@@ -14,6 +14,7 @@ export class DeclarationComponent implements OnInit {
   declarations: DeclarationDTO[] = [];
   projets: ProjetDTO[] = [];
   selectedProjetId: number | null = null;
+  Array = Array; // Pour utiliser Array.from dans le template
   
   // Modal state
   showAddModal = false;
@@ -236,6 +237,6 @@ export class DeclarationComponent implements OnInit {
 
   getProjetNom(): string {
     const projet = this.projets.find((p: ProjetDTO) => p.id === this.selectedProjetId);
-    return projet?.nom || '';
+    return projet?.societeNoms ? Array.from(projet.societeNoms).join(', ') : 'Aucune société';
   }
 }

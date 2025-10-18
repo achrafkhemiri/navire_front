@@ -15,19 +15,80 @@
         </div>
         <div class="header-text">
           <h1 class="page-title">Paramètres du projet</h1>
-          <p class="page-subtitle" *ngIf="projet">
-            <strong>{{ projet.nom }}</strong> - {{ projet.nomProduit }}
-          </p>
-          <p class="page-subtitle" *ngIf="!projet">
-            Gérez les différents modules de votre projet
-          </p>
+          <ng-container *ngIf="projet; else headerPlaceholder">
+            <p class="page-subtitle badges-row">
+              <span class="info-badge" *ngIf="projet.nomNavire">
+                <i class="bi bi-truck-front"></i>
+                <span class="badge-label">Navire</span>
+                <span class="badge-value">{{ projet.nomNavire }}</span>
+              </span>
+              <span class="info-badge" *ngIf="projet.port">
+                <i class="bi bi-geo-alt"></i>
+                <span class="badge-label">Port</span>
+                <span class="badge-value">{{ projet.port }}</span>
+              </span>
+              <span class="info-badge" *ngIf="projet.nomProduit">
+                <i class="bi bi-box"></i>
+                <span class="badge-label">Produit</span>
+                <span class="badge-value">{{ projet.nomProduit }}</span>
+              </span>
+              <span class="info-badge" *ngIf="societesList.length">
+                <i class="bi bi-building"></i>
+                <span class="badge-label">Sociétés :</span>
+                <span class="badge-value">{{ societesList.join(', ') }}</span>
+              </span>
+            </p>
+          </ng-container>
+          <ng-template #headerPlaceholder>
+            <p class="page-subtitle">Gérez les différents modules de votre projet</p>
+          </ng-template>
         </div>
       </div>
     </div>
 
     <!-- Grid de cartes modules -->
     <div class="modules-grid">
-      <div class="module-card" *ngFor="let card of cards">
+      <!-- Récapitulatif / Chargement / Déchargement quick cards -->
+      <div class="module-card">
+        <div class="card-icon-wrapper">
+          <i class="bi bi-clipboard-data text-primary"></i>
+        </div>
+        <div class="card-content">
+          <h3 class="card-title">Récapitulatif</h3>
+          <p class="card-description">Vue d'ensemble du projet</p>
+        </div>
+        <a [routerLink]="['/voyage']" class="card-action">
+          <span>Voir le récapitulatif</span>
+          <i class="bi bi-arrow-right"></i>
+        </a>
+      </div>
+      <div class="module-card">
+        <div class="card-icon-wrapper">
+          <i class="bi bi-box-arrow-in-down text-success"></i>
+        </div>
+        <div class="card-content">
+          <h3 class="card-title">Chargement</h3>
+          <p class="card-description">Suivre les chargements</p>
+        </div>
+        <a [routerLink]="['/chargement']" class="card-action">
+          <span>Gérer les chargements</span>
+          <i class="bi bi-arrow-right"></i>
+        </a>
+      </div>
+      <div class="module-card">
+        <div class="card-icon-wrapper">
+          <i class="bi bi-box-arrow-up text-warning"></i>
+        </div>
+        <div class="card-content">
+          <h3 class="card-title">Déchargement</h3>
+          <p class="card-description">Suivre les déchargements</p>
+        </div>
+        <a [routerLink]="['/dechargement']" class="card-action">
+          <span>Gérer les déchargements</span>
+          <i class="bi bi-arrow-right"></i>
+        </a>
+      </div>
+  <div class="module-card" *ngFor="let card of cards">
         <div class="card-icon-wrapper">
           <i class="bi {{card.icon}} {{card.color}}"></i>
         </div>
