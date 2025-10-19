@@ -126,6 +126,13 @@ export class ChargementComponent {
   
   Math = Math;
 
+  // Validation flags for déchargement form
+  weightsAreIntegers: boolean = true;
+  isBrutGreaterThanTar: boolean = true;
+  get canSubmitDechargement(): boolean {
+    return this.weightsAreIntegers && this.isBrutGreaterThanTar && !!this.dialogDechargement.numTicket && ((this.dialogDechargement._type === 'client' && !!this.dialogDechargement.clientId) || (this.dialogDechargement._type === 'depot' && !!this.dialogDechargement.depotId));
+  }
+
   constructor(
     private chargementService: ChargementControllerService,
     private dechargementService: DechargementControllerService,
@@ -452,6 +459,10 @@ export class ChargementComponent {
     this.showDechargementDialog = true;
     this.loadClientsAndDepots();
     this.loadDechargements();
+
+    // Reset validation state
+    this.weightsAreIntegers = true;
+    this.isBrutGreaterThanTar = true;
   }
 
   loadClientsAndDepots() {
@@ -567,6 +578,16 @@ export class ChargementComponent {
   }
 
   saveDechargement() {
+    // Validate integer weights and brut > tar before submit
+    this.validateWeights();
+    if (!this.weightsAreIntegers) {
+      this.error = 'Les poids doivent être des entiers (sans décimales).';
+      return;
+    }
+    if (!this.isBrutGreaterThanTar) {
+      this.error = 'Le poids brut doit être strictement supérieur au poids tar.';
+      return;
+    }
     if (!this.dialogDechargement.numTicket) {
       this.error = 'Le numéro de ticket est obligatoire';
       return;
@@ -633,6 +654,22 @@ export class ChargementComponent {
     const poidVide = this.dialogDechargement.poidCamionVide || 0;
     const poidComplet = this.dialogDechargement.poidComplet || 0;
     return poidComplet - poidVide;
+  }
+
+  // Enforce integer values and update validation flags
+  onWeightChange(field: 'poidCamionVide' | 'poidComplet', value: any) {
+    // Coerce to number, strip decimals
+    const num = Number(value);
+    const intVal = Number.isFinite(num) ? Math.trunc(num) : 0;
+    this.dialogDechargement[field] = intVal;
+    this.validateWeights();
+  }
+
+  private validateWeights() {
+    const vide = Number(this.dialogDechargement.poidCamionVide || 0);
+    const brut = Number(this.dialogDechargement.poidComplet || 0);
+    this.weightsAreIntegers = Number.isInteger(vide) && Number.isInteger(brut);
+    this.isBrutGreaterThanTar = brut > vide;
   }
 
   // Recherche client
@@ -1506,23 +1543,19 @@ export class ChargementComponent {
         
         <div class="receipt-container">
         <div class="header">
-          <div class="company-name">${chargement.nomProjet || 'PROJET'}</div>
+          <div class="company-name">${chargement.societeP || 'PROJET'}</div>
           <div>${chargement.produit || 'Produit'}</div>
           <div style="font-size: 10px; margin-top: 5px;">
-            Port: ${chargement.port || 'N/A'} | Navire: ${chargement.navire || 'N/A'}
+            Port: ${chargement.port || ''} | Navire: ${chargement.navire || ''}
           </div>
         </div>
         
-        <div class="receipt-title">BON DE CHARGEMENT</div>
+        <div class="receipt-title">ORDRE DE CHARGEMENT</div>
         
         <div class="section">
           <div class="row">
-            <span class="label">Date/Heure:</span>
+            <span class="label">Date :</span>
             <span class="value">${dateFormatted}</span>
-          </div>
-          <div class="row">
-            <span class="label">Imprimé le:</span>
-            <span class="value">${now}</span>
           </div>
         </div>
         
@@ -1543,7 +1576,7 @@ export class ChargementComponent {
             <span class="value">${camion?.matricule || 'N/A'}</span>
           </div>
           <div class="row">
-            <span class="label">Société:</span>
+            <span class="label">Transporteur:</span>
             <span class="value">${chargement.societe || 'N/A'}</span>
           </div>
         </div>

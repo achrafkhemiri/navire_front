@@ -20,6 +20,8 @@ export interface ProjetDTO {
     dateDebut?: string;
     dateFin?: string;
     active?: boolean;
+    // Compatibilité: backend expose aussi les sociétés complètes
+    societes?: Array<import('./societeDTO').SocieteDTO>;
     societeNoms?: Set<string>;
 }
 

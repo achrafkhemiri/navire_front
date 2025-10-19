@@ -89,19 +89,19 @@
         </button>
         <button 
           class="filter-btn" 
-          [class.active]="activeFilter === 'societe'"
-          (click)="setFilter('societe')"
+          [class.active]="activeFilter === 'societeP'"
+          (click)="setFilter('societeP')"
         >
-          <i class="bi bi-building-fill"></i>
-          <span>Par Transporteur</span>
+          <i class="bi bi-buildings"></i>
+          <span>Par Société (Projet)</span>
         </button>
         <button 
           class="filter-btn" 
-          [class.active]="activeFilter === 'projet'"
-          (click)="setFilter('projet')"
+          [class.active]="activeFilter === 'navire'"
+          (click)="setFilter('navire')"
         >
-          <i class="bi bi-folder-fill"></i>
-          <span>Par Projet</span>
+          <i class="bi bi-truck-front"></i>
+          <span>Par Navire</span>
         </button>
         <button 
           class="filter-btn" 
@@ -144,34 +144,34 @@
         </div>
       </div>
 
-      <div *ngIf="activeFilter === 'societe'" class="filter-details">
+      <div *ngIf="activeFilter === 'societeP'" class="filter-details">
         <label>
-          <i class="bi bi-building-fill"></i> Sélectionner une société
+          <i class="bi bi-buildings"></i> Sélectionner une société (Projet)
         </label>
         <select 
-          [(ngModel)]="selectedSociete" 
+          [(ngModel)]="selectedSocieteP" 
           (change)="applyFilter()">
-          <option [ngValue]="null">-- Toutes les sociétés --</option>
-          <option *ngFor="let societe of allSocietes" [ngValue]="societe">
-            {{ societe }}
+          <option [ngValue]="null">-- Toutes les sociétés (projet) --</option>
+          <option *ngFor="let s of societesList" [ngValue]="s">
+            {{ s }}
           </option>
         </select>
-          <button class="btn btn-link" (click)="clearFilter('societe')">Effacer</button>
+          <button class="btn btn-link" (click)="clearFilter('societeP')">Effacer</button>
       </div>
 
-      <div *ngIf="activeFilter === 'projet'" class="filter-details">
+      <div *ngIf="activeFilter === 'navire'" class="filter-details">
         <label>
-          <i class="bi bi-folder-fill"></i> Sélectionner un projet
+          <i class="bi bi-truck-front"></i> Sélectionner un navire
         </label>
         <select 
-          [(ngModel)]="selectedProjet" 
+          [(ngModel)]="selectedNavire" 
           (change)="applyFilter()">
-          <option [ngValue]="null">-- Tous les projets --</option>
-          <option *ngFor="let projet of allProjets" [ngValue]="projet">
-            {{ projet }}
+          <option [ngValue]="null">-- Tous les navires --</option>
+          <option *ngFor="let nav of allNavires" [ngValue]="nav">
+            {{ nav }}
           </option>
         </select>
-          <button class="btn btn-link" (click)="clearFilter('projet')">Effacer</button>
+          <button class="btn btn-link" (click)="clearFilter('navire')">Effacer</button>
       </div>
 
       <div *ngIf="activeFilter === 'produit'" class="filter-details">

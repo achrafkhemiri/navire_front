@@ -68,6 +68,26 @@
 								}"></i>
 							</div>
 						</th>
+						<th class="sortable" (click)="sortBy('adresse')">
+							<div class="th-content">
+								<span>Adresse</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-down': sortColumn === 'adresse' && sortDirection === 'desc',
+									'bi-chevron-up': sortColumn === 'adresse' && sortDirection === 'asc',
+									'bi-chevron-expand': sortColumn !== 'adresse'
+								}"></i>
+							</div>
+						</th>
+						<th class="sortable" (click)="sortBy('mf')">
+							<div class="th-content">
+								<span>Matricule Fiscal</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-down': sortColumn === 'mf' && sortDirection === 'desc',
+									'bi-chevron-up': sortColumn === 'mf' && sortDirection === 'asc',
+									'bi-chevron-expand': sortColumn !== 'mf'
+								}"></i>
+							</div>
+						</th>
 						<th class="actions-header text-center">Actions</th>
 					</tr>
 				</thead>
@@ -78,6 +98,14 @@
 							{{ cl.nom }}
 						</td>
 						<td>{{ cl.numero }}</td>
+						<td>
+							<i class="bi bi-geo-alt" style="margin-right: 8px; color: #10b981;"></i>
+							{{ cl.adresse || '-' }}
+						</td>
+						<td>
+							<i class="bi bi-file-text" style="margin-right: 8px; color: #f59e0b;"></i>
+							{{ cl.mf || '-' }}
+						</td>
 						<td class="actions-cell">
 							<button class="action-btn edit-btn" (click)="editClient(cl)" title="Modifier">
 								<i class="bi bi-pencil-fill"></i>
@@ -88,7 +116,7 @@
 						</td>
 					</tr>
 					<tr *ngIf="paginatedClients.length === 0" class="no-data-row">
-						<td colspan="3">
+						<td colspan="5">
 							<div class="no-data">
 								<i class="bi bi-inbox"></i>
 								<p>Aucun client trouvé</p>
@@ -140,6 +168,14 @@
 					<div class="form-group">
 						<label for="numero">Numéro:</label>
 						<input type="text" id="numero" [(ngModel)]="dialogClient.numero" name="numero" required />
+					</div>
+					<div class="form-group">
+						<label for="adresse">Adresse:</label>
+						<input type="text" id="adresse" [(ngModel)]="dialogClient.adresse" name="adresse" />
+					</div>
+					<div class="form-group">
+						<label for="mf">Matricule Fiscal (MF):</label>
+						<input type="text" id="mf" [(ngModel)]="dialogClient.mf" name="mf" />
 					</div>
 					<div class="dialog-actions">
 						<button type="button" (click)="cancel()">Annuler</button>

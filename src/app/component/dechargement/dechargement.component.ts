@@ -11,6 +11,7 @@ import { ClientDTO } from '../../api/model/clientDTO';
 import { DepotDTO } from '../../api/model/depotDTO';
 import { CamionDTO } from '../../api/model/camionDTO';
 import { ChauffeurDTO } from '../../api/model/chauffeurDTO';
+import { SocieteDTO } from '../../api/model/societeDTO';
 import { ProjetActifService } from '../../service/projet-actif.service';
 import * as XLSX from 'xlsx';
 
@@ -36,6 +37,9 @@ export class DechargementComponent implements OnInit {
   selectedProjet: string | null = null;
   selectedProduit: string | null = null;
   selectedDate: string | null = null; // yyyy-MM-dd
+  // Nouveaux filtres
+  selectedNavire: string | null = null; // Par navire (au lieu de projet)
+  selectedSocieteP: string | null = null; // Société liée au projet
   // Date max pour le filtre (aujourd'hui)
   today: string = '';
   allSocietes: string[] = [];
@@ -175,6 +179,8 @@ export class DechargementComponent implements OnInit {
       this.selectedSociete = null;
       this.selectedProjet = null;
       this.selectedProduit = null;
+      this.selectedNavire = null;
+      this.selectedSocieteP = null;
       this.selectedDate = null;
     }
     this.applyFilter();
@@ -205,10 +211,16 @@ export class DechargementComponent implements OnInit {
       if (this.selectedSociete && dech.societe !== this.selectedSociete) {
         return false;
       }
-      
-      // Filter by projet
-      if (this.selectedProjet && dech.nomProjet !== this.selectedProjet) {
+      // Filter by navire (remplace le filtre projet)
+      if (this.selectedNavire && dech.navire !== this.selectedNavire) {
         return false;
+      }
+      // Filtre par Société (Projet) - si on est dans le contexte d'un projet actif et qu'une société projet est sélectionnée,
+      // restreindre aux déchargements de ce projet
+      if (this.selectedSocieteP && this.projetActif && Array.isArray(this.societesList) && this.societesList.includes(this.selectedSocieteP)) {
+        if (dech.projetId !== this.projetActif.id) {
+          return false;
+        }
       }
       
       // Filter by produit
@@ -247,13 +259,19 @@ export class DechargementComponent implements OnInit {
   }
 
   // Effacer un filtre spécifique
-  clearFilter(filterType: 'societe' | 'projet' | 'produit' | 'date') {
+  clearFilter(filterType: 'societe' | 'projet' | 'produit' | 'date' | 'navire' | 'societeP') {
     switch (filterType) {
       case 'societe':
         this.selectedSociete = null;
         break;
       case 'projet':
         this.selectedProjet = null;
+        break;
+      case 'navire':
+        this.selectedNavire = null;
+        break;
+      case 'societeP':
+        this.selectedSocieteP = null;
         break;
       case 'produit':
         this.selectedProduit = null;
@@ -581,237 +599,381 @@ export class DechargementComponent implements OnInit {
     const chargement = this.chargements.find(c => c.id === dech.chargementId);
     const camion = chargement ? this.camions.find(c => c.id === chargement.camionId) : null;
     const chauffeur = chargement ? this.chauffeurs.find(c => c.id === chargement.chauffeurId) : null;
+    const client = dech.clientId ? this.clients.find(c => c.id === dech.clientId) : null;
+    const depot = dech.depotId ? this.depots.find(d => d.id === dech.depotId) : null;
+    
+    // Récupérer les informations de la société du projet
+    let societeInfo: SocieteDTO | null = null;
+    if (this.projetActif && Array.isArray(this.projetActif.societes)) {
+      // Si le chargement a un nom de société, essayer de la trouver
+      if (chargement?.societeP) {
+        societeInfo = this.projetActif.societes.find((s: SocieteDTO) => s.nom === chargement.societeP) || null;
+      }
+      // Sinon prendre la première société du projet
+      if (!societeInfo && this.projetActif.societes.length > 0) {
+        societeInfo = this.projetActif.societes[0];
+      }
+    }
 
     // Date et heure formatées
-    const dateDechargementFormatted = dech.dateDechargement ? new Date(dech.dateDechargement).toLocaleString('fr-FR', {
+    const dateDechargement = dech.dateDechargement ? new Date(dech.dateDechargement) : new Date();
+    const dateFormatted = dateDechargement.toLocaleDateString('fr-FR', {
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }) : 'N/A';
-    
-    const dateChargementFormatted = chargement ? new Date(chargement.dateChargement!).toLocaleString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }) : 'N/A';
-    
-    const now = new Date().toLocaleString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
+      year: 'numeric'
+    });
+    const heureDepart = dateDechargement.toLocaleTimeString('fr-FR', {
       hour: '2-digit',
       minute: '2-digit'
     });
+    
+    // Pour heure arrivée, on peut ajouter quelques minutes (simulation)
+    const heureArrivee = new Date(dateDechargement.getTime() + 30 * 60000).toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    // Préparer l'affichage du contact (peut être un JSON stringifié ou un tableau)
+    let contactHtml = '';
+    const rawContact = societeInfo?.contact;
+    if (rawContact) {
+      try {
+      const parsed = typeof rawContact === 'string' ? JSON.parse(rawContact) : rawContact;
+      if (Array.isArray(parsed)) {
+        contactHtml = parsed
+        .map(c => `<div>Tél : ${String(c)}</div>`)
+        .join('');
+      } else if (typeof parsed === 'object') {
+        contactHtml = Object.values(parsed)
+        .map(v => `<div>${String(v)}</div>`)
+        .join('');
+      } else {
+        contactHtml = `<div>Contact : ${String(parsed)}</div>`;
+      }
+      } catch {
+      // Si parsing échoue, afficher la valeur brute
+      contactHtml = `<div>Contact : ${String(rawContact)}</div>`;
+      }
+    } else {
+      contactHtml = '<div>TÉL : Tl 430 822</div><div>Fax : 71430 911</div>';
+    }
+
+    const hasMF = !!(depot?.mf || client?.mf);
 
     const printContent = `
       <!DOCTYPE html>
       <html>
       <head>
-        <meta charset="UTF-8">
-        <title>Bon de Déchargement #${dech.id}</title>
-        <style>
-          @page {
-            size: 80mm auto;
-            margin: 0;
-          }
-          
-          body {
-            font-family: 'Courier New', monospace;
-            font-size: 11px;
-            line-height: 1.3;
-            margin: 0;
-            padding: 20px;
-            max-width: 80mm;
-            margin: 0 auto;
-            background: #f5f5f5;
-          }
-          
-          .receipt-container {
-            background: white;
-            padding: 20px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-          }
-          
-          .print-button {
-            display: block;
-            width: 200px;
-            margin: 20px auto;
-            padding: 12px 24px;
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-          }
-          
-          .print-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 8px rgba(0,0,0,0.15);
-          }
-          
-          .header {
-            text-align: center;
-            border-bottom: 2px dashed #000;
-            padding-bottom: 10px;
-            margin-bottom: 10px;
-          }
-          
-          .company-name {
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 5px;
-          }
-          
-          .receipt-title {
-            font-size: 14px;
-            font-weight: bold;
-            margin: 10px 0;
-            text-decoration: underline;
-          }
-          
-          .section {
-            margin-bottom: 10px;
-            padding-bottom: 8px;
-            border-bottom: 1px dashed #666;
-          }
-          
-          .row {
-            display: flex;
-            justify-content: space-between;
-            margin: 3px 0;
-          }
-          
-          .label {
-            font-weight: bold;
-          }
-          
-          .value {
-            text-align: right;
-          }
-          
-          .footer {
-            text-align: center;
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 2px dashed #000;
-            font-size: 10px;
-          }
-          
-          .barcode {
-            text-align: center;
-            font-size: 20px;
-            font-family: 'Libre Barcode 39', cursive;
-            margin: 10px 0;
-          }
-          
-          @media print {
-            body {
-              background: white;
-              padding: 10px;
-            }
-            
-            .receipt-container {
-              box-shadow: none;
-              padding: 10px;
-            }
-            
-            .print-button {
-              display: none;
-            }
-          }
-        </style>
+      <meta charset="UTF-8">
+      <title>Bon de Sortie N° ${dech.numTicket}</title>
+      <style>
+      @page {
+      size: A4;
+      margin: 15mm;
+      }
+      
+      * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      }
+      
+      body {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11px;
+      line-height: 1.4;
+      color: #000;
+      background: white;
+      padding: 20px;
+      }
+      
+      .print-button {
+      display: block;
+      width: 200px;
+      margin: 0 auto 20px auto;
+      padding: 12px 24px;
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      }
+      
+      .print-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 8px rgba(0,0,0,0.15);
+      }
+      
+      .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto;
+      background: white;
+      padding: 10mm;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      }
+      
+      .header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #000;
+      }
+      
+      .company-info {
+      flex: 1;
+      }
+      
+      .company-name {
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 3px;
+      }
+      
+      .company-details {
+      font-size: 10px;
+      line-height: 1.5;
+      }
+      
+      .delivery-info {
+      text-align: right;
+      flex: 1;
+      }
+      
+      .delivery-title {
+      font-size: 12px;
+      font-weight: bold;
+      margin-bottom: 5px;
+      }
+      
+      .bon-number {
+      font-size: 13px;
+      font-weight: bold;
+      margin: 5px 0;
+      }
+      
+      .date-info {
+      font-size: 11px;
+      margin: 5px 0;
+      }
+      
+      .main-content {
+      margin-top: 20px;
+      }
+      
+      .info-row {
+      display: flex;
+      margin-bottom: 8px;
+      font-size: 11px;
+      }
+      
+      .info-label {
+      width: 150px;
+      font-weight: bold;
+      }
+      
+      .info-value {
+      flex: 1;
+      padding-left: 10px;
+      }
+      
+      .section-title {
+      font-size: 12px;
+      font-weight: bold;
+      margin: 20px 0 10px 0;
+      padding: 5px;
+      background: #f0f0f0;
+      border-left: 4px solid #000;
+      }
+      
+      .vehicle-section {
+      margin: 20px 0;
+      }
+      
+      .table-container {
+      margin: 20px 0;
+      border: 1px solid #000;
+      }
+      
+      table {
+      width: 100%;
+      border-collapse: collapse;
+      }
+      
+      th {
+      background: #f0f0f0;
+      padding: 8px;
+      text-align: center;
+      font-weight: bold;
+      border: 1px solid #000;
+      font-size: 11px;
+      }
+      
+      td {
+      padding: 8px;
+      text-align: center;
+      border: 1px solid #000;
+      font-size: 11px;
+      }
+      
+      .total-row {
+      font-weight: bold;
+      background: #f8f8f8;
+      font-size: 12px;
+      }
+      
+      .footer {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px dashed #666;
+      }
+      
+      .footer-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 5px;
+      font-size: 10px;
+      }
+      
+      .signature-section {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 40px;
+      }
+      
+      .signature-box {
+      text-align: center;
+      width: 200px;
+      }
+      
+      .signature-label {
+      font-size: 11px;
+      font-weight: bold;
+      margin-bottom: 40px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #000;
+      }
+      
+      @media print {
+      body {
+        padding: 0;
+      }
+      
+      .page {
+        box-shadow: none;
+        margin: 0;
+        padding: 10mm;
+      }
+      
+      .print-button {
+        display: none;
+      }
+      }
+      </style>
       </head>
       <body>
-        <button class="print-button" onclick="window.print()">
-          <i class="bi bi-printer-fill"></i> Imprimer le bon
-        </button>
-        
-        <div class="receipt-container">
-        <div class="header">
-          <div class="company-name">${dech.nomProjet || 'PROJET'}</div>
-          <div>${dech.produit || 'Produit'}</div>
-          <div style="font-size: 10px; margin-top: 5px;">
-            Port: ${dech.port || 'N/A'} | Navire: ${dech.navire || 'N/A'}
-          </div>
+      <button class="print-button" onclick="window.print()">
+      🖨️ Imprimer le Bon de chargement
+      </button>
+      
+      <div class="page">
+      <!-- En-tête -->
+      <div class="header">
+      <div class="company-info">
+        <div class="company-name">Société : ${societeInfo?.nom || chargement?.societeP || 'SNA'}</div>
+        <div class="company-details">
+        <div>STÉ ${societeInfo?.nom || chargement?.societeP || 'SNA'}</div>
+        ${societeInfo?.adresse ? `<div>Adresse: ${societeInfo.adresse}</div>` : ''}
+        ${societeInfo?.rcs ? `<div>N° RCS : ${societeInfo.rcs}</div>` : ''}
+        ${societeInfo?.tva ? `<div>N° TVA : ${societeInfo.tva}</div>` : '<div>MF : 000349528W000</div>'}
+        ${contactHtml}
+        </div>
+      </div>
+      
+      <div class="delivery-info">
+        <div class="delivery-title">Adresse Livraison : ${depot?.nom || client?.nom }</div>
+        <div class="company-details">
+        <div>&nbsp;</div>
+        <div>Adresse : ${depot?.adresse || client?.adresse}</div>
+        ${hasMF ? `<div>MF : ${depot?.mf || client?.mf}</div>
+        ` : ''}
+
+        </div>
+      </div>
+      </div>
+      
+      <!-- Informations du bon -->
+      <div style="text-align: center; margin: 15px 0;">
+      <div class="bon-number">Bon de sortie N° : ${dech.numTicket || 'SB017418'}</div>
+      <div class="date-info">
+        Date : ${dateFormatted}
+        <span style="margin-left: 40px;">Heure Départ : ${heureDepart}</span>
+      </div>
+      <div class="date-info">
+        Paie M. : ${dech.numBonLivraison || 'PL000148'}
+        <span style="margin-left: 20px;">Navire : ${dech.navire || '25020'}</span>
+        <span style="margin-left: 40px;">N° Ticket : ${dech.numTicket || '44'}</span>
+      </div>
+      <div class="date-info">Heure Arrivée : ${heureArrivee}</div>
+      </div>
+      
+      <!-- Informations port -->
+      <div class="main-content">
+      <div class="info-row">
+        <div class="info-label">Port :</div>
+        <div class="info-value">${dech.port || 'BIZERTE'}</div>
+      </div>
+      </div>
+      
+      <!-- Informations véhicule -->
+      <div class="section-title">VÉHICULE</div>
+      <div class="vehicle-section">
+      <div class=
+          <tr>
+            <td>${dech.produit || 'Tourteaux de Colza'}</td>
+            <td>${(dech.poidComplet! / 1000).toFixed(2)}</td>
+            <td>${(dech.poidCamionVide! / 1000).toFixed(2)}</td>
+            <td>${(this.calculatePoidsNet(dech) / 1000).toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td>Circuit</td>
+            <td>Agent Port</td>
+            <td>Chauffeur</td>
+            <td>Magasinier</td>
+          </tr>
+          </tbody>
+        </table>
         </div>
         
-        <div class="section">
-          <div class="row">
-            <span class="label">N° Ticket:</span>
-            <span class="value">${dech.numTicket}</span>
-          </div>
-          <div class="row">
-            <span class="label">N° Bon Livraison:</span>
-            <span class="value">${dech.numBonLivraison || 'N/A'}</span>
-          </div>
-          ${chargement ? `
-          <div class="row">
-            <span class="label">Date chargement:</span>
-            <span class="value">${dateChargementFormatted}</span>
-          </div>
-          ` : ''}
-          ${chauffeur ? `
-          <div class="row">
-            <span class="label">Chauffeur:</span>
-            <span class="value">${chauffeur.nom}</span>
-          </div>
-          ` : ''}
-          ${chauffeur?.numCin ? `
-          <div class="row">
-            <span class="label">CIN:</span>
-            <span class="value">${chauffeur.numCin}</span>
-          </div>
-          ` : ''}
-          ${camion ? `
-          <div class="row">
-            <span class="label">Matricule camion:</span>
-            <span class="value">${camion.matricule}</span>
-          </div>
-          ` : ''}
-          ${chargement ? `
-          <div class="row">
-            <span class="label">Société:</span>
-            <span class="value">${chargement.societe || 'N/A'}</span>
-          </div>
-          ` : ''}
+        <!-- Footer avec informations additionnelles -->
+        <div class="footer">
+        <div class="footer-row">
+          <span><strong>Client:</strong> ${client?.nom || dech.societe || 'N/A'}</span>
+          <span><strong>Dépôt:</strong> ${depot?.nom || 'N/A'}</span>
+        </div>
+        <div class="footer-row">
+          <span><strong>Bon de Livraison:</strong> ${dech.numBonLivraison || 'N/A'}</span>
+          <span><strong>Projet:</strong> ${dech.nomProjet || 'N/A'}</span>
+        </div>
         </div>
         
-        <div class="section">
-          <div class="row">
-            <span class="label">Date Déchargement:</span>
-            <span class="value">${dateDechargementFormatted}</span>
-          </div>
-          <div class="row">
-            <span class="label">Client:</span>
-            <span class="value">${dech.clientId ? this.getClientName(dech.clientId) : 'N/A'}</span>
-          </div>
-          <div class="row">
-            <span class="label">Dépôt:</span>
-            <span class="value">${dech.depotId ? this.getDepotName(dech.depotId) : 'N/A'}</span>
-          </div>
-          <div class="row">
-            <span class="label">Poids Vide:</span>
-            <span class="value">${dech.poidCamionVide?.toFixed(0)}</span>
-          </div>
-          <div class="row">
-            <span class="label">Poids Complet:</span>
-            <span class="value">${dech.poidComplet?.toFixed(0)}</span>
-          </div>
-          <div class="row" style="font-size: 12px; font-weight: bold; margin-top: 5px;">
-            <span class="label">POIDS NET:</span>
-            <span class="value">${this.calculatePoidsNet(dech).toFixed(0)}</span>
-          </div>
+        <!-- Signatures -->
+        <div class="signature-section">
+        <div class="signature-box">
+          <div class="signature-label">Signature Agent Port</div>
         </div>
-        
+        <div class="signature-box">
+          <div class="signature-label">Signature Chauffeur</div>
         </div>
+        <div class="signature-box">
+          <div class="signature-label">Signature Magasinier</div>
+        </div>
+        </div>
+      </div>
       </body>
       </html>
     `;

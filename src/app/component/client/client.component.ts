@@ -10,6 +10,9 @@ import { VoyageDTO } from '../../api/model/voyageDTO';
 import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
 import { NotificationService } from '../../service/notification.service';
 import { QuantiteService } from '../../service/quantite.service';
+import { HttpClient } from '@angular/common/http';
+import { Inject } from '@angular/core';
+import { BASE_PATH } from '../../api/variables';
 
 @Component({
   selector: 'app-client',
@@ -54,7 +57,7 @@ export class ClientComponent {
   isSidebarOpen: boolean = true;
   showAddClient: boolean = false;
   clientFilter: string = '';
-  dialogClient: ClientDTO = { nom: '', numero: '' };
+  dialogClient: ClientDTO = { nom: '', numero: '', adresse: '', mf: '' };
   
   // Pour l'autocomplétion type Select2
   allClients: ClientDTO[] = []; // Tous les clients (toutes les BDD)
@@ -101,7 +104,9 @@ export class ClientComponent {
     private projetService: ProjetControllerService,
     private voyageService: VoyageControllerService,
     private notificationService: NotificationService,
-    private quantiteService: QuantiteService
+    private quantiteService: QuantiteService,
+    private http: HttpClient,
+    @Inject(BASE_PATH) private basePath: string
   ) {
     // 🔥 Écouter les changements du projet actif
     this.projetActifService.projetActif$.subscribe(projet => {
@@ -249,7 +254,7 @@ export class ClientComponent {
   }
 
   openAddDialog() {
-    this.dialogClient = { nom: '', numero: '' };
+    this.dialogClient = { nom: '', numero: '', adresse: '', mf: '' };
     this.selectedExistingClient = null;
     this.showAddClient = true;
     this.editMode = false;
@@ -316,6 +321,8 @@ export class ClientComponent {
     this.selectedExistingClient = client;
     this.dialogClient.nom = client.nom || '';
     this.dialogClient.numero = client.numero || '';
+    this.dialogClient.adresse = client.adresse || '';
+    this.dialogClient.mf = client.mf || '';
     this.showSuggestions = false;
     this.filteredSuggestions = [];
   }
@@ -330,10 +337,17 @@ export class ClientComponent {
   
 
   selectClient(cl: ClientDTO) {
-    this.dialogClient = { ...cl };
+    this.dialogClient = {
+      id: cl.id,
+      nom: cl.nom,
+      numero: cl.numero,
+      adresse: cl.adresse,
+      mf: cl.mf,
+      quantitesAutoriseesParProjet: cl.quantitesAutoriseesParProjet
+    };
     this.selectedClient = cl;
     this.editMode = true;
-    this.showAddClient = false;
+    this.showAddClient = true;
   }
 
   // Helper: retourne aujourd'hui au format yyyy-MM-dd (heure locale)
@@ -379,7 +393,7 @@ export class ClientComponent {
       console.log('✅ Association client existant:', this.selectedExistingClient.id, 'au projet:', targetProjetId);
       // Associer le client existant au projet
       this.askQuantiteAndAssociate(this.selectedExistingClient.id);
-      this.dialogClient = { nom: '', numero: '' };
+      this.dialogClient = { nom: '', numero: '', adresse: '', mf: '' };
       this.closeDialog();
       return;
     }
@@ -398,6 +412,10 @@ export class ClientComponent {
               const client = JSON.parse(text);
               clientId = client.id;
               console.log('➡️ Association client', clientId, 'au projet', targetProjetId);
+              // Fermer le dialogue d'ajout AVANT d'ouvrir la modal quantité
+              this.dialogClient = { nom: '', numero: '', adresse: '', mf: '' };
+              this.closeDialog();
+              // Ouvrir la modal quantité
               this.askQuantiteAndAssociate(clientId);
             } catch (e) { 
               console.error('❌ Erreur parsing client:', e); 
@@ -406,10 +424,12 @@ export class ClientComponent {
         } else {
           clientId = createdClient.id;
           console.log('➡️ Association client', clientId, 'au projet', targetProjetId);
+          // Fermer le dialogue d'ajout AVANT d'ouvrir la modal quantité
+          this.dialogClient = { nom: '', numero: '', adresse: '', mf: '' };
+          this.closeDialog();
+          // Ouvrir la modal quantité
           this.askQuantiteAndAssociate(clientId);
         }
-        this.dialogClient = { nom: '', numero: '' };
-        this.closeDialog();
       },
       error: (err) => {
         console.error('❌ Erreur création client:', err);
@@ -498,10 +518,10 @@ export class ClientComponent {
         
         console.log('Message d\'erreur extrait:', errorMsg);
         
-        // Si c'est un 403, c'est probablement un dépassement de quantité
-        // car le backend rejette avec IllegalArgumentException qui devient 403
-        if (err.status === 403) {
-          console.log('Erreur 403 détectée - Dépassement de quantité probable');
+        // Si c'est un 400 ou 403, c'est probablement un dépassement de quantité
+        // car le backend rejette avec IllegalArgumentException
+        if (err.status === 400 || err.status === 403) {
+          console.log(`Erreur ${err.status} détectée - Dépassement de quantité probable`);
           
           // Fermer la modal de quantité
           this.closeQuantiteModal();
@@ -522,12 +542,13 @@ export class ClientComponent {
                 this.showTemporaryAlert(alertMsg, 'danger');
               },
               error: () => {
-                // Si on ne peut pas récupérer la quantité, utiliser un message par défaut
+                // Si on ne peut pas récupérer la quantité, utiliser un message par défaut ou le message d'erreur du backend
                 const nomProjet = projet.nom || `Projet ${targetProjetId}`;
                 const alertMsg = errorMsg && errorMsg.trim() 
                   ? errorMsg 
                   : `Impossible d'ajouter le client au projet "${nomProjet}" : la quantité autorisée dépasse la quantité restante.`;
                 
+                console.log('🚨 Affichage alerte d\'erreur:', alertMsg);
                 this.showTemporaryAlert(alertMsg, 'danger');
               }
             });
@@ -572,7 +593,7 @@ export class ClientComponent {
     if (!this.dialogClient?.id) return;
     this.clientService.updateClient(this.dialogClient.id, this.dialogClient, 'body').subscribe({
       next: () => {
-        this.dialogClient = { nom: '', numero: '' };
+        this.dialogClient = { nom: '', numero: '', adresse: '', mf: '' };
         this.selectedClient = null;
         this.editMode = false;
         this.loadClients();
@@ -586,7 +607,7 @@ export class ClientComponent {
   closeDialog() {
     this.showAddClient = false;
     this.editMode = false;
-    this.dialogClient = { nom: '', numero: '' };
+    this.dialogClient = { nom: '', numero: '', adresse: '', mf: '' };
     this.selectedClient = null;
     this.error = '';
   }
@@ -602,42 +623,25 @@ export class ClientComponent {
       return;
     }
     
-    // TOUJOURS charger via getClientsByProjet pour garantir le filtrage par projet
-    console.log('📤 Appel getClientsByProjet avec projetId:', targetProjetId);
+    // TOUJOURS charger via l'endpoint spécifique au projet pour garantir le filtrage
+    const url = `${this.basePath}/api/clients/projet/${targetProjetId}`;
+    console.log('📤 Appel endpoint projet-clients:', url);
     
-    this.clientService.getClientsByProjet(targetProjetId, 'body').subscribe({
-      next: async (data) => {
+    this.http.get<any[]>(url, { withCredentials: true, responseType: 'json' as 'json' }).subscribe({
+      next: (data) => {
         console.log('✅ Réponse getClientsByProjet:', data);
-        
-        if (data instanceof Blob) {
-          const text = await data.text();
-          try {
-            const json = JSON.parse(text);
-            if (Array.isArray(json)) {
-              this.clients = json;
-              console.log(`✅ ${json.length} clients chargés pour le projet ${targetProjetId}`);
-            } else {
-              this.clients = [];
-              console.warn('⚠️ Réponse JSON non-array:', json);
-            }
-          } catch (e) {
-            console.error('❌ Erreur parsing JSON:', e);
-            this.error = 'Erreur parsing JSON: ' + e;
-            this.clients = [];
-          }
-        } else if (Array.isArray(data)) {
+        if (Array.isArray(data)) {
           this.clients = data;
           console.log(`✅ ${data.length} clients chargés pour le projet ${targetProjetId}`);
         } else {
           this.clients = [];
-          console.warn('⚠️ Type de réponse inattendu:', data);
+          console.warn('⚠️ Réponse non-array:', data);
         }
-        
         this.applyFilter();
       },
-      error: (err) => {
-        console.error('❌ Erreur getClientsByProjet:', err);
-        this.error = 'Erreur chargement: ' + (err.error?.message || err.message);
+      error: err => {
+        console.error('❌ Erreur chargement clients pour projet:', err);
+        this.error = 'Erreur chargement des clients: ' + (err.error?.message || err.message);
         this.clients = [];
         this.applyFilter();
       }

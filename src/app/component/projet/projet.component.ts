@@ -36,11 +36,16 @@ export class ProjetComponent {
   isSidebarOpen: boolean = true;
   openEditProjetModal(pr: ProjetDTO) {
     this.selectedProjet = { ...pr };
-    // Pré-remplir les sociétés existantes du projet dans les chips
-    const noms = (pr as any)?.societeNoms;
-    if (noms) {
-      const arr = Array.isArray(noms) ? noms : Array.from(noms as Set<string>);
-      this.selectedSocietes = arr.filter((s: string) => !!s && s.trim() !== '');
+    // Synchroniser les sociétés du projet sélectionné (même logique que selectProjet)
+    const societes = (pr as any).societes as SocieteDTO[] | undefined;
+    const noms = (pr as any).societeNoms as Set<string> | string[] | undefined;
+    if (Array.isArray(societes) && societes.length) {
+      this.selectedSocietes = societes.map(s => ({...s}));
+      // Préparer les contacts arrays côté UI
+      this.selectedSocietes.forEach(s => this.ensureContactsArray(s));
+    } else if (noms) {
+      const arr = Array.isArray(noms) ? noms : Array.from(noms as any);
+      this.selectedSocietes = arr.map(n => ({ nom: n } as SocieteDTO));
     } else {
       this.selectedSocietes = [];
     }
@@ -82,12 +87,16 @@ export class ProjetComponent {
   // Déclarations dynamiques pour le formulaire d'ajout/modification
   declarations: Array<{numeroDeclaration: string, quantiteManifestee: number}> = [{numeroDeclaration: '', quantiteManifestee: 0}];
   
-  // Gestion des sociétés
-  selectedSocietes: string[] = [];
+  // Gestion des sociétés (sélection, création, édition)
+  selectedSocietes: SocieteDTO[] = [];
   societeSearchInput: string = '';
-  allSocietes: any[] = [];
-  filteredSocietes: any[] = [];
+  allSocietes: SocieteDTO[] = [];
+  filteredSocietes: SocieteDTO[] = [];
   showSocieteDropdown: boolean = false;
+  // Formulaire rapide pour créer une nouvelle société
+  showNewSocieteForm: boolean = false;
+  newSociete: SocieteDTO = { nom: '', adresse: '', rcs: '', contact: '', tva: '' };
+  newSocieteContacts: string[] = [];
   
   // Pagination
   currentPage: number = 1;
@@ -136,7 +145,7 @@ export class ProjetComponent {
   loadSocietes(): void {
     this.societeService.getAllSocietes('body').subscribe({
       next: (data) => {
-        this.allSocietes = data;
+        this.allSocietes = (data || []) as any;
       },
       error: (err) => {
         console.error('Erreur chargement sociétés:', err);
@@ -176,7 +185,12 @@ export class ProjetComponent {
       dateFin: '', 
       active: false 
     };
-    this.resetDeclarations();
+  this.resetDeclarations();
+  this.selectedSocietes = [];
+  this.societeSearchInput = '';
+  this.showNewSocieteForm = false;
+  this.newSociete = { nom: '', adresse: '', rcs: '', contact: '', tva: '' };
+  this.newSocieteContacts = [];
     
     setTimeout(() => {
       const modal = document.getElementById('addProjetModal');
@@ -331,19 +345,23 @@ export class ProjetComponent {
     }
     const projetEstActive = this.newProjet.active;
     
-    // Si le projet ajouté est actif, désactive les autres
-    if (projetEstActive) {
-      this.projets.forEach(pr => {
-        if (pr.active) {
-          pr.active = false;
-          if (pr.id) {
-            this.projetService.updateProjet(pr.id, pr, 'body').subscribe();
-          }
-        }
-      });
+    // Préparer payload avec sociétés complètes
+    const payload: ProjetDTO = { ...this.newProjet } as any;
+    if (this.selectedSocietes.length > 0) {
+      (payload as any).societes = this.selectedSocietes.map(s => ({
+        id: s.id,
+        nom: s.nom,
+        adresse: s.adresse,
+        rcs: s.rcs,
+        contact: this.stringifyContacts(this.getContactsArray(s)),
+        tva: s.tva,
+      }));
+      delete (payload as any).societeNoms;
+    } else if (!(payload as any).societeNoms) {
+      (payload as any).societeNoms = [] as any;
     }
-    
-    this.projetService.createProjet(this.newProjet, 'body').subscribe({
+
+    this.projetService.createProjet(payload, 'body').subscribe({
       next: async (created) => {
         let projetAjoute: ProjetDTO | undefined = created;
         if (created instanceof Blob) {
@@ -357,7 +375,38 @@ export class ProjetComponent {
         }
         
         if (projetAjoute && projetAjoute.id) {
-          this.projets.push(projetAjoute);
+          // Si le projet ajouté est actif, désactiver les autres d'abord
+          if (projetEstActive) {
+            const updatePromises = this.projets
+              .filter(pr => pr.active && pr.id)
+              .map(pr => {
+                pr.active = false;
+                return new Promise<void>((resolve, reject) => {
+                  this.projetService.updateProjet(pr.id!, pr, 'body').subscribe({
+                    next: () => resolve(),
+                    error: (err) => reject(err)
+                  });
+                });
+              });
+            
+            // Attendre que toutes les désactivations soient terminées
+            Promise.all(updatePromises)
+              .then(() => {
+                // Maintenant ajouter le nouveau projet
+                this.projets.push(projetAjoute!);
+                this.projetActifService.setProjetActif(projetAjoute!);
+                console.log('✅ Nouveau projet actif défini:', projetAjoute);
+              })
+              .catch((err) => {
+                console.error('❌ Erreur lors de la désactivation des projets:', err);
+                // Ajouter quand même le projet
+                this.projets.push(projetAjoute!);
+                this.projetActifService.setProjetActif(projetAjoute!);
+              });
+          } else {
+            // Projet non actif, ajouter directement
+            this.projets.push(projetAjoute);
+          }
           
           // Créer les déclarations associées au projet
           const declarationsValides = this.declarations.filter(d => d.numeroDeclaration && d.numeroDeclaration.trim() !== '');
@@ -376,16 +425,11 @@ export class ProjetComponent {
               });
             });
           }
-          
-          // Si le projet ajouté est actif, mettre à jour le service
-          if (projetEstActive) {
-            this.projetActifService.setProjetActif(projetAjoute);
-            console.log('✅ Nouveau projet actif défini:', projetAjoute);
-          }
         }
         
         this.newProjet = { nomProduit: '', quantiteTotale: 0, nomNavire: '', paysNavire: '', etat: '', port: '', dateDebut: '', dateFin: '', active: false };
         this.resetDeclarations();
+        this.selectedSocietes = [];
         this.loadProjets(); // Recharge la liste pour garantir la cohérence
       },
       error: (err) => this.error = 'Erreur ajout: ' + (err.error?.message || err.message)
@@ -394,6 +438,19 @@ export class ProjetComponent {
 
   selectProjet(pr: ProjetDTO) {
     this.selectedProjet = { ...pr };
+    // Synchroniser les sociétés du projet sélectionné
+    const societes = (pr as any).societes as SocieteDTO[] | undefined;
+    const noms = (pr as any).societeNoms as Set<string> | string[] | undefined;
+    if (Array.isArray(societes) && societes.length) {
+      this.selectedSocietes = societes.map(s => ({...s}));
+      // Préparer les contacts arrays côté UI
+      this.selectedSocietes.forEach(s => this.ensureContactsArray(s));
+    } else if (noms) {
+      const arr = Array.isArray(noms) ? noms : Array.from(noms as any);
+      this.selectedSocietes = arr.map(n => ({ nom: n } as SocieteDTO));
+    } else {
+      this.selectedSocietes = [];
+    }
     this.editMode = true;
   }
 
@@ -425,7 +482,21 @@ export class ProjetComponent {
       });
     }
     
-    this.projetService.updateProjet(projetEnCoursDeMiseAJour.id!, projetEnCoursDeMiseAJour, 'body').subscribe({
+    // Injecter sociétés complètes si présentes
+    const payload: ProjetDTO = { ...projetEnCoursDeMiseAJour } as any;
+    if (this.selectedSocietes.length > 0) {
+      (payload as any).societes = this.selectedSocietes.map(s => ({
+        id: s.id,
+        nom: s.nom,
+        adresse: s.adresse,
+        rcs: s.rcs,
+        contact: this.stringifyContacts(this.getContactsArray(s)),
+        tva: s.tva,
+      }));
+      delete (payload as any).societeNoms;
+    }
+
+    this.projetService.updateProjet(projetEnCoursDeMiseAJour.id!, payload, 'body').subscribe({
       next: async (updated) => {
         console.log('✅ Projet mis à jour:', updated);
         console.log('🔍 projetEstActive:', projetEstActive, 'projetEnCoursDeMiseAJour:', projetEnCoursDeMiseAJour);
@@ -619,9 +690,7 @@ export class ProjetComponent {
   onSocieteSearchInput(): void {
     const search = this.societeSearchInput.trim().toLowerCase();
     if (search) {
-      this.filteredSocietes = this.allSocietes.filter(s =>
-        s.nom.toLowerCase().includes(search)
-      );
+      this.filteredSocietes = this.allSocietes.filter(s => s.nom?.toLowerCase().includes(search));
       this.showSocieteDropdown = true;
     } else {
       this.filteredSocietes = [];
@@ -629,29 +698,100 @@ export class ProjetComponent {
     }
   }
 
-  selectSociete(societe: any): void {
-    if (!this.selectedSocietes.includes(societe.nom)) {
-      this.selectedSocietes.push(societe.nom);
+  selectSociete(societe: SocieteDTO): void {
+    if (!this.selectedSocietes.find(s => s.nom === societe.nom)) {
+      const copy = { ...societe };
+      this.ensureContactsArray(copy);
+      this.selectedSocietes.push(copy);
     }
     this.societeSearchInput = '';
     this.filteredSocietes = [];
     this.showSocieteDropdown = false;
   }
 
-  removeSociete(societe: string): void {
-    this.selectedSocietes = this.selectedSocietes.filter(s => s !== societe);
+  removeSociete(nom: string): void {
+    this.selectedSocietes = this.selectedSocietes.filter(s => s.nom !== nom);
   }
 
   addSocieteFromSearch(): void {
     const nom = this.societeSearchInput.trim();
-    if (nom && !this.selectedSocietes.includes(nom)) {
-      this.selectedSocietes.push(nom);
+    if (!nom) return;
+    if (!this.selectedSocietes.find(s => s.nom === nom)) {
+      this.newSociete = { nom, adresse: '', rcs: '', contact: '', tva: '' };
+      this.newSocieteContacts = [];
+      this.showNewSocieteForm = true;
     }
     this.societeSearchInput = '';
     this.filteredSocietes = [];
     this.showSocieteDropdown = false;
   }
 
+  // Gestion contacts: convertir string JSON <-> tableau
+  private ensureContactsArray(s: SocieteDTO & { _contacts?: string[] }): void {
+    if ((s as any)._contacts) return;
+    (s as any)._contacts = this.parseContacts(s.contact);
+  }
+
+  getContactsArray(s: SocieteDTO & { _contacts?: string[] }): string[] {
+    if (!(s as any)._contacts) this.ensureContactsArray(s);
+    return (s as any)._contacts as string[];
+  }
+
+  addContactToSociete(s: SocieteDTO & { _contacts?: string[] }, phone: string = ''): void {
+    const arr = this.getContactsArray(s);
+    arr.push(phone);
+  }
+
+  removeContactFromSociete(s: SocieteDTO & { _contacts?: string[] }, idx: number): void {
+    const arr = this.getContactsArray(s);
+    if (idx >= 0 && idx < arr.length) arr.splice(idx, 1);
+  }
+
+  parseContacts(contact?: string): string[] {
+    if (!contact) return [];
+    try {
+      const val = JSON.parse(contact);
+      return Array.isArray(val) ? val.map(String) : (typeof val === 'string' ? [val] : []);
+    } catch {
+      // fallback: split by comma
+      if (contact.includes(',')) return contact.split(',').map(s => s.trim()).filter(Boolean);
+      return [contact];
+    }
+  }
+
+  stringifyContacts(arr: string[]): string {
+    return JSON.stringify((arr || []).map(s => s.trim()).filter(Boolean));
+  }
+
+  // Création rapide: confirmer/cancel
+  confirmAddNewSociete(): void {
+    const nom = (this.newSociete.nom || '').trim();
+    if (!nom) return;
+    const copy: any = { ...this.newSociete } as any;
+    copy._contacts = [...this.newSocieteContacts];
+    copy.contact = this.stringifyContacts(copy._contacts);
+    this.selectedSocietes.push(copy);
+    this.newSociete = { nom: '', adresse: '', rcs: '', contact: '', tva: '' };
+    this.newSocieteContacts = [];
+    this.showNewSocieteForm = false;
+  }
+
+  cancelAddNewSociete(): void {
+    this.showNewSocieteForm = false;
+  }
+
+  // TrackBy pour éviter la perte de focus dans les inputs
+  trackByIndex(index: number, item: any): number {
+    return index;
+  }
+
+  // Helper pour UI: récupérer les noms des sociétés d'un projet
+  getSocieteNames(pr: ProjetDTO): string[] {
+    const societes = (pr as any).societes as SocieteDTO[] | undefined;
+    if (Array.isArray(societes) && societes.length) return societes.map(s => s.nom);
+    const noms = (pr as any).societeNoms as Set<string> | string[] | undefined;
+    return noms ? (Array.isArray(noms) ? noms : Array.from(noms as any)) : [];
+  }
   // Méthode pour ouvrir le modal de confirmation de suppression
   openDeleteConfirmModal(projet: ProjetDTO): void {
     this.selectedProjet = projet;

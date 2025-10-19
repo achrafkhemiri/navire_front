@@ -27,7 +27,7 @@ export class DepotComponent {
   contextProjet: any = null;
   breadcrumbItems: BreadcrumbItem[] = [];
   selectedDepot: DepotDTO | null = null;
-  dialogDepot: DepotDTO = { nom: '' };
+  dialogDepot: DepotDTO = { nom: '', adresse: '', mf: '' };
   editMode: boolean = false;
   error: string = '';
   isSidebarOpen: boolean = true;
@@ -191,7 +191,7 @@ export class DepotComponent {
   }
 
   openAddDialog() {
-    this.dialogDepot = { nom: '' };
+    this.dialogDepot = { nom: '', adresse: '', mf: '' };
     this.selectedExistingDepot = null;
     this.showAddDialog = true;
     this.editMode = false;
@@ -254,6 +254,8 @@ export class DepotComponent {
   selectSuggestion(depot: DepotDTO) {
     this.selectedExistingDepot = depot;
     this.dialogDepot.nom = depot.nom || '';
+    this.dialogDepot.adresse = depot.adresse || '';
+    this.dialogDepot.mf = depot.mf || '';
     this.showSuggestions = false;
     this.filteredSuggestions = [];
   }
@@ -267,10 +269,16 @@ export class DepotComponent {
   }
 
   selectDepot(dep: DepotDTO) {
-    this.dialogDepot = { ...dep };
+    this.dialogDepot = { 
+      id: dep.id,
+      nom: dep.nom,
+      adresse: dep.adresse,
+      mf: dep.mf,
+      projetId: dep.projetId
+    };
     this.selectedDepot = dep;
     this.editMode = true;
-    this.showAddDialog = false;
+    this.showAddDialog = true;
   }
 
   addDialogDepot() {
@@ -306,6 +314,9 @@ export class DepotComponent {
     }
 
     console.log('Création nouveau depot - payload:', this.dialogDepot);
+    console.log('dialogDepot.nom:', this.dialogDepot.nom);
+    console.log('dialogDepot.adresse:', this.dialogDepot.adresse);
+    console.log('dialogDepot.mf:', this.dialogDepot.mf);
 
     this.depotService.createDepot(this.dialogDepot, 'body').subscribe({
       next: (created) => {
@@ -363,7 +374,7 @@ export class DepotComponent {
           }
         }
 
-        this.dialogDepot = { nom: '' };
+        this.dialogDepot = { nom: '', adresse: '', mf: '' };
         this.closeDialog();
       },
       error: (err) => {
@@ -375,9 +386,9 @@ export class DepotComponent {
 
   updateDialogDepot() {
     if (!this.dialogDepot?.id) return;
-    this.depotService.createDepot(this.dialogDepot, 'body').subscribe({
+    this.depotService.updateDepot(this.dialogDepot.id, this.dialogDepot, 'body').subscribe({
       next: () => {
-        this.dialogDepot = { nom: '' };
+        this.dialogDepot = { nom: '', adresse: '', mf: '' };
         this.selectedDepot = null;
         this.editMode = false;
         this.loadDepots();
@@ -390,7 +401,7 @@ export class DepotComponent {
   closeDialog() {
     this.showAddDialog = false;
     this.editMode = false;
-    this.dialogDepot = { nom: '' };
+    this.dialogDepot = { nom: '', adresse: '', mf: '' };
     this.selectedDepot = null;
     this.error = '';
   }

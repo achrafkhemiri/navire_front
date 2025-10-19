@@ -12,13 +12,13 @@ export class ClientsComponent {
   filteredClients: ClientDTO[] = [];
   paginatedClients: ClientDTO[] = [];
   selectedClient: ClientDTO | null = null;
-  newClient: ClientDTO = { nom: '', numero: '' };
+  newClient: ClientDTO = { nom: '', numero: '', adresse: '', mf: '' };
   editMode: boolean = false;
   error: string = '';
   isSidebarOpen: boolean = true;
   showAddClient: boolean = false;
   clientFilter: string = '';
-  dialogClient: ClientDTO = { nom: '', numero: '' };
+  dialogClient: ClientDTO = { nom: '', numero: '', adresse: '', mf: '' };
   
   // Pagination
   currentPage: number = 1;
@@ -112,6 +112,14 @@ export class ClientsComponent {
           aVal = a.numero ?? '';
           bVal = b.numero ?? '';
           break;
+        case 'adresse':
+          aVal = a.adresse ?? '';
+          bVal = b.adresse ?? '';
+          break;
+        case 'mf':
+          aVal = a.mf ?? '';
+          bVal = b.mf ?? '';
+          break;
         default:
           return 0;
       }
@@ -171,7 +179,7 @@ export class ClientsComponent {
   }
 
   addClient() {
-    this.dialogClient = { nom: '', numero: '' };
+    this.dialogClient = { nom: '', numero: '', adresse: '', mf: '' };
     this.showAddClient = true;
     this.editMode = false;
   }
@@ -182,7 +190,7 @@ export class ClientsComponent {
         next: () => {
           this.loadAllClients();
           this.showAddClient = false;
-          this.dialogClient = { nom: '', numero: '' };
+          this.dialogClient = { nom: '', numero: '', adresse: '', mf: '' };
         },
         error: (err) => {
           this.error = 'Erreur lors de la création du client';
@@ -193,7 +201,14 @@ export class ClientsComponent {
   }
 
   editClient(client: ClientDTO) {
-    this.dialogClient = { ...client };
+    this.dialogClient = {
+      id: client.id,
+      nom: client.nom,
+      numero: client.numero,
+      adresse: client.adresse,
+      mf: client.mf,
+      quantitesAutoriseesParProjet: client.quantitesAutoriseesParProjet
+    };
     this.editMode = true;
     this.showAddClient = true;
   }

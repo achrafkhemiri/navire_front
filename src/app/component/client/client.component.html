@@ -151,6 +151,26 @@
 								}"></i>
 							</div>
 						</th>
+						<th (click)="sortBy('adresse')" class="sortable">
+							<div class="th-content">
+								<span>Adresse</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-up': sortColumn === 'adresse' && sortDirection === 'asc',
+									'bi-chevron-down': sortColumn === 'adresse' && sortDirection === 'desc',
+									'bi-chevron-expand': sortColumn !== 'adresse'
+								}"></i>
+							</div>
+						</th>
+						<th (click)="sortBy('mf')" class="sortable">
+							<div class="th-content">
+								<span>Matricule Fiscal</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-up': sortColumn === 'mf' && sortDirection === 'asc',
+									'bi-chevron-down': sortColumn === 'mf' && sortDirection === 'desc',
+									'bi-chevron-expand': sortColumn !== 'mf'
+								}"></i>
+							</div>
+						</th>
 						<th *ngIf="projetActifId" (click)="sortBy('quantite')" class="sortable">
 							<div class="th-content">
 								<span>Quantité autorisée</span>
@@ -193,6 +213,14 @@
 							</div>
 						</td>
 						<td class="numero-cell">{{ cl.numero }}</td>
+						<td>
+							<i class="bi bi-geo-alt" style="margin-right: 8px; color: #10b981;"></i>
+							{{ cl.adresse || '-' }}
+						</td>
+						<td>
+							<i class="bi bi-file-text" style="margin-right: 8px; color: #f59e0b;"></i>
+							{{ cl.mf || '-' }}
+						</td>
 						<td *ngIf="projetActifId" class="quantite-cell">
 							<span class="badge">{{ getQuantitePourProjet(cl) || 0 }}</span>
 						</td>
@@ -313,6 +341,32 @@
 									placeholder="Numéro du client" 
 									class="table-filter"
 									[disabled]="editMode"
+									style="width: 100%;" 
+								/>
+							</div>
+							
+							<!-- Champ Adresse -->
+							<div style="margin-bottom: 16px;">
+								<label style="display: block; margin-bottom: 8px; font-weight: 600; color: #475569; font-size: 13px;">
+									<i class="bi bi-geo-alt"></i> Adresse
+								</label>
+								<input 
+									[(ngModel)]="dialogClient.adresse" 
+									placeholder="Adresse du client" 
+									class="table-filter"
+									style="width: 100%;" 
+								/>
+							</div>
+							
+							<!-- Champ Matricule Fiscal -->
+							<div style="margin-bottom: 16px;">
+								<label style="display: block; margin-bottom: 8px; font-weight: 600; color: #475569; font-size: 13px;">
+									<i class="bi bi-file-text"></i> Matricule Fiscal (MF)
+								</label>
+								<input 
+									[(ngModel)]="dialogClient.mf" 
+									placeholder="Matricule fiscal" 
+									class="table-filter"
 									style="width: 100%;" 
 								/>
 							</div>

@@ -109,6 +109,26 @@
                 }"></i>
               </div>
             </th>
+            <th class="sortable" (click)="sortBy('adresse')">
+              <div class="th-content">
+                <span>Adresse</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'adresse' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'adresse' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'adresse'
+                }"></i>
+              </div>
+            </th>
+            <th class="sortable" (click)="sortBy('mf')">
+              <div class="th-content">
+                <span>Matricule Fiscal</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'mf' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'mf' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'mf'
+                }"></i>
+              </div>
+            </th>
             <th class="text-center quantity-header">
               <div class="th-content">
                 <i class="bi bi-box-seam-fill"></i>
@@ -123,6 +143,14 @@
             <td>
               <i class="bi bi-box-seam" style="margin-right: 8px; color: #6366f1;"></i>
               {{ dep.nom }}
+            </td>
+            <td>
+              <i class="bi bi-geo-alt" style="margin-right: 8px; color: #10b981;"></i>
+              {{ dep.adresse || '-' }}
+            </td>
+            <td>
+              <i class="bi bi-file-text" style="margin-right: 8px; color: #f59e0b;"></i>
+              {{ dep.mf || '-' }}
             </td>
             <td class="text-center">
               <span class="quantity-badge">
@@ -141,7 +169,7 @@
             </td>
           </tr>
           <tr *ngIf="paginatedDepots.length === 0" class="no-data-row">
-            <td colspan="3">
+            <td colspan="5">
               <div class="no-data">
                 <i class="bi bi-inbox"></i>
                 <p *ngIf="!isProjetActif()">Aucun dépôt trouvé</p>
@@ -227,6 +255,32 @@
               <i class="bi bi-plus-circle suggestion-icon-return" style="color: #64748b; font-size: 16px;"></i>
             </div>
           </div>
+        </div>
+        
+        <!-- Champ Adresse -->
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #475569; font-size: 13px;">
+            <i class="bi bi-geo-alt" style="margin-right: 6px;"></i>
+            Adresse
+          </label>
+          <input 
+            [(ngModel)]="dialogDepot.adresse" 
+            placeholder="Adresse du dépôt..." 
+            style="width: 100%;" 
+          />
+        </div>
+        
+        <!-- Champ Matricule Fiscal -->
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #475569; font-size: 13px;">
+            <i class="bi bi-file-text" style="margin-right: 6px;"></i>
+            Matricule Fiscal (MF)
+          </label>
+          <input 
+            [(ngModel)]="dialogDepot.mf" 
+            placeholder="Matricule fiscal..." 
+            style="width: 100%;" 
+          />
         </div>
         
         <div class="dialog-actions">

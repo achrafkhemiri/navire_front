@@ -12,7 +12,7 @@ export class DepotsComponent {
   filteredDepots: DepotDTO[] = [];
   paginatedDepots: DepotDTO[] = [];
   selectedDepot: DepotDTO | null = null;
-  dialogDepot: DepotDTO = { nom: '' };
+  dialogDepot: DepotDTO = { nom: '', adresse: '', mf: '' };
   editMode: boolean = false;
   error: string = '';
   isSidebarOpen: boolean = true;
@@ -108,6 +108,14 @@ export class DepotsComponent {
           aVal = a.nom ?? '';
           bVal = b.nom ?? '';
           break;
+        case 'adresse':
+          aVal = a.adresse ?? '';
+          bVal = b.adresse ?? '';
+          break;
+        case 'mf':
+          aVal = a.mf ?? '';
+          bVal = b.mf ?? '';
+          break;
         default:
           return 0;
       }
@@ -162,7 +170,7 @@ export class DepotsComponent {
   }
 
   openAddDialog() {
-    this.dialogDepot = { nom: '' };
+    this.dialogDepot = { nom: '', adresse: '', mf: '' };
     this.showAddDialog = true;
     this.editMode = false;
   }
@@ -173,7 +181,7 @@ export class DepotsComponent {
         next: () => {
           this.loadAllDepots();
           this.showAddDialog = false;
-          this.dialogDepot = { nom: '' };
+          this.dialogDepot = { nom: '', adresse: '', mf: '' };
         },
         error: (err) => {
           this.error = 'Erreur lors de la création du dépôt';
@@ -184,19 +192,26 @@ export class DepotsComponent {
   }
 
   editDepot(depot: DepotDTO) {
-    this.selectedDepot = { ...depot };
-    this.dialogDepot = { ...depot };
+    this.selectedDepot = depot;
+    this.dialogDepot = { 
+      id: depot.id,
+      nom: depot.nom,
+      adresse: depot.adresse,
+      mf: depot.mf,
+      projetId: depot.projetId
+    };
     this.editMode = true;
     this.showAddDialog = true;
   }
 
   updateDepot() {
-    if (this.selectedDepot && this.selectedDepot.id) {
-      this.depotService.updateDepot(this.selectedDepot.id, this.selectedDepot).subscribe({
+    if (this.dialogDepot && this.dialogDepot.id) {
+      this.depotService.updateDepot(this.dialogDepot.id, this.dialogDepot).subscribe({
         next: () => {
           this.loadAllDepots();
           this.showAddDialog = false;
           this.selectedDepot = null;
+          this.dialogDepot = { nom: '', adresse: '', mf: '' };
           this.editMode = false;
         },
         error: (err) => {
@@ -224,6 +239,7 @@ export class DepotsComponent {
   cancel() {
     this.showAddDialog = false;
     this.selectedDepot = null;
+    this.dialogDepot = { nom: '', adresse: '', mf: '' };
     this.editMode = false;
   }
 }

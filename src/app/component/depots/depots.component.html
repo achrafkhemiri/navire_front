@@ -58,6 +58,26 @@
 								}"></i>
 							</div>
 						</th>
+						<th class="sortable" (click)="sortBy('adresse')">
+							<div class="th-content">
+								<span>Adresse</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-down': sortColumn === 'adresse' && sortDirection === 'desc',
+									'bi-chevron-up': sortColumn === 'adresse' && sortDirection === 'asc',
+									'bi-chevron-expand': sortColumn !== 'adresse'
+								}"></i>
+							</div>
+						</th>
+						<th class="sortable" (click)="sortBy('mf')">
+							<div class="th-content">
+								<span>Matricule Fiscal</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-down': sortColumn === 'mf' && sortDirection === 'desc',
+									'bi-chevron-up': sortColumn === 'mf' && sortDirection === 'asc',
+									'bi-chevron-expand': sortColumn !== 'mf'
+								}"></i>
+							</div>
+						</th>
 						<th class="actions-header text-center">Actions</th>
 					</tr>
 				</thead>
@@ -66,6 +86,14 @@
 						<td>
 							<i class="bi bi-box-seam" style="margin-right: 8px; color: #6366f1;"></i>
 							{{ dep.nom }}
+						</td>
+						<td>
+							<i class="bi bi-geo-alt" style="margin-right: 8px; color: #10b981;"></i>
+							{{ dep.adresse || '-' }}
+						</td>
+						<td>
+							<i class="bi bi-file-text" style="margin-right: 8px; color: #f59e0b;"></i>
+							{{ dep.mf || '-' }}
 						</td>
 						<td class="actions-cell">
 							<button class="action-btn edit-btn" (click)="editDepot(dep)" title="Modifier">
@@ -77,7 +105,7 @@
 						</td>
 					</tr>
 					<tr *ngIf="paginatedDepots.length === 0" class="no-data-row">
-						<td colspan="2">
+						<td colspan="4">
 							<div class="no-data">
 								<i class="bi bi-inbox"></i>
 								<p>Aucun dépôt trouvé</p>
@@ -124,6 +152,14 @@
 				<div class="form-group">
 					<label for="nom">Nom:</label>
 					<input type="text" id="nom" [(ngModel)]="dialogDepot.nom" name="nom" required />
+				</div>
+				<div class="form-group">
+					<label for="adresse">Adresse:</label>
+					<input type="text" id="adresse" [(ngModel)]="dialogDepot.adresse" name="adresse" />
+				</div>
+				<div class="form-group">
+					<label for="mf">Matricule Fiscal (MF):</label>
+					<input type="text" id="mf" [(ngModel)]="dialogDepot.mf" name="mf" />
 				</div>
 				<div class="dialog-actions">
 					<button type="button" (click)="cancel()">Annuler</button>
