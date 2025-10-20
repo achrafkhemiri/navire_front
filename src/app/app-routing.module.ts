@@ -22,6 +22,7 @@ import { ClientsComponent } from './component/clients/clients.component';
 import { DepotsComponent } from './component/depots/depots.component';
 import { NotificationsComponent } from './component/notifications/notifications.component';
 import { RecapComponent } from './component/recap/recap.component';
+import { RecapDepotComponent } from './component/recap-depot/recap-depot.component';
 import { DeclarationComponent } from './component/declaration/declaration.component';
 
 // Importation des guards
@@ -35,7 +36,8 @@ const routes: Routes = [
   
   // Routes protégées - nécessitent une authentification
   { path: 'projet-list', component: ProjetListComponent, canActivate: [AuthGuard] },
-  { path: '', component: HomeComponent, canActivate: [AuthGuard] },
+  { path: 'home', component: HomeComponent, canActivate: [AuthGuard] },
+  { path: '', redirectTo: '/login', pathMatch: 'full' }, // Page par défaut = login
   { path: 'etat-generale', component: EtatGeneraleComponent, canActivate: [AuthGuard] },
   { path: 'etat-vente', component: EtatVenteComponent, canActivate: [AuthGuard] },
   { path: 'recap-vente', component: RecapVenteComponent, canActivate: [AuthGuard] },
@@ -51,10 +53,12 @@ const routes: Routes = [
   { path: 'projet/:id/voyages', component: VoyageComponent, canActivate: [AuthGuard] },
   { path: 'projet/:id/chargements', component: ChargementComponent, canActivate: [AuthGuard] },
   { path: 'projet/:id/recap', component: RecapComponent, canActivate: [AuthGuard] },
+  { path: 'projet/:id/recap-depot', component: RecapDepotComponent, canActivate: [AuthGuard] },
   { path: 'voyage', component: VoyageComponent, canActivate: [AuthGuard] },
   { path: 'chargement', component: ChargementComponent, canActivate: [AuthGuard] },
   { path: 'dechargement', component: DechargementComponent, canActivate: [AuthGuard] },
   { path: 'recap', component: RecapComponent, canActivate: [AuthGuard] },
+  { path: 'recap-depot', component: RecapDepotComponent, canActivate: [AuthGuard] },
   { path: 'projet-client', component: ProjetClientComponent, canActivate: [AuthGuard] },
   { path: 'notifications', component: NotificationsComponent, canActivate: [AuthGuard] },
   

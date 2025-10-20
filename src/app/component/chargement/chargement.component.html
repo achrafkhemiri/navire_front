@@ -42,10 +42,6 @@
         </div>
       </div>
       <div class="page-actions">
-        <button class="action-button export-btn" (click)="exportToExcel()">
-          <i class="bi bi-file-earmark-excel"></i>
-          <span>Exporter</span>
-        </button>
         <button 
           class="action-button add-btn" 
           (click)="openAddDialog()"
@@ -81,33 +77,6 @@
         </button>
         <button 
           class="filter-btn" 
-          [class.active]="activeFilter === 'camion'"
-          (click)="setFilter('camion')"
-        >
-          <i class="bi bi-truck"></i>
-          <span>Par Matricule Camion</span>
-          <span class="badge" *ngIf="getFilterCount('camion') > 0">{{ getFilterCount('camion') }}</span>
-        </button>
-        <button 
-          class="filter-btn" 
-          [class.active]="activeFilter === 'chauffeur'"
-          (click)="setFilter('chauffeur')"
-        >
-          <i class="bi bi-person-badge"></i>
-          <span>Par Chauffeur</span>
-          <span class="badge" *ngIf="getFilterCount('chauffeur') > 0">{{ getFilterCount('chauffeur') }}</span>
-        </button>
-        <button 
-          class="filter-btn" 
-          [class.active]="activeFilter === 'societe'"
-          (click)="setFilter('societe')"
-        >
-          <i class="bi bi-building"></i>
-          <span>Par Transporteur</span>
-          <span class="badge" *ngIf="getFilterCount('societe') > 0">{{ getFilterCount('societe') }}</span>
-        </button>
-        <button 
-          class="filter-btn" 
           [class.active]="activeFilter === 'societeP'"
           (click)="setFilter('societeP')"
         >
@@ -120,77 +89,49 @@
       <!-- Date Filter -->
       <div *ngIf="activeFilter === 'date'" class="filter-details" style="margin-top: 16px; padding: 16px; background: #dbeafe; border-radius: 12px; border-left: 4px solid #3b82f6;">
         <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b; font-size: 14px;">
-          <i class="bi bi-calendar-event"></i> Sélectionner une date
+          <i class="bi bi-calendar-event"></i> Sélectionner une plage de dates
         </label>
-        <input 
-          type="date" 
-          [(ngModel)]="selectedDate" 
-          (change)="applyFilter()"
-          [max]="today"
-          style="width: 100%; max-width: 300px; padding: 10px 14px; border: 2px solid #93c5fd; border-radius: 8px; font-size: 14px;"
-        />
-        <div style="margin-top: 12px; padding: 10px; background: #eff6ff; border-radius: 8px; font-size: 12px; color: #1e40af;">
-          Journée de travail: de 7h00 du jour sélectionné à 6h00 le lendemain
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 200px;">
+            <label style="display: block; margin-bottom: 6px; font-size: 12px; color: #64748b; font-weight: 500;">
+              Date début
+            </label>
+            <input 
+              type="date" 
+              [(ngModel)]="dateDebut" 
+              (change)="applyFilter()"
+              [max]="today"
+              style="width: 100%; padding: 10px 14px; border: 2px solid #93c5fd; border-radius: 8px; font-size: 14px;"
+            />
+          </div>
+          <div style="flex: 1; min-width: 200px;">
+            <label style="display: block; margin-bottom: 6px; font-size: 12px; color: #64748b; font-weight: 500;">
+              Date fin
+            </label>
+            <input 
+              type="date" 
+              [(ngModel)]="dateFin" 
+              (change)="applyFilter()"
+              [max]="today"
+              style="width: 100%; padding: 10px 14px; border: 2px solid #93c5fd; border-radius: 8px; font-size: 14px;"
+            />
+          </div>
         </div>
-        <button class="btn btn-link" style="margin-left: 8px; color: #1d4ed8;" (click)="clearFilter('date')">
-          Effacer
-        </button>
-      </div>
-
-      <!-- Camion Filter -->
-      <div *ngIf="activeFilter === 'camion'" class="filter-details" style="margin-top: 16px; padding: 16px; background: #fef3c7; border-radius: 12px; border-left: 4px solid #f59e0b;">
-        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b; font-size: 14px;">
-          <i class="bi bi-truck"></i> Sélectionner un camion
-        </label>
-        <select 
-          [(ngModel)]="selectedCamionId" 
-          (change)="applyFilter()"
-          style="width: 100%; max-width: 400px; padding: 10px 14px; border: 2px solid #fcd34d; border-radius: 8px; font-size: 14px; background: white;">
-          <option [ngValue]="null">-- Tous les camions --</option>
-          <option *ngFor="let camion of camions" [ngValue]="camion.id">
-            {{ camion.matricule }} 
-          </option>
-        </select>
-        <button class="btn btn-link" style="margin-left: 8px; color: #b45309;" (click)="clearFilter('camion')">
-          Effacer
-        </button>
-      </div>
-
-      <!-- Chauffeur Filter -->
-      <div *ngIf="activeFilter === 'chauffeur'" class="filter-details" style="margin-top: 16px; padding: 16px; background: #e0e7ff; border-radius: 12px; border-left: 4px solid #6366f1;">
-        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b; font-size: 14px;">
-          <i class="bi bi-person-badge-fill"></i> Sélectionner un chauffeur
-        </label>
-        <select 
-          [(ngModel)]="selectedChauffeurId" 
-          (change)="applyFilter()"
-          style="width: 100%; max-width: 400px; padding: 10px 14px; border: 2px solid #c7d2fe; border-radius: 8px; font-size: 14px; background: white;">
-          <option [ngValue]="null">-- Tous les chauffeurs --</option>
-          <option *ngFor="let chauffeur of chauffeurs" [ngValue]="chauffeur.id">
-            {{ chauffeur.nom }}
-          </option>
-        </select>
-        <button class="btn btn-link" style="margin-left: 8px; color: #4f46e5;" (click)="clearFilter('chauffeur')">
-          Effacer
-        </button>
-      </div>
-
-      <!-- Société Filter -->
-      <div *ngIf="activeFilter === 'societe'" class="filter-details" style="margin-top: 16px; padding: 16px; background: #fce7f3; border-radius: 12px; border-left: 4px solid #ec4899;">
-        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b; font-size: 14px;">
-          <i class="bi bi-building-fill"></i> Sélectionner un Transporteur
-        </label>
-        <select 
-          [(ngModel)]="selectedSociete" 
-          (change)="applyFilter()"
-          style="width: 100%; max-width: 400px; padding: 10px 14px; border: 2px solid #fbcfe8; border-radius: 8px; font-size: 14px; background: white;">
-          <option [ngValue]="null">-- Toutes les sociétés --</option>
-          <option *ngFor="let societe of allSocietes" [ngValue]="societe">
-            {{ societe }}
-          </option>
-        </select>
-        <button class="btn btn-link" style="margin-left: 8px; color: #be185d;" (click)="clearFilter('societe')">
-          Effacer
+        <div *ngIf="dateDebut || dateFin" style="margin-top: 12px; padding: 12px; background: #eff6ff; border-radius: 8px; display: flex; align-items: center; gap: 8px;">
+          <i class="bi bi-info-circle-fill" style="color: #3b82f6; font-size: 16px; flex-shrink: 0;"></i>
+          <div style="font-size: 13px; color: #1e40af; line-height: 1.4;">
+            <strong>Journée de travail :</strong> Les chargements incluent ceux effectués de <strong>7h00</strong> le matin jusqu'à <strong>6h00</strong> le lendemain
+            <span *ngIf="dateDebut && dateFin">, du <strong>{{ dateDebut }}</strong> au <strong>{{ dateFin }}</strong></span>
+            <span *ngIf="dateDebut && !dateFin">, à partir du <strong>{{ dateDebut }}</strong></span>
+            <span *ngIf="!dateDebut && dateFin">, jusqu'au <strong>{{ dateFin }}</strong></span>
+          </div>
+        </div>
+        <button 
+          *ngIf="dateDebut || dateFin"
+          class="btn btn-link" 
+          style="margin-top: 8px; color: #1d4ed8;" 
+          (click)="clearFilter('date')">
+          <i class="bi bi-x-circle"></i> Effacer
         </button>
       </div>
 

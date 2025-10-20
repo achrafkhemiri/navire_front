@@ -8,17 +8,22 @@ import { ClientControllerService } from '../../api/api/clientController.service'
 import { DepotControllerService } from '../../api/api/depotController.service';
 import { ProjetControllerService } from '../../api/api/projetController.service';
 import { ProjetClientControllerService } from '../../api/api/projetClientController.service';
+import { DechargementControllerService } from '../../api/api/dechargementController.service';
 import { ChauffeurDTO } from '../../api/model/chauffeurDTO';
 import { CamionDTO } from '../../api/model/camionDTO';
 import { ClientDTO } from '../../api/model/clientDTO';
 import { DepotDTO } from '../../api/model/depotDTO';
 import { ProjetDTO } from '../../api/model/projetDTO';
 import { ProjetClientDTO } from '../../api/model/projetClientDTO';
+import { DechargementDTO } from '../../api/model/dechargementDTO';
 import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
 import { HttpClient } from '@angular/common/http';
 import { BASE_PATH } from '../../api/variables';
 import { ProjetActifService } from '../../service/projet-actif.service';
 import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { forkJoin } from 'rxjs';
 
 @Component({
   selector: 'app-voyage',
@@ -90,7 +95,8 @@ export class VoyageComponent {
   
   // Filtres
   activeFilter: 'all' | 'date' | 'client' | 'depot' | 'societeP' = 'all';
-  selectedDate: string | null = null;
+  dateDebut: string | null = null;
+  dateFin: string | null = null;
   selectedClientId: number | null = null;
   selectedDepotId: number | null = null;
   selectedSocieteP: string | null = null;
@@ -123,6 +129,7 @@ export class VoyageComponent {
     private depotService: DepotControllerService,
     private projetService: ProjetControllerService,
     private projetClientService: ProjetClientControllerService,
+    private dechargementService: DechargementControllerService,
     private projetActifService: ProjetActifService,
     private http: HttpClient,
     private route: ActivatedRoute,
@@ -164,8 +171,8 @@ export class VoyageComponent {
     this.loadProjets(); // charge aussi si pas de param route
     this.loadChauffeurs();
     this.loadCamions();
-    this.loadClients();
-    this.loadDepots();
+    // NE PAS appeler loadClients() et loadDepots() ici car ils seront appelés
+    // après que le projet actif soit défini (via reloadData() ou loadProjetDetails())
     this.loadProjetsClients();
     // Initialiser la date du jour au format yyyy-MM-dd
     this.today = this.getTodayString();
@@ -330,6 +337,9 @@ export class VoyageComponent {
     
     console.log(`📦 Chargement des dépôts du projet ${projetId}...`);
     
+    // Vider la liste des dépôts avant de charger les nouveaux
+    this.depots = [];
+    
     // Utiliser l'endpoint spécifique au projet avec le basePath correct
     const url = `${this.basePath}/api/projets/${projetId}/depots`;
     console.log(`🔗 URL: ${url}`);
@@ -337,7 +347,7 @@ export class VoyageComponent {
     this.http.get<DepotDTO[]>(url).subscribe({
       next: (data) => {
         this.depots = data;
-        console.log(`✅ ${this.depots.length} dépôt(s) chargé(s) pour le projet ${projetId}`);
+        console.log(`✅ ${this.depots.length} dépôt(s) chargé(s) pour le projet ${projetId}:`, this.depots.map(d => d.nom));
       },
       error: (err) => {
         console.error('❌ Erreur chargement dépôts:', err);
@@ -850,8 +860,9 @@ export class VoyageComponent {
             } else {
               this.projetActif = parsed;
             }
-            // Recharger les clients et projets-clients pour ce projet
+            // Recharger les clients, dépôts et projets-clients pour ce projet
             this.loadClients();
+            this.loadDepots();
             this.loadProjetsClients();
           } catch (e) {
             console.error('Erreur parsing projet:', e);
@@ -863,8 +874,9 @@ export class VoyageComponent {
           } else {
             this.projetActif = data;
           }
-          // Recharger les clients et projets-clients pour ce projet
+          // Recharger les clients, dépôts et projets-clients pour ce projet
           this.loadClients();
+          this.loadDepots();
           this.loadProjetsClients();
         }
       },
@@ -947,6 +959,15 @@ export class VoyageComponent {
   selectVoyage(vg: VoyageDTO) {
     this.dialogVoyage = { ...vg };
     
+    // Déterminer le type (client ou depot) basé sur les données
+    if (vg.clientId && vg.clientId > 0) {
+      this.dialogVoyage._type = 'client';
+    } else if (vg.depotId && vg.depotId > 0) {
+      this.dialogVoyage._type = 'depot';
+    } else {
+      this.dialogVoyage._type = 'client'; // Par défaut
+    }
+    
     // Convertir la date au format datetime-local si elle existe
     if (vg.date) {
       const dateStr = vg.date.toString();
@@ -982,6 +1003,19 @@ export class VoyageComponent {
     // Initialiser le champ de recherche de société avec la société actuelle
     if (vg.societe) {
       this.societeSearchInput = vg.societe;
+    }
+    
+    // Initialiser les champs de recherche client/depot
+    if (this.dialogVoyage._type === 'client' && vg.clientId) {
+      const client = this.clients.find(c => c.id === vg.clientId);
+      if (client) {
+        this.clientSearchInput = client.nom || '';
+      }
+    } else if (this.dialogVoyage._type === 'depot' && vg.depotId) {
+      const depot = this.depots.find(d => d.id === vg.depotId);
+      if (depot) {
+        this.depotSearchInput = depot.nom || '';
+      }
     }
 
     // s'assurer que la Société Projet est portée dans le dialogue
@@ -1113,11 +1147,39 @@ export class VoyageComponent {
   }
 
   async updateDialogVoyage() {
-    if (!this.dialogVoyage?.id) return;
+    if (!this.dialogVoyage?.id) {
+      this.error = "L'id du voyage à modifier est manquant.";
+      return;
+    }
+    
+    // Validation des champs obligatoires
+    if (!this.dialogVoyage.numBonLivraison) {
+      this.error = 'Le numéro de bon de livraison est obligatoire.';
+      return;
+    }
+    if (!this.dialogVoyage.numTicket) {
+      this.error = 'Le numéro de ticket est obligatoire.';
+      return;
+    }
+    if (!this.dialogVoyage.date) {
+      this.error = 'La date est obligatoire.';
+      return;
+    }
+
+    // Société Projet obligatoire
+    if (!this.dialogVoyage.societeP || !this.dialogVoyage.societeP.trim()) {
+      this.error = 'La Société Projet est obligatoire.';
+      return;
+    }
     
     // Vérification et création du chauffeur si nécessaire
     if (!this.dialogVoyage.chauffeurId && this.chauffeurSearchInput.trim() && this.chauffeurCinInput.trim()) {
       await this.createAndSelectChauffeur(this.chauffeurSearchInput, this.chauffeurCinInput);
+    }
+    
+    if (!this.dialogVoyage.chauffeurId) {
+      this.error = 'Le chauffeur est obligatoire.';
+      return;
     }
     
     // Vérification et création du camion si nécessaire
@@ -1125,20 +1187,80 @@ export class VoyageComponent {
       await this.createAndSelectCamion();
     }
     
-    const requiredFields = ['camionId', 'chauffeurId', 'clientId', 'depotId', 'projetId', 'userId', 'societeP'];
-    for (const field of requiredFields) {
-      if (this.dialogVoyage[field as keyof VoyageDTO] == null) {
-        this.error = `Le champ ${field} est obligatoire.`;
-        return;
-      }
-    }
-    console.log(this.dialogVoyage);
-    if (!this.dialogVoyage?.id) {
-      this.error = "L'id du voyage à modifier est manquant.";
+    if (!this.dialogVoyage.camionId) {
+      this.error = 'Le camion est obligatoire.';
       return;
     }
-    this.voyageService.updateVoyage(this.dialogVoyage.id, this.dialogVoyage, 'body').subscribe({
+    
+    // Validation du type (client OU depot, pas les deux)
+    if (!this.dialogVoyage._type) {
+      this.error = 'Veuillez sélectionner Client ou Dépôt.';
+      return;
+    }
+    if (this.dialogVoyage._type === 'client' && !this.dialogVoyage.clientId) {
+      this.error = 'Veuillez sélectionner un client.';
+      return;
+    }
+    if (this.dialogVoyage._type === 'depot' && !this.dialogVoyage.depotId) {
+      this.error = 'Veuillez sélectionner un dépôt.';
+      return;
+    }
+    
+    // Validation du poids
+    if (!this.validatePoids()) {
+      return;
+    }
+    
+    // Normalisation du payload comme dans addDialogVoyage
+    const payload: any = {
+      id: this.dialogVoyage.id,
+      numBonLivraison: this.dialogVoyage.numBonLivraison?.trim(),
+      numTicket: this.dialogVoyage.numTicket?.trim(),
+      reste: this.dialogVoyage.reste != null ? Number(this.dialogVoyage.reste) : 0,
+      date: this.dialogVoyage.date ? this.dialogVoyage.date : undefined,
+      societe: this.dialogVoyage.societe?.trim() || undefined,
+      societeP: this.dialogVoyage.societeP?.trim(),
+      poidsClient: undefined as number | undefined,
+      poidsDepot: undefined as number | undefined,
+      chauffeurId: this.dialogVoyage.chauffeurId,
+      camionId: this.dialogVoyage.camionId,
+      clientId: undefined as number | undefined,
+      depotId: undefined as number | undefined,
+      projetId: this.dialogVoyage.projetId,
+      userId: this.dialogVoyage.userId || 1
+    };
+
+    // Mutuelle exclusivité client/depot
+    if (this.dialogVoyage._type === 'client') {
+      payload.clientId = this.dialogVoyage.clientId!;
+      payload.depotId = undefined; // Forcer à undefined
+      if (this.dialogVoyage.poidsClient != null) {
+        payload.poidsClient = Number(this.dialogVoyage.poidsClient);
+      }
+      payload.poidsDepot = undefined; // Forcer à undefined
+    } else if (this.dialogVoyage._type === 'depot') {
+      payload.depotId = this.dialogVoyage.depotId!;
+      payload.clientId = undefined; // Forcer à undefined
+      if (this.dialogVoyage.poidsDepot != null) {
+        payload.poidsDepot = Number(this.dialogVoyage.poidsDepot);
+      }
+      payload.poidsClient = undefined; // Forcer à undefined
+    }
+
+    // Nettoyage: retirer les clés undefined
+    Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+
+    console.log('Payload voyage modification envoyé ->', payload);
+    
+    // Conserver les anciennes valeurs pour trouver le déchargement correspondant
+    const oldNumBonLivraison = this.selectedVoyage?.numBonLivraison;
+    const oldNumTicket = this.selectedVoyage?.numTicket;
+
+    this.voyageService.updateVoyage(this.dialogVoyage.id, payload, 'body').subscribe({
       next: () => {
+        // Synchroniser avec le déchargement lié en utilisant les anciennes valeurs pour la recherche
+        this.syncDechargementFromVoyage(this.dialogVoyage, oldNumBonLivraison, oldNumTicket);
+        
         this.dialogVoyage = { numBonLivraison: '', numTicket: '', reste: 0, date: '', poidsClient: 0, poidsDepot: 0, societe: '', societeP: undefined };
         this.selectedVoyage = null;
         this.editMode = false;
@@ -1162,6 +1284,128 @@ export class VoyageComponent {
     });
   }
 
+  // Synchroniser le déchargement quand le voyage est modifié
+  syncDechargementFromVoyage(voyage: VoyageDTO, oldNumBonLivraison?: string, oldNumTicket?: string): void {
+    console.log('🔄 Début synchronisation Voyage → Déchargement');
+    console.log('Voyage:', voyage);
+    
+    // Utiliser les anciennes valeurs si fournies, sinon les valeurs actuelles
+    const searchBonLivraison = oldNumBonLivraison || voyage.numBonLivraison;
+    const searchTicket = oldNumTicket || voyage.numTicket;
+    
+    if (!searchBonLivraison || !searchTicket) {
+      console.warn('⚠️ Synchronisation annulée: numBonLivraison ou numTicket manquant');
+      return;
+    }
+
+    console.log(`🔍 Recherche déchargement avec Bon: ${searchBonLivraison}, Ticket: ${searchTicket}`);
+    if (oldNumBonLivraison || oldNumTicket) {
+      console.log(`📝 Nouvelles valeurs: Bon: ${voyage.numBonLivraison}, Ticket: ${voyage.numTicket}`);
+    }
+
+    // Trouver le déchargement correspondant
+    this.dechargementService.getAllDechargements().subscribe({
+      next: (dechargements: any) => {
+        let dechargementsList: DechargementDTO[] = [];
+        
+        if (dechargements instanceof Blob) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              dechargementsList = JSON.parse(reader.result as string);
+              console.log(`📦 ${dechargementsList.length} déchargements chargés (Blob)`);
+              this.updateMatchingDechargement(dechargementsList, voyage, searchBonLivraison, searchTicket);
+            } catch (e) {
+              console.error('❌ Erreur parsing dechargements:', e);
+            }
+          };
+          reader.readAsText(dechargements);
+        } else {
+          dechargementsList = dechargements;
+          console.log(`📦 ${dechargementsList.length} déchargements chargés (JSON direct)`);
+          this.updateMatchingDechargement(dechargementsList, voyage, searchBonLivraison, searchTicket);
+        }
+      },
+      error: (err) => {
+        console.error('❌ Erreur récupération dechargements:', err);
+      }
+    });
+  }
+
+  updateMatchingDechargement(dechargements: DechargementDTO[], voyage: VoyageDTO, searchBonLivraison: string, searchTicket: string): void {
+    console.log('🔍 Recherche du déchargement correspondant parmi', dechargements.length, 'déchargements');
+    
+    const matchingDechargement = dechargements.find(d =>
+      d.numBonLivraison === searchBonLivraison && 
+      d.numTicket === searchTicket
+    );
+
+    if (!matchingDechargement) {
+      console.warn('⚠️ Aucun déchargement trouvé avec Bon:', searchBonLivraison, 'Ticket:', searchTicket);
+      return;
+    }
+
+    console.log('✅ Déchargement correspondant trouvé:', matchingDechargement);
+
+    if (!matchingDechargement.id) {
+      console.error('❌ Déchargement sans ID, impossible de mettre à jour');
+      return;
+    }
+
+    // Calculer les poids à partir du voyage
+    const poidsNet = (voyage.poidsClient || 0) + (voyage.poidsDepot || 0);
+    
+    // Synchroniser TOUS les champs communs
+    const updatedDechargement: DechargementDTO = {
+      ...matchingDechargement,
+      // Identifiants (obligatoires pour DechargementDTO)
+      chargementId: matchingDechargement.chargementId,
+      
+      // Numéros
+      numBonLivraison: voyage.numBonLivraison || matchingDechargement.numBonLivraison,
+      numTicket: voyage.numTicket || matchingDechargement.numTicket,
+      
+      // Date
+      dateDechargement: voyage.date || matchingDechargement.dateDechargement,
+      
+      // Client/Dépôt
+      clientId: voyage.clientId || matchingDechargement.clientId || 0,
+      depotId: voyage.depotId || matchingDechargement.depotId || 0,
+      
+      // Transporteur
+      societe: voyage.societe || matchingDechargement.societe,
+      
+      // Véhicule et chauffeur
+      camionId: voyage.camionId || matchingDechargement.camionId,
+      chauffeurId: voyage.chauffeurId || matchingDechargement.chauffeurId,
+      
+      // Projet
+      projetId: voyage.projetId || matchingDechargement.projetId,
+      
+      // Note: Les poids (poidComplet, poidCamionVide) ne sont pas synchronisés depuis le voyage
+      // car ils sont des mesures physiques spécifiques au déchargement
+    };
+
+    console.log('📝 Déchargement mis à jour:', updatedDechargement);
+
+    this.dechargementService.updateDechargement(matchingDechargement.id, updatedDechargement).subscribe({
+      next: () => {
+        console.log('✅ Déchargement synchronisé avec succès!');
+        console.log('🔄 Rechargement des déchargements recommandé');
+      },
+      error: (err) => {
+        console.error('❌ Erreur synchronisation déchargement:', err);
+        if (err.error instanceof Blob) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            console.error('Détails erreur:', reader.result);
+          };
+          reader.readAsText(err.error);
+        }
+      }
+    });
+  }
+
   closeDialog() {
     this.showAddDialog = false;
     this.editMode = false;
@@ -1177,8 +1421,11 @@ export class VoyageComponent {
 
   applyFilter() {
     // Ne pas permettre une date future
-    if (this.selectedDate && this.today && this.selectedDate > this.today) {
-      this.selectedDate = this.today;
+    if (this.dateDebut && this.today && this.dateDebut > this.today) {
+      this.dateDebut = this.today;
+    }
+    if (this.dateFin && this.today && this.dateFin > this.today) {
+      this.dateFin = this.today;
     }
     const filter = this.voyageFilter.trim().toLowerCase();
     let voyagesFiltrés = this.voyages;
@@ -1198,18 +1445,28 @@ export class VoyageComponent {
       );
     }
     
-    // Filtres complémentaires (intersection)
-    if (this.selectedDate) {
+    // Filtre par date avec journée de travail (7h00 → 6h00 lendemain)
+    if (this.dateDebut || this.dateFin) {
+      const startDate = this.dateDebut ? new Date(this.dateDebut + 'T00:00:00') : new Date('1900-01-01');
+      const endDate = this.dateFin ? new Date(this.dateFin + 'T00:00:00') : new Date();
+      
       voyagesFiltrés = voyagesFiltrés.filter(vg => {
         if (!vg.date) return false;
-        const selectedDateObj = new Date(this.selectedDate + 'T00:00:00');
-        const startWorkDay = new Date(selectedDateObj);
-        startWorkDay.setHours(7, 0, 0, 0);
-        const endWorkDay = new Date(selectedDateObj);
-        endWorkDay.setDate(endWorkDay.getDate() + 1);
-        endWorkDay.setHours(6, 0, 0, 0); // Fin de journée de travail à 6h du lendemain (exclusif)
         const voyageDateTime = new Date(vg.date);
-        return voyageDateTime >= startWorkDay && voyageDateTime < endWorkDay;
+        
+        // Vérifier si le voyage tombe dans l'une des journées de travail de la plage
+        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+          const workDayStart = new Date(d);
+          workDayStart.setHours(7, 0, 0, 0);
+          const workDayEnd = new Date(d);
+          workDayEnd.setDate(workDayEnd.getDate() + 1);
+          workDayEnd.setHours(6, 0, 0, 0);
+          
+          if (voyageDateTime >= workDayStart && voyageDateTime < workDayEnd) {
+            return true;
+          }
+        }
+        return false;
       });
     }
     if (this.selectedClientId) {
@@ -1242,14 +1499,22 @@ export class VoyageComponent {
     
     // Réinitialiser les filtres spécifiques quand on change de type
     if (filterType === 'all') {
-      this.selectedDate = null;
+      this.dateDebut = null;
+      this.dateFin = null;
       this.selectedClientId = null;
       this.selectedDepotId = null;
       this.selectedSocieteP = null;
     } else if (filterType === 'date') {
-      if (!this.selectedDate) {
-        this.selectedDate = new Date().toISOString().split('T')[0];
-      }
+      // Ne pas initialiser automatiquement les dates, laisser l'utilisateur choisir
+      // Les champs restent vides par défaut
+    } else if (filterType === 'depot') {
+      // Recharger les dépôts du projet actif pour s'assurer d'avoir les bonnes données
+      console.log('🔄 [Voyage] Rechargement des dépôts pour le filtre');
+      this.loadDepots();
+    } else if (filterType === 'client') {
+      // Recharger les clients du projet actif pour s'assurer d'avoir les bonnes données
+      console.log('🔄 [Voyage] Rechargement des clients pour le filtre');
+      this.loadClients();
     }
     
     this.applyFilter();
@@ -1290,7 +1555,8 @@ export class VoyageComponent {
   clearFilter(filterType: 'date' | 'client' | 'depot' | 'societeP') {
     switch (filterType) {
       case 'date':
-        this.selectedDate = null;
+        this.dateDebut = null;
+        this.dateFin = null;
         break;
       case 'client':
         this.selectedClientId = null;
@@ -1328,18 +1594,27 @@ export class VoyageComponent {
   getTotalWeightLabel(): string {
     if (this.activeFilter === 'all') {
       return 'Total des voyages';
-    } else if (this.activeFilter === 'date' && this.selectedDate) {
-      // Formater la date en français avec indication de la plage horaire
-      const date = new Date(this.selectedDate);
-      const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
-      const dateFormatted = date.toLocaleDateString('fr-FR', options);
-      
-      // Date du lendemain pour affichage
-      const nextDate = new Date(date);
-      nextDate.setDate(nextDate.getDate() + 1);
-      const nextDateFormatted = nextDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
-      
-      return `Total des voyages du ${dateFormatted} (7h) au ${nextDateFormatted} (7h)`;
+    } else if (this.activeFilter === 'date' && (this.dateDebut || this.dateFin)) {
+      // Formater la plage de dates
+      if (this.dateDebut && this.dateFin) {
+        const dateD = new Date(this.dateDebut);
+        const dateF = new Date(this.dateFin);
+        const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+        const dateDebutFormatted = dateD.toLocaleDateString('fr-FR', options);
+        const dateFinFormatted = dateF.toLocaleDateString('fr-FR', options);
+        return `Total des voyages du ${dateDebutFormatted} au ${dateFinFormatted} (7h00 → 6h00)`;
+      } else if (this.dateDebut) {
+        const dateD = new Date(this.dateDebut);
+        const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+        const dateDebutFormatted = dateD.toLocaleDateString('fr-FR', options);
+        return `Total des voyages à partir du ${dateDebutFormatted} (7h00 → 6h00)`;
+      } else if (this.dateFin) {
+        const dateF = new Date(this.dateFin);
+        const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+        const dateFinFormatted = dateF.toLocaleDateString('fr-FR', options);
+        return `Total des voyages jusqu'au ${dateFinFormatted} (7h00 → 6h00)`;
+      }
+      return 'Total des voyages par date';
     } else if (this.activeFilter === 'client' && this.selectedClientId) {
       const client = this.clients.find(c => c.id === this.selectedClientId);
       if (client) {
@@ -1660,15 +1935,157 @@ export class VoyageComponent {
     });
   }
 
+  // Méthodes helper pour récupérer les informations du projet
+  getNavire(voyage: VoyageDTO): string {
+    if (!voyage.projetId) return '-';
+    const projet = this.projets.find(p => p.id === voyage.projetId);
+    return projet?.nomNavire || '-';
+  }
+
+  getPort(voyage: VoyageDTO): string {
+    if (!voyage.projetId) return '-';
+    const projet = this.projets.find(p => p.id === voyage.projetId);
+    return projet?.port || '-';
+  }
+
+  getProduit(voyage: VoyageDTO): string {
+    if (!voyage.projetId) return '-';
+    const projet = this.projets.find(p => p.id === voyage.projetId);
+    return projet?.nomProduit || '-';
+  }
+
+  // Obtenir le label du filtre actif avec gestion des combinaisons
+  getActiveFilterLabel(): string {
+    const filters: string[] = [];
+    
+    // Vérifier tous les filtres actifs
+    if (this.dateDebut || this.dateFin) {
+      if (this.dateDebut && this.dateFin) {
+        filters.push(`Date: ${new Date(this.dateDebut).toLocaleDateString('fr-FR')} - ${new Date(this.dateFin).toLocaleDateString('fr-FR')}`);
+      } else if (this.dateDebut) {
+        filters.push(`Date: À partir du ${new Date(this.dateDebut).toLocaleDateString('fr-FR')}`);
+      } else if (this.dateFin) {
+        filters.push(`Date: Jusqu'au ${new Date(this.dateFin).toLocaleDateString('fr-FR')}`);
+      }
+    }
+    
+    if (this.selectedClientId) {
+      const client = this.clients.find(c => c.id === this.selectedClientId);
+      if (client) {
+        filters.push(`Client: ${client.nom}`);
+      }
+    }
+    
+    if (this.selectedDepotId) {
+      const depot = this.depots.find(d => d.id === this.selectedDepotId);
+      if (depot) {
+        filters.push(`Dépôt: ${depot.nom}`);
+      }
+    }
+    
+    if (this.selectedSocieteP) {
+      filters.push(`Société: ${this.selectedSocieteP}`);
+    }
+    
+    // Si aucun filtre n'est actif
+    if (filters.length === 0) {
+      return 'Tous les voyages';
+    }
+    
+    // Combiner les filtres
+    return filters.join(' et ');
+  }
+
   exportToExcel(): void {
-    // Préparer les données pour l'export
+    // Récupérer les informations uniques de navire, port et produit
+    const naviresSet = new Set<string>();
+    const portsSet = new Set<string>();
+    const produitsSet = new Set<string>();
+    
+    this.filteredVoyages.forEach(voyage => {
+      const navire = this.getNavire(voyage);
+      const port = this.getPort(voyage);
+      const produit = this.getProduit(voyage);
+      
+      if (navire && navire !== '-') naviresSet.add(navire);
+      if (port && port !== '-') portsSet.add(port);
+      if (produit && produit !== '-') produitsSet.add(produit);
+    });
+
+    const navires = Array.from(naviresSet).join(', ');
+    const ports = Array.from(portsSet).join(', ');
+    const produits = Array.from(produitsSet).join(', ');
+    const filterLabel = this.getActiveFilterLabel();
+
+    // Calculer les statistiques
+    const projet = this.contextProjet || this.projetActif;
+    const quantiteTotale = projet?.quantiteTotale || 0;
+    const nombreVoyages = this.filteredVoyages.length;
+    const totalVoyages = this.filteredVoyages.reduce((sum, v) => {
+      return sum + (v.poidsClient || 0) + (v.poidsDepot || 0);
+    }, 0);
+
+    // Créer le workbook
+    const wb: XLSX.WorkBook = XLSX.utils.book_new();
+    const ws: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
+
+    // Ajouter l'en-tête avec les informations
+    let currentRow = 0;
+    XLSX.utils.sheet_add_aoa(ws, [['LISTE DES VOYAGES']], { origin: { r: currentRow, c: 0 } });
+    ws['!merges'] = ws['!merges'] || [];
+    ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 12 } });
+    currentRow++;
+
+    if (navires) {
+      XLSX.utils.sheet_add_aoa(ws, [[`Navire: ${navires}`]], { origin: { r: currentRow, c: 0 } });
+      ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 12 } });
+      currentRow++;
+    }
+
+    if (ports) {
+      XLSX.utils.sheet_add_aoa(ws, [[`Port: ${ports}`]], { origin: { r: currentRow, c: 0 } });
+      ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 12 } });
+      currentRow++;
+    }
+
+    if (produits) {
+      XLSX.utils.sheet_add_aoa(ws, [[`Produit: ${produits}`]], { origin: { r: currentRow, c: 0 } });
+      ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 12 } });
+      currentRow++;
+    }
+
+    // Ajouter la quantité totale du projet
+    if (quantiteTotale > 0) {
+      XLSX.utils.sheet_add_aoa(ws, [[`Quantité Totale du Projet: ${quantiteTotale.toLocaleString('fr-FR')} kg`]], { origin: { r: currentRow, c: 0 } });
+      ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 12 } });
+      currentRow++;
+    }
+
+    // Ajouter le nombre de voyages
+    XLSX.utils.sheet_add_aoa(ws, [[`Nombre de Voyages: ${nombreVoyages}`]], { origin: { r: currentRow, c: 0 } });
+    ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 12 } });
+    currentRow++;
+
+    // Ajouter le total des voyages
+    XLSX.utils.sheet_add_aoa(ws, [[`Total des Voyages: ${totalVoyages.toLocaleString('fr-FR')} kg`]], { origin: { r: currentRow, c: 0 } });
+    ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 12 } });
+    currentRow++;
+
+    // Ajouter le type de filtre
+    XLSX.utils.sheet_add_aoa(ws, [[`Filtre: ${filterLabel}`]], { origin: { r: currentRow, c: 0 } });
+    ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 12 } });
+    currentRow++;
+
+    // Ajouter une ligne vide
+    currentRow++;
+
+    // Préparer les données pour l'export avec nouvelle structure
     const dataToExport = this.filteredVoyages.map(voyage => {
       // Trouver les noms plutôt que les IDs
       const chauffeur = this.chauffeurs.find(c => c.id === voyage.chauffeurId);
       const camion = this.camions.find(c => c.id === voyage.camionId);
       const client = this.clients.find(c => c.id === voyage.clientId);
       const depot = this.depots.find(d => d.id === voyage.depotId);
-      const projet = this.projets.find(p => p.id === voyage.projetId);
       
       return {
         'N° Bon de Livraison': voyage.numBonLivraison || '',
@@ -1676,20 +2093,64 @@ export class VoyageComponent {
         'Date': voyage.date ? this.formatDateTime(voyage.date) : '',
         'Chauffeur': chauffeur?.nom || '',
         'Camion': camion?.matricule || '',
-        'Société': voyage.societe || '',
-        'Société Projet': voyage.societeP || '',
+        'Transporteur': voyage.societe || '',
         'Dépôt': depot?.nom || '',
         'Poids Dépôt (kg)': voyage.poidsDepot || 0,
         'Client': client?.nom || '',
         'N° Client': client?.numero || '',
         'Poids Client (kg)': voyage.poidsClient || 0,
-        'Reste (kg)': voyage.reste || 0,
-        'Projet': projet?.societeNoms ? Array.from(projet.societeNoms).join(', ') : 'Aucune société'
+        'Reste (kg)': this.getResteForVoyage(voyage),
+        'Société': voyage.societeP || ''
       };
     });
 
-    // Créer une feuille de calcul
-    const worksheet: XLSX.WorkSheet = XLSX.utils.json_to_sheet(dataToExport);
+    const headerRow = currentRow;
+    
+    // Ajouter les données
+    XLSX.utils.sheet_add_json(ws, dataToExport, { origin: { r: currentRow, c: 0 } });
+
+    // Appliquer les couleurs aux cellules
+    // Colonnes: 0=BL, 1=Ticket, 2=Date, 3=Chauffeur, 4=Camion, 5=Transporteur
+    // 6=Dépôt, 7=Poids Dépôt, 8=Client, 9=N° Client, 10=Poids Client, 11=Reste, 12=Société
+    
+    const dataStartRow = headerRow + 1;
+    
+    // Couleur pour le dépôt (jaune/orange) - colonnes 6 et 7
+    const depotFill = {
+      fgColor: { rgb: "FEF3C7" } // Jaune clair
+    };
+    
+    // Couleur pour le client (vert clair) - colonnes 8, 9 et 10
+    const clientFill = {
+      fgColor: { rgb: "D1FAE5" } // Vert clair
+    };
+    
+    this.filteredVoyages.forEach((voyage, index) => {
+      const rowNum = dataStartRow + index;
+      
+      // Appliquer la couleur aux colonnes Dépôt (col 6) et Poids Dépôt (col 7)
+      const depotCell = XLSX.utils.encode_cell({ r: rowNum, c: 6 });
+      const poidsDepotCell = XLSX.utils.encode_cell({ r: rowNum, c: 7 });
+      
+      if (!ws[depotCell]) ws[depotCell] = { t: 's', v: '' };
+      if (!ws[poidsDepotCell]) ws[poidsDepotCell] = { t: 'n', v: 0 };
+      
+      ws[depotCell].s = { fill: depotFill };
+      ws[poidsDepotCell].s = { fill: depotFill };
+      
+      // Appliquer la couleur aux colonnes Client (col 8), N° Client (col 9) et Poids Client (col 10)
+      const clientCell = XLSX.utils.encode_cell({ r: rowNum, c: 8 });
+      const numClientCell = XLSX.utils.encode_cell({ r: rowNum, c: 9 });
+      const poidsClientCell = XLSX.utils.encode_cell({ r: rowNum, c: 10 });
+      
+      if (!ws[clientCell]) ws[clientCell] = { t: 's', v: '' };
+      if (!ws[numClientCell]) ws[numClientCell] = { t: 's', v: '' };
+      if (!ws[poidsClientCell]) ws[poidsClientCell] = { t: 'n', v: 0 };
+      
+      ws[clientCell].s = { fill: clientFill };
+      ws[numClientCell].s = { fill: clientFill };
+      ws[poidsClientCell].s = { fill: clientFill };
+    });
 
     // Ajuster la largeur des colonnes
     const columnWidths = [
@@ -1698,30 +2159,215 @@ export class VoyageComponent {
       { wch: 18 }, // Date avec heure
       { wch: 20 }, // Chauffeur
       { wch: 15 }, // Camion
-      { wch: 20 }, // Société
-      { wch: 22 }, // Société Projet
+      { wch: 20 }, // Transporteur
       { wch: 20 }, // Dépôt
       { wch: 15 }, // Poids Dépôt
       { wch: 25 }, // Client
       { wch: 15 }, // N° Client
       { wch: 15 }, // Poids Client
       { wch: 12 }, // Reste
-      { wch: 20 }  // Projet
+      { wch: 22 }  // Société (dernière colonne)
     ];
-    worksheet['!cols'] = columnWidths;
+    ws['!cols'] = columnWidths;
 
-    // Créer un classeur
-    const workbook: XLSX.WorkBook = {
-      Sheets: { 'Voyages': worksheet },
-      SheetNames: ['Voyages']
-    };
+    // Ajouter la feuille au workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Voyages');
 
-    // Générer le nom du fichier avec la date actuelle
-    const dateStr = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
-    const fileName = `Voyages_${dateStr}.xlsx`;
+    // Générer le nom du fichier avec la date actuelle et le filtre
+    const fileName = this.generateFileName('xlsx');
 
     // Télécharger le fichier
-    XLSX.writeFile(workbook, fileName);
+    XLSX.writeFile(wb, fileName);
+  }
+
+  exportToPDF(): void {
+    // Récupérer les informations uniques de navire, port et produit
+    const naviresSet = new Set<string>();
+    const portsSet = new Set<string>();
+    const produitsSet = new Set<string>();
+    
+    this.filteredVoyages.forEach(voyage => {
+      const navire = this.getNavire(voyage);
+      const port = this.getPort(voyage);
+      const produit = this.getProduit(voyage);
+      
+      if (navire && navire !== '-') naviresSet.add(navire);
+      if (port && port !== '-') portsSet.add(port);
+      if (produit && produit !== '-') produitsSet.add(produit);
+    });
+
+    const navires = Array.from(naviresSet).join(', ');
+    const ports = Array.from(portsSet).join(', ');
+    const produits = Array.from(produitsSet).join(', ');
+    const filterLabel = this.getActiveFilterLabel();
+
+    // Calculer les statistiques
+    const projet = this.contextProjet || this.projetActif;
+    const quantiteTotale = projet?.quantiteTotale || 0;
+    const nombreVoyages = this.filteredVoyages.length;
+    const totalVoyages = this.filteredVoyages.reduce((sum, v) => {
+      return sum + (v.poidsClient || 0) + (v.poidsDepot || 0);
+    }, 0);
+
+    // Créer le PDF en mode paysage (landscape)
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    // Titre principal
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('LISTE DES VOYAGES', doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+
+    let yPosition = 25;
+
+    // Informations du projet
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    if (navires) {
+      doc.text(`Navire: ${navires}`, 14, yPosition);
+      yPosition += 5;
+    }
+    if (ports) {
+      doc.text(`Port: ${ports}`, 14, yPosition);
+      yPosition += 5;
+    }
+    if (produits) {
+      doc.text(`Produit: ${produits}`, 14, yPosition);
+      yPosition += 5;
+    }
+    if (quantiteTotale > 0) {
+      doc.text(`Quantite Totale du Projet: ${Math.round(quantiteTotale)} kg`, 14, yPosition);
+      yPosition += 5;
+    }
+    doc.text(`Nombre de Voyages: ${nombreVoyages}`, 14, yPosition);
+    yPosition += 5;
+    doc.text(`Total des Voyages: ${Math.round(totalVoyages)} kg`, 14, yPosition);
+    yPosition += 5;
+    doc.text(`Filtre: ${filterLabel}`, 14, yPosition);
+    yPosition += 8;
+
+    // Préparer les données du tableau
+    const tableData = this.filteredVoyages.map(voyage => {
+      const chauffeur = this.chauffeurs.find(c => c.id === voyage.chauffeurId);
+      const camion = this.camions.find(c => c.id === voyage.camionId);
+      const client = this.clients.find(c => c.id === voyage.clientId);
+      const depot = this.depots.find(d => d.id === voyage.depotId);
+      
+      return [
+        voyage.numBonLivraison || '',
+        voyage.numTicket || '',
+        voyage.date ? this.formatDateTime(voyage.date) : '',
+        chauffeur?.nom || '',
+        camion?.matricule || '',
+        voyage.societe || '',
+        depot?.nom || '',
+        Math.round(voyage.poidsDepot || 0).toString(),
+        client?.nom || '',
+        client?.numero || '',
+        Math.round(voyage.poidsClient || 0).toString(),
+        Math.round(this.getResteForVoyage(voyage)).toString(),
+        voyage.societeP || ''
+      ];
+    });
+
+    // Créer le tableau avec autoTable
+    autoTable(doc, {
+      startY: yPosition,
+      head: [[
+        'N° Bon',
+        'N° Ticket',
+        'Date',
+        'Chauffeur',
+        'Camion',
+        'Transporteur',
+        'Dépôt',
+        'Poids Dépôt',
+        'Client',
+        'N° Client',
+        'Poids Client',
+        'Reste',
+        'Société'
+      ]],
+      body: tableData,
+      theme: 'grid',
+      styles: {
+        fontSize: 7,
+        cellPadding: 2,
+        overflow: 'linebreak',
+        halign: 'left'
+      },
+      headStyles: {
+        fillColor: [102, 126, 234],
+        textColor: 255,
+        fontStyle: 'bold',
+        halign: 'center'
+      },
+      columnStyles: {
+        0: { cellWidth: 18 },  // N° Bon
+        1: { cellWidth: 15 },  // N° Ticket
+        2: { cellWidth: 25 },  // Date
+        3: { cellWidth: 25 },  // Chauffeur
+        4: { cellWidth: 18 },  // Camion
+        5: { cellWidth: 25 },  // Transporteur
+        6: { cellWidth: 25, fillColor: [254, 243, 199] },  // Dépôt (jaune)
+        7: { cellWidth: 18, fillColor: [254, 243, 199], halign: 'right' },  // Poids Dépôt (jaune)
+        8: { cellWidth: 30, fillColor: [209, 250, 229] },  // Client (vert)
+        9: { cellWidth: 18, fillColor: [209, 250, 229] },  // N° Client (vert)
+        10: { cellWidth: 18, fillColor: [209, 250, 229], halign: 'right' },  // Poids Client (vert)
+        11: { cellWidth: 16, halign: 'right' },  // Reste
+        12: { cellWidth: 25 }   // Société
+      },
+      alternateRowStyles: {
+        fillColor: [245, 247, 250]
+      },
+      margin: { left: 14, right: 14 }
+    });
+
+    // Générer le nom du fichier avec la date actuelle et le filtre
+    const fileName = this.generateFileName('pdf');
+
+    // Télécharger le PDF
+    doc.save(fileName);
+  }
+
+  // Générer un nom de fichier significatif avec les filtres
+  generateFileName(extension: 'xlsx' | 'pdf'): string {
+    const dateStr = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
+    let filterPart = '';
+
+    // Ajouter le type de filtre au nom du fichier
+    if (this.activeFilter === 'date' && (this.dateDebut || this.dateFin)) {
+      if (this.dateDebut && this.dateFin) {
+        const dateD = new Date(this.dateDebut).toLocaleDateString('fr-FR').replace(/\//g, '-');
+        const dateF = new Date(this.dateFin).toLocaleDateString('fr-FR').replace(/\//g, '-');
+        filterPart = `_Date_${dateD}_au_${dateF}`;
+      } else if (this.dateDebut) {
+        const dateD = new Date(this.dateDebut).toLocaleDateString('fr-FR').replace(/\//g, '-');
+        filterPart = `_Date_a_partir_${dateD}`;
+      } else if (this.dateFin) {
+        const dateF = new Date(this.dateFin).toLocaleDateString('fr-FR').replace(/\//g, '-');
+        filterPart = `_Date_jusquau_${dateF}`;
+      }
+    } else if (this.activeFilter === 'client' && this.selectedClientId) {
+      const client = this.clients.find(c => c.id === this.selectedClientId);
+      const clientName = client?.nom?.replace(/[^a-zA-Z0-9]/g, '_') || 'Client';
+      filterPart = `_${clientName}`;
+    } else if (this.activeFilter === 'depot' && this.selectedDepotId) {
+      const depot = this.depots.find(d => d.id === this.selectedDepotId);
+      const depotName = depot?.nom?.replace(/[^a-zA-Z0-9]/g, '_') || 'Depot';
+      filterPart = `_${depotName}`;
+    } else if (this.activeFilter === 'societeP' && this.selectedSocieteP) {
+      const societeName = this.selectedSocieteP.replace(/[^a-zA-Z0-9]/g, '_');
+      filterPart = `_${societeName}`;
+    } else {
+      filterPart = '_Tous';
+    }
+
+    return `Voyages${filterPart}_${dateStr}.${extension}`;
   }
 
   // Formater la date pour l'affichage dans le tableau

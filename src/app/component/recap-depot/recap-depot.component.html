@@ -8,81 +8,70 @@
     <!-- Page Header -->
     <div class="page-header">
       <div class="header-left">
-        <div class="header-icon">
-          <i class="bi bi-file-earmark-text"></i>
+        <div class="header-icon depot">
+          <i class="bi bi-building"></i>
         </div>
         <div>
-          <h1 class="page-title">Récapitulatif par Client</h1>
-          <p class="page-subtitle">Consultez l'historique détaillé des voyages par client</p>
+          <h1 class="page-title">Récapitulatif par Dépôt</h1>
+          <p class="page-subtitle">Consultez l'historique détaillé des voyages par dépôt</p>
         </div>
       </div>
     </div>
 
     <!-- Filter Section -->
     <div class="filter-section">
-      <div class="filter-card">
-        <div class="filter-header">
+      <div class="filter-card depot">
+        <div class="filter-header depot">
           <i class="bi bi-funnel-fill"></i>
-          <h3>Sélectionner un client</h3>
+          <h3>Sélectionner un dépôt</h3>
         </div>
         <div class="filter-body">
-          <div class="client-search-container" style="position: relative;">
+          <div class="depot-search-container" style="position: relative;">
             <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b; font-size: 14px;">
-              <i class="bi bi-person-check-fill"></i> Client
+              <i class="bi bi-building-fill"></i> Dépôt
             </label>
             <input 
-              [(ngModel)]="clientSearchInput" 
-              (input)="onClientSearchInput()"
-              (focus)="onClientSearchInput()"
-              placeholder="Rechercher un client par nom ou numéro..." 
+              [(ngModel)]="depotSearchInput" 
+              (input)="onDepotSearchInput()"
+              (focus)="onDepotSearchInput()"
+              placeholder="Rechercher un dépôt par nom..." 
               class="search-input"
               autocomplete="off"
             />
-            <div *ngIf="showClientDropdown && filteredClientsSearch.length > 0" 
+            <div *ngIf="showDepotDropdown && filteredDepotsSearch.length > 0" 
                  (mousedown)="$event.preventDefault()"
                  class="dropdown-list">
-              <div *ngFor="let cl of filteredClientsSearch" 
-                   (click)="selectClient(cl)"
+              <div *ngFor="let dep of filteredDepotsSearch" 
+                   (click)="selectDepot(dep)"
                    class="dropdown-item">
-                <div class="client-icon">
-                  <i class="bi bi-person-circle"></i>
+                <div class="depot-icon">
+                  <i class="bi bi-building-fill-check"></i>
                 </div>
-                <div class="client-info">
-                  <div class="client-name">{{ cl.nom }}</div>
-                  <div class="client-numero">{{ cl.numero || 'N/A' }}</div>
+                <div class="depot-info">
+                  <div class="depot-name">{{ dep.nom }}</div>
                 </div>
                 <i class="bi bi-chevron-right"></i>
               </div>
             </div>
-            <div *ngIf="showClientDropdown && filteredClientsSearch.length === 0 && clientSearchInput.trim()" 
+            <div *ngIf="showDepotDropdown && filteredDepotsSearch.length === 0 && depotSearchInput.trim()" 
                  class="dropdown-list empty">
-              <i class="bi bi-search"></i> Aucun client trouvé
+              <i class="bi bi-search"></i> Aucun dépôt trouvé
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Client Details & Table -->
-    <div *ngIf="selectedClient" class="recap-container">
-      <!-- Client Info Card -->
-      <div class="client-info-card">
-        <div class="client-header">
-          <div class="client-avatar">
-            <i class="bi bi-person-fill"></i>
+    <!-- Depot Details & Table -->
+    <div *ngIf="selectedDepot" class="recap-container">
+      <!-- Depot Info Card -->
+      <div class="depot-info-card">
+        <div class="depot-header">
+          <div class="depot-avatar">
+            <i class="bi bi-building-fill"></i>
           </div>
-          <div class="client-details">
-            <h2 class="client-title">{{ selectedClient.nom }}</h2>
-            <div class="client-meta">
-              <span class="meta-item">
-                <i class="bi bi-hash"></i>
-                Numéro: <strong>{{ selectedClient.numero || 'N/A' }}</strong>
-              </span>
-              <span class="meta-item">
-                <i class="bi bi-box-seam"></i>
-                Quantité autorisée: <strong>{{ getQuantiteAutorisee(selectedClient.id) | number:'1.0-2' }} kg</strong>
-              </span>
-            </div>
+          <div class="depot-details">
+            <h2 class="depot-title">{{ selectedDepot.nom }}</h2>
           </div>
         </div>
         
@@ -98,7 +87,7 @@
             </div>
           </div>
           <div class="stat-card">
-            <div class="stat-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);">
               <i class="bi bi-box-seam"></i>
             </div>
             <div class="stat-info">
@@ -157,9 +146,9 @@
               />
             </div>
           </div>
-          <div *ngIf="dateDebut || dateFin" style="margin-top: 12px; padding: 12px; background: #e0e7ff; border-radius: 8px; display: flex; align-items: center; gap: 8px;">
-            <i class="bi bi-info-circle-fill" style="color: #667eea; font-size: 16px; flex-shrink: 0;"></i>
-            <div style="font-size: 13px; color: #4338ca; line-height: 1.4;">
+          <div *ngIf="dateDebut || dateFin" style="margin-top: 12px; padding: 12px; background: #fef3c7; border-radius: 8px; display: flex; align-items: center; gap: 8px;">
+            <i class="bi bi-info-circle-fill" style="color: #f59e0b; font-size: 16px; flex-shrink: 0;"></i>
+            <div style="font-size: 13px; color: #92400e; line-height: 1.4;">
               <strong>Journée de travail :</strong> Les voyages incluent ceux effectués de <strong>7h00</strong> le matin jusqu'à <strong>6h00</strong> le lendemain
               <span *ngIf="dateDebut && dateFin">, du <strong>{{ dateDebut }}</strong> au <strong>{{ dateFin }}</strong></span>
               <span *ngIf="dateDebut && !dateFin">, à partir du <strong>{{ dateDebut }}</strong></span>
@@ -211,13 +200,13 @@
                 </div>
               </th>
               <th>Chauffeur</th>
-              <th (click)="sortBy('poidsClient')" class="sortable">
+              <th (click)="sortBy('poidsDepot')" class="sortable">
                 <div class="th-content">
                   <span>Poids Voyage (kg)</span>
                   <i class="bi" [ngClass]="{
-                    'bi-chevron-down': sortColumn === 'poidsClient' && sortDirection === 'desc',
-                    'bi-chevron-up': sortColumn === 'poidsClient' && sortDirection === 'asc',
-                    'bi-chevron-expand': sortColumn !== 'poidsClient'
+                    'bi-chevron-down': sortColumn === 'poidsDepot' && sortDirection === 'desc',
+                    'bi-chevron-up': sortColumn === 'poidsDepot' && sortDirection === 'asc',
+                    'bi-chevron-expand': sortColumn !== 'poidsDepot'
                   }"></i>
                 </div>
               </th>
@@ -238,7 +227,7 @@
               <td>
                 <span class="date-badge">
                   <i class="bi bi-calendar-event"></i>
-                  {{ voyage.date }}
+                  {{ voyage.date | date:'dd/MM/yyyy HH:mm' }}
                 </span>
               </td>
               <td>{{ voyage.numBonLivraison }}</td>
@@ -251,12 +240,16 @@
               </td>
               <td>{{ getChauffeurNom(voyage.chauffeurId) }}</td>
               <td>
-                <span class="poids-badge">
-                  {{ voyage.poidsClient | number:'1.0-2' }}
+                <span class="poids-badge depot">
+                  {{ voyage.poidsDepot | number:'1.0-2' }}
                 </span>
               </td>
               <td>
-                <span class="reste-badge" [style.background]="getResteBadgeColor(voyage.reste || 0)" [style.color]="'white'">
+                <span class="reste-badge" [ngClass]="{
+                  'positive': (voyage.reste || 0) > 0,
+                  'zero': (voyage.reste || 0) === 0,
+                  'negative': (voyage.reste || 0) < 0
+                }">
                   {{ voyage.reste | number:'1.0-2' }}
                 </span>
               </td>
@@ -265,7 +258,7 @@
               <td colspan="7">
                 <div class="no-data">
                   <i class="bi bi-inbox"></i>
-                  <p>Aucun voyage trouvé pour ce client</p>
+                  <p>Aucun voyage trouvé pour ce dépôt</p>
                 </div>
               </td>
             </tr>
@@ -276,7 +269,7 @@
                 <i class="bi bi-calculator"></i> TOTAL:
               </td>
               <td>
-                <span class="total-badge">
+                <span class="total-badge depot">
                   {{ getTotalLivre() | number:'1.0-2' }} kg
                 </span>
               </td>
@@ -302,14 +295,7 @@
           <button class="page-btn" (click)="goToPage(currentPage - 1)" [disabled]="currentPage === 1">
             <i class="bi bi-chevron-left"></i>
           </button>
-          <button 
-            *ngFor="let page of getPageNumbers()" 
-            class="page-btn" 
-            [class.active]="page === currentPage"
-            (click)="goToPage(page)"
-          >
-            {{ page }}
-          </button>
+          <span class="page-info">Page {{ currentPage }} / {{ totalPages }}</span>
           <button class="page-btn" (click)="goToPage(currentPage + 1)" [disabled]="currentPage === totalPages">
             <i class="bi bi-chevron-right"></i>
           </button>
@@ -321,12 +307,12 @@
     </div>
 
     <!-- Empty State -->
-    <div *ngIf="!selectedClient" class="empty-state">
+    <div *ngIf="!selectedDepot" class="empty-state">
       <div class="empty-icon">
-        <i class="bi bi-person-x"></i>
+        <i class="bi bi-building-x"></i>
       </div>
-      <h3>Aucun client sélectionné</h3>
-      <p>Veuillez sélectionner un client pour voir le récapitulatif de ses voyages</p>
+      <h3>Aucun dépôt sélectionné</h3>
+      <p>Veuillez sélectionner un dépôt pour voir le récapitulatif de ses voyages</p>
     </div>
   </main>
 </div>

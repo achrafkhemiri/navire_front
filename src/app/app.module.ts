@@ -6,6 +6,7 @@ import { ChargementComponent } from './component/chargement/chargement.component
 import { DechargementComponent } from './component/dechargement/dechargement.component';
 import { BreadcrumbComponent } from './component/breadcrumb/breadcrumb.component';
 import { RecapComponent } from './component/recap/recap.component';
+import { RecapDepotComponent } from './component/recap-depot/recap-depot.component';
 import { NgModule } from '@angular/core';
 import { HTTP_INTERCEPTORS } from '@angular/common/http';
 import { BASE_PATH } from './api/variables';
@@ -76,6 +77,7 @@ import { DeclarationComponent } from './component/declaration/declaration.compon
   BreadcrumbComponent,
   NotificationsComponent,
   RecapComponent,
+  RecapDepotComponent,
   DeclarationComponent,
   ],
   imports: [

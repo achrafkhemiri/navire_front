@@ -9,6 +9,9 @@ import { ProjetControllerService } from '../../api/api/projetController.service'
 import { DepotDTO } from '../../api/model/depotDTO';
 import { VoyageDTO } from '../../api/model/voyageDTO';
 import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 @Component({
   selector: 'app-depot',
@@ -55,9 +58,19 @@ export class DepotComponent {
   
   // Date Filter
   dateFilterActive: boolean = false;
-  selectedDate: string | null = null;
+  dateDebut: string | null = null;
+  dateFin: string | null = null;
   // Date max pour le filtre (aujourd'hui)
   today: string = '';
+  
+  // Modal de confirmation/erreur
+  showConfirmModal: boolean = false;
+  showErrorModal: boolean = false;
+  modalTitle: string = '';
+  modalMessage: string = '';
+  modalIcon: string = '';
+  modalIconColor: string = '';
+  depotToDelete: number | null = null;
   
   Math = Math;
 
@@ -208,15 +221,17 @@ export class DepotComponent {
           try {
             const json = JSON.parse(text);
             if (Array.isArray(json)) {
-              this.allDepots = json;
+              // Trier par ID décroissant (du plus récent au plus ancien)
+              this.allDepots = json.sort((a, b) => (b.id || 0) - (a.id || 0));
             }
           } catch (e) {
             console.error('Erreur parsing allDepots:', e);
           }
         } else if (Array.isArray(data)) {
-          this.allDepots = data;
+          // Trier par ID décroissant (du plus récent au plus ancien)
+          this.allDepots = data.sort((a, b) => (b.id || 0) - (a.id || 0));
         }
-        console.log('AllDepots chargés pour autocomplétion:', this.allDepots.length);
+        console.log('AllDepots chargés et triés pour autocomplétion:', this.allDepots.length);
       },
       error: (err) => {
         console.error('Erreur chargement allDepots:', err);
@@ -433,22 +448,32 @@ export class DepotComponent {
     this.updatePagination();
   }
 
-  // Total livré pour un dépôt, avec option de filtre par journée de travail [07:00, 06:00)
+  // Total livré pour un dépôt avec filtre par plage de dates (journée de travail 7h00 → 6h00)
   getTotalLivreDepot(depotId?: number): number {
     if (!depotId || !this.voyages) return 0;
     let voyagesFiltrés = this.voyages.filter(v => v.depotId === depotId && v.poidsDepot);
 
-    if (this.dateFilterActive && this.selectedDate) {
-      const selectedDateObj = new Date(this.selectedDate + 'T00:00:00');
-      const startWorkDay = new Date(selectedDateObj);
-      startWorkDay.setHours(7, 0, 0, 0);
-      const endWorkDay = new Date(selectedDateObj);
-      endWorkDay.setDate(endWorkDay.getDate() + 1);
-      endWorkDay.setHours(6, 0, 0, 0);
+    if (this.dateFilterActive && (this.dateDebut || this.dateFin)) {
+      const startDate = this.dateDebut ? new Date(this.dateDebut + 'T00:00:00') : new Date('1900-01-01');
+      const endDate = this.dateFin ? new Date(this.dateFin + 'T00:00:00') : new Date();
+      
       voyagesFiltrés = voyagesFiltrés.filter(v => {
         if (!v.date) return false;
-        const d = new Date(v.date);
-        return d >= startWorkDay && d < endWorkDay;
+        const voyageDateTime = new Date(v.date);
+        
+        // Vérifier si le voyage tombe dans l'une des journées de travail de la plage
+        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+          const workDayStart = new Date(d);
+          workDayStart.setHours(7, 0, 0, 0);
+          const workDayEnd = new Date(d);
+          workDayEnd.setDate(workDayEnd.getDate() + 1);
+          workDayEnd.setHours(6, 0, 0, 0);
+          
+          if (voyageDateTime >= workDayStart && voyageDateTime < workDayEnd) {
+            return true;
+          }
+        }
+        return false;
       });
     }
     return voyagesFiltrés.reduce((sum, v) => sum + (v.poidsDepot || 0), 0);
@@ -456,24 +481,24 @@ export class DepotComponent {
 
   toggleDateFilter() {
     this.dateFilterActive = !this.dateFilterActive;
-    if (this.dateFilterActive && !this.selectedDate) {
-      // Utiliser la date locale formatée pour éviter les décalages de fuseau
-      this.selectedDate = this.today;
-    }
     this.updatePagination();
   }
 
   onDateFilterChange() {
     // Empêcher la sélection d'une date future
-    if (this.selectedDate && this.today && this.selectedDate > this.today) {
-      this.selectedDate = this.today;
+    if (this.dateDebut && this.today && this.dateDebut > this.today) {
+      this.dateDebut = this.today;
+    }
+    if (this.dateFin && this.today && this.dateFin > this.today) {
+      this.dateFin = this.today;
     }
     this.updatePagination();
   }
 
   clearDateFilter() {
     this.dateFilterActive = false;
-    this.selectedDate = null;
+    this.dateDebut = null;
+    this.dateFin = null;
     this.updatePagination();
   }
   
@@ -556,12 +581,88 @@ export class DepotComponent {
 
   deleteDepot(id?: number) {
     if (id === undefined) return;
-    this.depotService.deleteDepot(id, 'body').subscribe({
+    
+    // Vérifier si le dépôt a une quantité vendue > 0
+    const quantite = this.getTotalLivreDepot(id);
+    if (quantite > 0) {
+      this.showErrorModal = true;
+      this.modalTitle = 'Suppression impossible';
+      this.modalMessage = `Ce dépôt a une quantité vendue de ${quantite.toFixed(2)} kg. Vous ne pouvez pas supprimer un dépôt ayant des ventes enregistrées.`;
+      this.modalIcon = 'bi-exclamation-triangle-fill';
+      this.modalIconColor = '#ef4444';
+      return;
+    }
+    
+    // Afficher la modale de confirmation
+    this.depotToDelete = id;
+    this.showConfirmModal = true;
+    this.modalTitle = 'Confirmer la suppression';
+    this.modalMessage = 'Êtes-vous sûr de vouloir supprimer ce dépôt ? Cette action est irréversible.';
+    this.modalIcon = 'bi-trash-fill';
+    this.modalIconColor = '#ef4444';
+  }
+
+  confirmDelete() {
+    if (this.depotToDelete === null) return;
+    
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    if (!targetProjetId) {
+      this.showConfirmModal = false;
+      this.showErrorModal = true;
+      this.modalTitle = 'Erreur';
+      this.modalMessage = 'Aucun projet actif';
+      this.modalIcon = 'bi-x-circle-fill';
+      this.modalIconColor = '#ef4444';
+      return;
+    }
+    
+    // Utiliser depotService.deleteDepot qui utilise la bonne méthode backend
+    this.depotService.deleteDepot(this.depotToDelete, 'body').subscribe({
       next: () => {
+        console.log('✅ Dépôt supprimé avec succès');
+        this.showConfirmModal = false;
+        this.depotToDelete = null;
         this.loadDepots();
       },
-      error: (err) => this.error = 'Erreur suppression: ' + (err.error?.message || err.message)
+      error: (err) => {
+        console.error('❌ Erreur suppression dépôt:', err);
+        this.showConfirmModal = false;
+        this.showErrorModal = true;
+        this.modalTitle = 'Erreur de suppression';
+        
+        // Message d'erreur plus explicite
+        let errorMessage = 'Une erreur est survenue lors de la suppression';
+        
+        if (err.status === 403) {
+          errorMessage = 'Vous n\'avez pas les permissions nécessaires pour supprimer ce dépôt.';
+        } else if (err.error?.message) {
+          errorMessage = err.error.message;
+        } else if (err.message) {
+          errorMessage = err.message;
+        }
+        
+        // Détecter les erreurs de contrainte de clé étrangère
+        const errorText = JSON.stringify(err);
+        if (errorText.includes('foreign key') || errorText.includes('constraint') || errorText.includes('DataIntegrityViolationException')) {
+          errorMessage = 'Ce dépôt est encore associé à un ou plusieurs projets. Il ne peut pas être supprimé tant qu\'il y a des associations actives.';
+        }
+        
+        this.modalMessage = errorMessage;
+        this.modalIcon = 'bi-x-circle-fill';
+        this.modalIconColor = '#ef4444';
+      }
     });
+  }
+
+  cancelDelete() {
+    this.showConfirmModal = false;
+    this.depotToDelete = null;
+  }
+
+  closeErrorModal() {
+    this.showErrorModal = false;
+    this.modalTitle = '';
+    this.modalMessage = '';
   }
 
   loadDepots() {
@@ -583,8 +684,9 @@ export class DepotComponent {
       next: (data) => {
         console.log('✅ Réponse getDepotsByProjet:', data);
         if (Array.isArray(data)) {
-          this.depots = data;
-          console.log(`✅ ${data.length} dépôts chargés pour le projet ${targetProjetId}`);
+          // Trier par ID décroissant (du plus récent au plus ancien)
+          this.depots = data.sort((a, b) => (b.id || 0) - (a.id || 0));
+          console.log(`✅ ${data.length} dépôts chargés et triés pour le projet ${targetProjetId}`);
         } else {
           this.depots = [];
           console.warn('⚠️ Réponse non-array:', data);
@@ -666,5 +768,178 @@ export class DepotComponent {
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  }
+
+  // Export PDF
+  exportToPDF(): void {
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    // Titre
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Liste des Dépôts', 14, 15);
+
+    // Informations du projet
+    if (this.projetActif) {
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      let yPos = 25;
+      
+      if (this.projetActif.nomNavire) {
+        doc.text(`Navire: ${this.projetActif.nomNavire}`, 14, yPos);
+        yPos += 6;
+      }
+      if (this.projetActif.port) {
+        doc.text(`Port: ${this.projetActif.port}`, 14, yPos);
+        yPos += 6;
+      }
+      if (this.projetActif.nomProduit) {
+        doc.text(`Produit: ${this.projetActif.nomProduit}`, 14, yPos);
+        yPos += 6;
+      }
+    }
+
+    // Statistiques
+    const totalDepots = this.filteredDepots.length;
+    const totalVendu = this.filteredDepots.reduce((sum, d) => 
+      sum + (this.getTotalLivreDepot(d.id) || 0), 0
+    );
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    let statsY = this.projetActif ? 45 : 25;
+    doc.text(`Total Dépôts: ${totalDepots}`, 14, statsY);
+    doc.text(`Quantité Totale Vendue: ${totalVendu.toFixed(2)} kg`, 80, statsY);
+
+    // Filtres appliqués
+    // Filtres appliqués
+    if (this.dateFilterActive && (this.dateDebut || this.dateFin)) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(9);
+      statsY += 6;
+      let filterText = 'Filtre par date: ';
+      if (this.dateDebut && this.dateFin) {
+        filterText += `${this.formatDate(this.dateDebut)} - ${this.formatDate(this.dateFin)}`;
+      } else if (this.dateDebut) {
+        filterText += `À partir du ${this.formatDate(this.dateDebut)}`;
+      } else if (this.dateFin) {
+        filterText += `Jusqu'au ${this.formatDate(this.dateFin)}`;
+      }
+      doc.text(filterText, 14, statsY);
+    }
+
+    // Préparer les données du tableau
+    const tableData = this.filteredDepots.map(depot => {
+      const quantiteVendue = this.getTotalLivreDepot(depot.id);
+      
+      return [
+        depot.nom || '-',
+        depot.adresse || '-',
+        depot.mf || '-',
+        quantiteVendue.toFixed(2)
+      ];
+    });
+
+    // Générer le tableau
+    autoTable(doc, {
+      startY: statsY + 10,
+      head: [['Nom', 'Adresse', 'Matricule Fiscal', 'Quantité Vendue (kg)']],
+      body: tableData,
+      theme: 'grid',
+      styles: {
+        fontSize: 9,
+        cellPadding: 3
+      },
+      headStyles: {
+        fillColor: [251, 191, 36], // Couleur jaune/orange pour les dépôts
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+        fontSize: 10
+      },
+      columnStyles: {
+        0: { cellWidth: 60 },
+        1: { cellWidth: 80 },
+        2: { cellWidth: 50 },
+        3: { cellWidth: 40, halign: 'right' }
+      },
+      didDrawPage: (data) => {
+        // Footer
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        const pageSize = doc.internal.pageSize;
+        const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(
+          `Page ${data.pageNumber} / ${pageCount} - Généré le ${new Date().toLocaleDateString('fr-FR')}`,
+          14,
+          pageHeight - 10
+        );
+      }
+    });
+
+    // Télécharger le PDF
+    const fileName = `Depots_${this.projetActif?.nomNavire || 'Liste'}_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`;
+    doc.save(fileName);
+  }
+
+  // Export Excel
+  exportToExcel(): void {
+    // Préparer les données
+    const data = this.filteredDepots.map(depot => {
+      const quantiteVendue = this.getTotalLivreDepot(depot.id);
+      
+      return {
+        'Nom': depot.nom || '-',
+        'Adresse': depot.adresse || '-',
+        'Matricule Fiscal': depot.mf || '-',
+        'Quantité Vendue (kg)': quantiteVendue.toFixed(2)
+      };
+    });
+
+    // Créer la feuille de calcul
+    const ws: XLSX.WorkSheet = XLSX.utils.json_to_sheet(data);
+
+    // Définir la largeur des colonnes
+    ws['!cols'] = [
+      { wch: 30 }, // Nom
+      { wch: 50 }, // Adresse
+      { wch: 25 }, // MF
+      { wch: 20 }  // Quantité Vendue
+    ];
+
+    // Créer le classeur
+    const wb: XLSX.WorkBook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Dépôts');
+
+    // Ajouter une feuille de statistiques
+    const totalDepots = this.filteredDepots.length;
+    const totalVendu = this.filteredDepots.reduce((sum, d) => 
+      sum + (this.getTotalLivreDepot(d.id) || 0), 0
+    );
+
+    const statsData = [
+      { 'Statistique': 'Total Dépôts', 'Valeur': totalDepots },
+      { 'Statistique': 'Quantité Totale Vendue (kg)', 'Valeur': totalVendu.toFixed(2) }
+    ];
+
+    if (this.projetActif) {
+      statsData.unshift(
+        { 'Statistique': 'Navire', 'Valeur': this.projetActif.nomNavire || '-' },
+        { 'Statistique': 'Port', 'Valeur': this.projetActif.port || '-' },
+        { 'Statistique': 'Produit', 'Valeur': this.projetActif.nomProduit || '-' }
+      );
+    }
+
+    const wsStats: XLSX.WorkSheet = XLSX.utils.json_to_sheet(statsData);
+    wsStats['!cols'] = [{ wch: 30 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, wsStats, 'Statistiques');
+
+    // Télécharger le fichier
+    const fileName = `Depots_${this.projetActif?.nomNavire || 'Liste'}_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.xlsx`;
+    XLSX.writeFile(wb, fileName);
   }
 }

@@ -101,19 +101,18 @@ export class LoginComponent implements OnInit {
         this.authService.markLoggedIn();
 
         const projetActif = result?.projetActif || null;
-        let cibleNavig = ['/'];
+        // Redirection vers la page projet après connexion réussie
+        let cibleNavig = ['/projet'];
+        
         if (projetActif && projetActif.id) {
           this.projetActifService.setProjetActif(projetActif);
           try { window.sessionStorage.setItem('projetActifId', projetActif.id); } catch {}
-          cibleNavig = ['/projet', projetActif.id, 'parametre'];
-          this.router.navigate(cibleNavig);
         } else {
-          const actif = await this.chargerProjetActifApresLogin();
-            if (actif && actif.id) {
-              cibleNavig = ['/projet', actif.id, 'parametre'];
-            }
-            this.router.navigate(cibleNavig);
+          await this.chargerProjetActifApresLogin();
         }
+        
+        this.router.navigate(cibleNavig);
+        
         // Fallback si toujours sur /login après 400ms
         setTimeout(() => {
           if (window.location.pathname.includes('login')) {

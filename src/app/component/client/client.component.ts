@@ -13,6 +13,9 @@ import { QuantiteService } from '../../service/quantite.service';
 import { HttpClient } from '@angular/common/http';
 import { Inject } from '@angular/core';
 import { BASE_PATH } from '../../api/variables';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 @Component({
   selector: 'app-client',
@@ -90,7 +93,8 @@ export class ClientComponent {
   
   // Date Filter
   dateFilterActive: boolean = false;
-  selectedDate: string | null = null;
+  dateDebut: string | null = null;
+  dateFin: string | null = null;
   // Date max pour le filtre (aujourd'hui)
   today: string = '';
   
@@ -812,19 +816,28 @@ export class ClientComponent {
     
     let filteredVoyages = this.voyages.filter(v => v.clientId === clientId && v.poidsClient);
     
-    // Si un filtre de date est actif, filtrer dans la fenêtre [07:00 du jour, 06:00 du lendemain)
-    if (this.dateFilterActive && this.selectedDate) {
-      const selectedDateObj = new Date(this.selectedDate + 'T00:00:00');
-      const startWorkDay = new Date(selectedDateObj);
-      startWorkDay.setHours(7, 0, 0, 0);
-      const endWorkDay = new Date(selectedDateObj);
-      endWorkDay.setDate(endWorkDay.getDate() + 1);
-      endWorkDay.setHours(6, 0, 0, 0);
-      
+    // Si un filtre de date est actif, filtrer par plage avec journée de travail [07:00, 06:00)
+    if (this.dateFilterActive && (this.dateDebut || this.dateFin)) {
       filteredVoyages = filteredVoyages.filter(v => {
         if (!v.date) return false;
         const voyageDateTime = new Date(v.date);
-        return voyageDateTime >= startWorkDay && voyageDateTime < endWorkDay;
+        
+        // Si date début définie, vérifier que le voyage est >= dateDebut 07:00
+        if (this.dateDebut) {
+          const startDate = new Date(this.dateDebut + 'T00:00:00');
+          startDate.setHours(7, 0, 0, 0);
+          if (voyageDateTime < startDate) return false;
+        }
+        
+        // Si date fin définie, vérifier que le voyage est < dateFin+1 06:00
+        if (this.dateFin) {
+          const endDate = new Date(this.dateFin + 'T00:00:00');
+          endDate.setDate(endDate.getDate() + 1);
+          endDate.setHours(6, 0, 0, 0);
+          if (voyageDateTime >= endDate) return false;
+        }
+        
+        return true;
       });
     }
     
@@ -910,18 +923,17 @@ export class ClientComponent {
   // Activer/désactiver le filtre par date
   toggleDateFilter() {
     this.dateFilterActive = !this.dateFilterActive;
-    if (this.dateFilterActive && !this.selectedDate) {
-      // Initialiser avec la date d'aujourd'hui (locale)
-      this.selectedDate = this.today;
-    }
     this.updatePagination();
   }
   
   // Gérer le changement de date
   onDateFilterChange() {
     // Clamp future dates
-    if (this.selectedDate && this.today && this.selectedDate > this.today) {
-      this.selectedDate = this.today;
+    if (this.dateDebut && this.today && this.dateDebut > this.today) {
+      this.dateDebut = this.today;
+    }
+    if (this.dateFin && this.today && this.dateFin > this.today) {
+      this.dateFin = this.today;
     }
     // Relancer le filtrage ou au moins la pagination
     this.applyFilter();
@@ -931,7 +943,8 @@ export class ClientComponent {
   // Effacer le filtre par date
   clearDateFilter() {
     this.dateFilterActive = false;
-    this.selectedDate = null;
+    this.dateDebut = null;
+    this.dateFin = null;
     this.updatePagination();
   }
   
@@ -944,5 +957,205 @@ export class ClientComponent {
       day: 'numeric' 
     };
     return date.toLocaleDateString('fr-FR', options);
+  }
+
+  // Export PDF
+  exportToPDF(): void {
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    // Titre
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Liste des Clients', 14, 15);
+
+    // Informations du projet
+    if (this.projetActif) {
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      let yPos = 25;
+      
+      if (this.projetActif.nomNavire) {
+        doc.text(`Navire: ${this.projetActif.nomNavire}`, 14, yPos);
+        yPos += 6;
+      }
+      if (this.projetActif.port) {
+        doc.text(`Port: ${this.projetActif.port}`, 14, yPos);
+        yPos += 6;
+      }
+      if (this.projetActif.nomProduit) {
+        doc.text(`Produit: ${this.projetActif.nomProduit}`, 14, yPos);
+        yPos += 6;
+      }
+    }
+
+    // Statistiques
+    const totalClients = this.filteredClients.length;
+    const totalQuantiteAutorisee = this.filteredClients.reduce((sum, c) => 
+      sum + (this.getQuantitePourProjet(c) || 0), 0
+    );
+    const totalEnleve = this.filteredClients.reduce((sum, c) => 
+      sum + (this.getTotalLivreClient(c.id) || 0), 0
+    );
+    const totalReste = totalQuantiteAutorisee - totalEnleve;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    let statsY = this.projetActif ? 45 : 25;
+    doc.text(`Total Clients: ${totalClients}`, 14, statsY);
+    doc.text(`Quantité Totale: ${totalQuantiteAutorisee.toFixed(0)} T`, 70, statsY);
+    doc.text(`Total Enlevé: ${totalEnleve.toFixed(2)} T`, 140, statsY);
+    doc.text(`Reste Total: ${totalReste.toFixed(2)} T`, 200, statsY);
+
+    // Filtres appliqués
+    if (this.dateFilterActive && (this.dateDebut || this.dateFin)) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(9);
+      statsY += 6;
+      let filterText = 'Filtre par date: ';
+      if (this.dateDebut && this.dateFin) {
+        filterText += `${this.formatDate(this.dateDebut)} - ${this.formatDate(this.dateFin)}`;
+      } else if (this.dateDebut) {
+        filterText += `À partir du ${this.formatDate(this.dateDebut)}`;
+      } else if (this.dateFin) {
+        filterText += `Jusqu'au ${this.formatDate(this.dateFin)}`;
+      }
+      doc.text(filterText, 14, statsY);
+    }
+
+    // Préparer les données du tableau
+    const tableData = this.filteredClients.map(client => {
+      const quantiteAutorisee = this.getQuantitePourProjet(client) || 0;
+      const totalLivre = this.getTotalLivreClient(client.id);
+      const reste = quantiteAutorisee - totalLivre;
+      
+      return [
+        client.nom || '-',
+        client.numero || '-',
+        client.adresse || '-',
+        client.mf || '-',
+        quantiteAutorisee.toFixed(0),
+        totalLivre.toFixed(2),
+        reste.toFixed(2)
+      ];
+    });
+
+    // Générer le tableau
+    autoTable(doc, {
+      startY: statsY + 10,
+      head: [['Nom', 'Numéro', 'Adresse', 'MF', 'Qté Autorisée (T)', 'Enlevé (T)', 'Reste (T)']],
+      body: tableData,
+      theme: 'grid',
+      styles: {
+        fontSize: 9,
+        cellPadding: 3
+      },
+      headStyles: {
+        fillColor: [102, 126, 234],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 10
+      },
+      columnStyles: {
+        0: { cellWidth: 40 },
+        1: { cellWidth: 30 },
+        2: { cellWidth: 50 },
+        3: { cellWidth: 30 },
+        4: { cellWidth: 30, halign: 'right' },
+        5: { cellWidth: 25, halign: 'right' },
+        6: { cellWidth: 25, halign: 'right' }
+      },
+      didDrawPage: (data) => {
+        // Footer
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        const pageSize = doc.internal.pageSize;
+        const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(
+          `Page ${data.pageNumber} / ${pageCount} - Généré le ${new Date().toLocaleDateString('fr-FR')}`,
+          14,
+          pageHeight - 10
+        );
+      }
+    });
+
+    // Télécharger le PDF
+    const fileName = `Clients_${this.projetActif?.nomNavire || 'Liste'}_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`;
+    doc.save(fileName);
+  }
+
+  // Export Excel
+  exportToExcel(): void {
+    // Préparer les données
+    const data = this.filteredClients.map(client => {
+      const quantiteAutorisee = this.getQuantitePourProjet(client) || 0;
+      const totalLivre = this.getTotalLivreClient(client.id);
+      const reste = quantiteAutorisee - totalLivre;
+      
+      return {
+        'Nom': client.nom || '-',
+        'Numéro': client.numero || '-',
+        'Adresse': client.adresse || '-',
+        'MF': client.mf || '-',
+        'Quantité Autorisée (T)': quantiteAutorisee.toFixed(0),
+        'Enlevé (T)': totalLivre.toFixed(2),
+        'Reste (T)': reste.toFixed(2)
+      };
+    });
+
+    // Créer la feuille de calcul
+    const ws: XLSX.WorkSheet = XLSX.utils.json_to_sheet(data);
+
+    // Définir la largeur des colonnes
+    ws['!cols'] = [
+      { wch: 30 }, // Nom
+      { wch: 15 }, // Numéro
+      { wch: 40 }, // Adresse
+      { wch: 20 }, // MF
+      { wch: 20 }, // Quantité Autorisée
+      { wch: 15 }, // Enlevé
+      { wch: 15 }  // Reste
+    ];
+
+    // Créer le classeur
+    const wb: XLSX.WorkBook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Clients');
+
+    // Ajouter une feuille de statistiques
+    const totalClients = this.filteredClients.length;
+    const totalQuantiteAutorisee = this.filteredClients.reduce((sum, c) => 
+      sum + (this.getQuantitePourProjet(c) || 0), 0
+    );
+    const totalEnleve = this.filteredClients.reduce((sum, c) => 
+      sum + (this.getTotalLivreClient(c.id) || 0), 0
+    );
+    const totalReste = totalQuantiteAutorisee - totalEnleve;
+
+    const statsData = [
+      { 'Statistique': 'Total Clients', 'Valeur': totalClients },
+      { 'Statistique': 'Quantité Totale Autorisée (T)', 'Valeur': totalQuantiteAutorisee.toFixed(2) },
+      { 'Statistique': 'Total Enlevé (T)', 'Valeur': totalEnleve.toFixed(2) },
+      { 'Statistique': 'Reste Total (T)', 'Valeur': totalReste.toFixed(2) }
+    ];
+
+    if (this.projetActif) {
+      statsData.unshift(
+        { 'Statistique': 'Navire', 'Valeur': this.projetActif.nomNavire || '-' },
+        { 'Statistique': 'Port', 'Valeur': this.projetActif.port || '-' },
+        { 'Statistique': 'Produit', 'Valeur': this.projetActif.nomProduit || '-' }
+      );
+    }
+
+    const wsStats: XLSX.WorkSheet = XLSX.utils.json_to_sheet(statsData);
+    wsStats['!cols'] = [{ wch: 30 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, wsStats, 'Statistiques');
+
+    // Télécharger le fichier
+    const fileName = `Clients_${this.projetActif?.nomNavire || 'Liste'}_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.xlsx`;
+    XLSX.writeFile(wb, fileName);
   }
 }

@@ -129,3 +129,16 @@
 .export-btn i {
   font-size: 18px;
 }
+
+.export-btn-pdf {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.export-btn-pdf:hover:not(:disabled) {
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+}
+
+.export-btn-pdf:disabled {
+  background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+}

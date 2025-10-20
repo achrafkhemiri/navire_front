@@ -322,3 +322,255 @@
   background-color: #f1f5f9;
   cursor: not-allowed;
 }
+
+/* ===== MODALES DE CONFIRMATION ET ERREUR ===== */
+.confirm-modal, .error-modal {
+  background: white;
+  border-radius: 20px;
+  padding: 0;
+  max-width: 480px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: modalSlideIn 0.3s ease-out;
+  overflow: hidden;
+}
+
+.modal-header-confirm, .modal-header-error {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: white;
+}
+
+.modal-header-confirm i, .modal-header-error i {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.modal-header-confirm h3, .modal-header-error h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.modal-body-confirm, .modal-body-error {
+  padding: 28px 24px;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.modal-body-confirm p, .modal-body-error p {
+  margin: 0;
+  font-size: 15px;
+  color: #475569;
+}
+
+.modal-actions-confirm, .modal-actions-error {
+  padding: 20px 24px;
+  background: #f8fafc;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.btn-cancel {
+  background: white;
+  color: #64748b;
+  border: 2px solid #cbd5e1;
+  padding: 10px 24px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+}
+
+.btn-cancel:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+}
+
+.btn-confirm-delete {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  transition: all 0.3s ease;
+}
+
+.btn-confirm-delete:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+}
+
+.btn-confirm-delete:active {
+  transform: translateY(0);
+}
+
+.btn-close-error {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  border: none;
+  padding: 10px 28px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  transition: all 0.3s ease;
+}
+
+.btn-close-error:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+.btn-close-error:active {
+  transform: translateY(0);
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ===== FILTER BUTTONS ===== */
+.filter-section {
+  margin-bottom: 20px;
+}
+
+.filter-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.filter-btn:hover {
+  border-color: #fbbf24;
+  color: #f59e0b;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.15);
+}
+
+.filter-btn.active {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  border-color: #fbbf24;
+  color: white;
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
+}
+
+.filter-btn i {
+  font-size: 18px;
+}
+
+.filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  background: rgba(251, 191, 36, 0.1);
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+.filter-btn.active .filter-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+}
+
+.filter-details {
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== EXPORT BUTTONS ===== */
+.export-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.export-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.export-btn i {
+  font-size: 18px;
+}
+
+.excel-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.excel-btn:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+.pdf-btn {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+}
+
+.pdf-btn:hover {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
