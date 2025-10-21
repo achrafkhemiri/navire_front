@@ -75,4 +75,9 @@ export class NotificationService {
   rafraichir(): void {
     this.notificationUpdate.next();
   }
+
+  // Créer une notification manuelle
+  creerNotification(notification: Partial<Notification>): Observable<Notification> {
+    return this.http.post<Notification>(this.baseUrl, notification);
+  }
 }

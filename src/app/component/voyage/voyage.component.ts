@@ -9,6 +9,7 @@ import { DepotControllerService } from '../../api/api/depotController.service';
 import { ProjetControllerService } from '../../api/api/projetController.service';
 import { ProjetClientControllerService } from '../../api/api/projetClientController.service';
 import { DechargementControllerService } from '../../api/api/dechargementController.service';
+import { NotificationService } from '../../service/notification.service';
 import { ChauffeurDTO } from '../../api/model/chauffeurDTO';
 import { CamionDTO } from '../../api/model/camionDTO';
 import { ClientDTO } from '../../api/model/clientDTO';
@@ -20,6 +21,7 @@ import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
 import { HttpClient } from '@angular/common/http';
 import { BASE_PATH } from '../../api/variables';
 import { ProjetActifService } from '../../service/projet-actif.service';
+import { TypeNotification, NiveauAlerte } from '../../model/notification.model';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -52,6 +54,10 @@ export class VoyageComponent {
   isSidebarOpen: boolean = true;
   showAddDialog: boolean = false;
   voyageFilter: string = '';
+  
+  // Delete confirmation
+  showDeleteDialog: boolean = false;
+  voyageToDelete: VoyageDTO | null = null;
   
   // Camion search/create
   camionSearchInput: string = '';
@@ -131,6 +137,7 @@ export class VoyageComponent {
     private projetClientService: ProjetClientControllerService,
     private dechargementService: DechargementControllerService,
     private projetActifService: ProjetActifService,
+    private notificationService: NotificationService,
     private http: HttpClient,
     private route: ActivatedRoute,
     @Inject(BASE_PATH) private basePath: string
@@ -741,6 +748,13 @@ export class VoyageComponent {
     return quantiteAutorisee - totalLivre;
   }
 
+  // Vérifier si un client a dépassé sa quantité autorisée
+  isClientEnDepassement(clientId: number | undefined): boolean {
+    if (!clientId) return false;
+    const reste = this.getResteClient(clientId);
+    return reste < 0;
+  }
+
   // Obtenir la couleur selon le pourcentage restant
   getResteColor(reste: number, quantiteAutorisee: number): string {
     if (quantiteAutorisee === 0) return '#64748b'; // gris
@@ -788,15 +802,42 @@ export class VoyageComponent {
 
   // Valider le poids saisi
   validatePoids(): boolean {
+    // Calculer le poids total à ajouter
+    const poidsTotal = (this.dialogVoyage._type === 'client' ? (Number(this.dialogVoyage.poidsClient) || 0) : 0) +
+                       (this.dialogVoyage._type === 'depot' ? (Number(this.dialogVoyage.poidsDepot) || 0) : 0);
+    
+    // Vérifier le reste du projet (quantité totale - total livré)
+    const resteProjet = this.getResteProjet();
+    
+    // En mode édition, on doit retirer le poids actuel du voyage qu'on modifie
+    let resteDisponible = resteProjet;
+    if (this.editMode && this.selectedVoyage) {
+      const poidsActuelVoyage = (this.selectedVoyage.poidsClient || 0) + (this.selectedVoyage.poidsDepot || 0);
+      resteDisponible = resteProjet + poidsActuelVoyage;
+    }
+    
+    if (poidsTotal > resteDisponible) {
+      this.error = `Le poids saisi (${poidsTotal}) dépasse le reste disponible du projet (${resteDisponible})`;
+      return false;
+    }
+    
+    // Validation spécifique pour les clients
     if (this.dialogVoyage._type === 'client' && this.dialogVoyage.clientId) {
-      const reste = this.getResteClient(this.dialogVoyage.clientId);
+      const resteClient = this.getResteClient(this.dialogVoyage.clientId);
       const poidsActuel = Number(this.dialogVoyage.poidsClient) || 0;
       
-      if (poidsActuel > reste) {
-        this.error = `Le poids saisi (${poidsActuel}) dépasse le reste autorisé pour ce client (${reste})`;
+      // En mode édition, ajouter le poids actuel du client si c'est le même client
+      let resteClientDisponible = resteClient;
+      if (this.editMode && this.selectedVoyage && this.selectedVoyage.clientId === this.dialogVoyage.clientId) {
+        resteClientDisponible = resteClient + (this.selectedVoyage.poidsClient || 0);
+      }
+      
+      if (poidsActuel > resteClientDisponible) {
+        this.error = `Le poids saisi (${poidsActuel}) dépasse le reste autorisé pour ce client (${resteClientDisponible})`;
         return false;
       }
     }
+    
     return true;
   }
 
@@ -1925,14 +1966,212 @@ export class VoyageComponent {
     this.dialogVoyage.depotId = undefined;
   }
 
-  deleteVoyage(id?: number) {
-    if (id === undefined) return;
+  openDeleteDialog(voyage: VoyageDTO): void {
+    this.voyageToDelete = voyage;
+    this.showDeleteDialog = true;
+  }
+
+  closeDeleteDialog(): void {
+    this.showDeleteDialog = false;
+    this.voyageToDelete = null;
+  }
+
+  confirmDeleteVoyage(): void {
+    if (!this.voyageToDelete || !this.voyageToDelete.id) return;
+    
+    const id = this.voyageToDelete.id;
+    const numTicket = this.voyageToDelete.numTicket;
+    const numBonLivraison = this.voyageToDelete.numBonLivraison;
+    const destination = this.voyageToDelete.clientId 
+      ? `Client: ${this.voyageToDelete.clientNum || this.voyageToDelete.clientId}`
+      : this.voyageToDelete.depotId 
+        ? `Dépôt: ${this.voyageToDelete.depotNom || this.voyageToDelete.depotId}`
+        : 'N/A';
+
+    console.log('🗑️ Suppression voyage:', {
+      voyageId: id,
+      numTicket,
+      numBonLivraison,
+      destination
+    });
+
+    // 1. Supprimer le voyage
     this.voyageService.deleteVoyage(id, 'body').subscribe({
       next: () => {
-        this.loadVoyages();
+        console.log('✅ Voyage supprimé avec succès');
+        
+        // 2. Trouver et supprimer le déchargement associé par numTicket ou numBonLivraison
+        this.dechargementService.getAllDechargements('body').subscribe({
+          next: async (dechargementsData) => {
+            let dechargements: DechargementDTO[] = [];
+            
+            // Parser les données si c'est un Blob
+            if (dechargementsData instanceof Blob) {
+              const text = await dechargementsData.text();
+              try {
+                dechargements = JSON.parse(text);
+              } catch (e) {
+                console.error('❌ Erreur parsing déchargements:', e);
+              }
+            } else {
+              dechargements = dechargementsData || [];
+            }
+
+            // Trouver le déchargement lié par numTicket ou numBonLivraison
+            const dechargementAssocie = dechargements.find(d => 
+              (numTicket && d.numTicket === numTicket) || 
+              (numBonLivraison && d.numBonLivraison === numBonLivraison)
+            );
+            
+            if (dechargementAssocie && dechargementAssocie.id) {
+              console.log('🔍 Déchargement associé trouvé:', dechargementAssocie.id);
+              
+              const dechDestination = dechargementAssocie.clientId 
+                ? `Client ID: ${dechargementAssocie.clientId}`
+                : dechargementAssocie.depotId 
+                  ? `Dépôt ID: ${dechargementAssocie.depotId}`
+                  : 'N/A';
+              
+              // Supprimer le déchargement
+              this.dechargementService.deleteDechargement(dechargementAssocie.id).subscribe({
+                next: () => {
+                  console.log('✅ Déchargement synchronisé et supprimé');
+                  
+                  // 3. Créer une notification de danger
+                  const notificationMessage = `⚠️ OPÉRATION DANGEREUSE EFFECTUÉE
+
+Suppression d'un voyage avec synchronisation automatique:
+
+🚚 VOYAGE SUPPRIMÉ:
+   • ID: ${id}
+   • Bon de livraison: ${numBonLivraison || 'N/A'}
+   • Ticket: ${numTicket || 'N/A'}
+   • Date: ${this.formatDate(this.voyageToDelete?.date)}
+   • Camion: ${this.voyageToDelete?.camionNom || this.voyageToDelete?.camionId || 'N/A'}
+   • Chauffeur: ${this.voyageToDelete?.chauffeurNom || 'N/A'}
+   • Destination: ${destination}
+   • Quantité: ${this.voyageToDelete?.quantite || 0} T
+
+📦 DÉCHARGEMENT SYNCHRONISÉ ET SUPPRIMÉ:
+   • ID Déchargement: ${dechargementAssocie.id}
+   • Ticket: ${dechargementAssocie.numTicket || 'N/A'}
+   • Bon de livraison: ${dechargementAssocie.numBonLivraison || 'N/A'}
+   • Destination: ${dechDestination}
+   • Date: ${this.formatDate(dechargementAssocie.dateDechargement)}
+
+⚠️ ATTENTION: Cette opération a supprimé automatiquement le déchargement associé pour maintenir la cohérence des données entre voyages et déchargements.
+
+⏰ Date de l'opération: ${new Date().toLocaleString('fr-FR')}`;
+
+                  this.notificationService.creerNotification({
+                    type: TypeNotification.INFO_GENERALE,
+                    niveau: NiveauAlerte.DANGER,
+                    message: notificationMessage,
+                    entiteType: 'VOYAGE',
+                    entiteId: id,
+                    lu: false,
+                    deletable: false, // ⚠️ NOTIFICATION CRITIQUE - NON SUPPRIMABLE
+                    dateCreation: new Date().toISOString()
+                  } as any).subscribe({
+                    next: () => {
+                      console.log('✅ Notification de danger créée');
+                      this.notificationService.rafraichir();
+                    },
+                    error: (err) => {
+                      console.error('❌ Erreur création notification:', err);
+                      // Ne pas bloquer l'opération si la notification échoue
+                      if (err.status === 403) {
+                        console.warn('⚠️ Session expirée - notification non créée (opération de suppression déjà effectuée)');
+                      }
+                    }
+                  });
+                },
+                error: (err) => {
+                  console.error('❌ Erreur suppression déchargement:', err);
+                  this.error = 'Le voyage a été supprimé mais le déchargement associé n\'a pas pu être supprimé';
+                }
+              });
+            } else {
+              console.warn('⚠️ Aucun déchargement associé trouvé');
+              
+              // Notification sans déchargement
+              const notificationMessage = `⚠️ OPÉRATION EFFECTUÉE
+
+Suppression d'un voyage:
+
+🚚 VOYAGE SUPPRIMÉ:
+   • ID: ${id}
+   • Bon de livraison: ${numBonLivraison || 'N/A'}
+   • Ticket: ${numTicket || 'N/A'}
+   • Date: ${this.formatDate(this.voyageToDelete?.date)}
+   • Camion: ${this.voyageToDelete?.camionNom || this.voyageToDelete?.camionId || 'N/A'}
+   • Chauffeur: ${this.voyageToDelete?.chauffeurNom || 'N/A'}
+   • Destination: ${destination}
+   • Quantité: ${this.voyageToDelete?.quantite || 0} T
+
+ℹ️ Aucun déchargement associé n'a été trouvé pour synchronisation.
+
+⏰ Date de l'opération: ${new Date().toLocaleString('fr-FR')}`;
+
+              this.notificationService.creerNotification({
+                type: TypeNotification.INFO_GENERALE,
+                niveau: NiveauAlerte.WARNING,
+                message: notificationMessage,
+                entiteType: 'VOYAGE',
+                entiteId: id,
+                lu: false,
+                deletable: false, // ⚠️ NOTIFICATION CRITIQUE - NON SUPPRIMABLE
+                dateCreation: new Date().toISOString()
+              } as any).subscribe({
+                next: () => {
+                  console.log('✅ Notification créée');
+                  this.notificationService.rafraichir();
+                },
+                error: (err) => {
+                  console.error('❌ Erreur création notification:', err);
+                  // Ne pas bloquer l'opération si la notification échoue
+                  if (err.status === 403) {
+                    console.warn('⚠️ Session expirée - notification non créée (opération de suppression déjà effectuée)');
+                  }
+                }
+              });
+            }
+            
+            // Recharger les données
+            this.loadVoyages();
+            this.closeDeleteDialog();
+          },
+          error: (err) => {
+            console.error('❌ Erreur chargement déchargements:', err);
+            this.loadVoyages();
+            this.closeDeleteDialog();
+          }
+        });
       },
-      error: (err) => this.error = 'Erreur suppression: ' + (err.error?.message || err.message)
+      error: (err) => {
+        this.error = 'Erreur suppression: ' + (err.error?.message || err.message);
+        this.closeDeleteDialog();
+      }
     });
+  }
+
+  deleteVoyage(id?: number) {
+    if (id === undefined) return;
+    
+    // Trouver le voyage et ouvrir le modal de confirmation
+    const voyage = this.voyages.find(v => v.id === id);
+    if (voyage) {
+      this.openDeleteDialog(voyage);
+    }
+  }
+
+  private formatDate(date: any): string {
+    if (!date) return 'N/A';
+    try {
+      return new Date(date).toLocaleString('fr-FR');
+    } catch {
+      return String(date);
+    }
   }
 
   // Méthodes helper pour récupérer les informations du projet

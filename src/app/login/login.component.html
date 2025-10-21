@@ -16,6 +16,15 @@
         <p class="login-subtitle">Connectez-vous à votre compte</p>
       </div>
 
+      <!-- Alerte d'expiration de session -->
+      <div *ngIf="sessionExpired" class="session-expired-alert">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <div class="alert-content">
+          <strong>Session expirée</strong>
+          <p>Votre session a expiré. Veuillez vous reconnecter.</p>
+        </div>
+      </div>
+
       <!-- Formulaire -->
       <form (ngSubmit)="onSubmit()" class="login-form">
         <!-- Email -->

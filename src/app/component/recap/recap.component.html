@@ -66,13 +66,18 @@
     <!-- Client Details & Table -->
     <div *ngIf="selectedClient" class="recap-container">
       <!-- Client Info Card -->
-      <div class="client-info-card">
+      <div class="client-info-card" 
+           [style.border]="isClientEnDepassement() ? '3px solid #dc2626' : ''"
+           [style.background]="isClientEnDepassement() ? 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)' : ''">
         <div class="client-header">
-          <div class="client-avatar">
+          <div class="client-avatar" [style.background]="isClientEnDepassement() ? 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)' : ''">
             <i class="bi bi-person-fill"></i>
           </div>
           <div class="client-details">
-            <h2 class="client-title">{{ selectedClient.nom }}</h2>
+            <h2 class="client-title">
+              {{ selectedClient.nom }}
+              <i *ngIf="isClientEnDepassement()" class="bi bi-exclamation-triangle-fill" style="color: #dc2626; margin-left: 12px; font-size: 24px;"></i>
+            </h2>
             <div class="client-meta">
               <span class="meta-item">
                 <i class="bi bi-hash"></i>
@@ -81,6 +86,10 @@
               <span class="meta-item">
                 <i class="bi bi-box-seam"></i>
                 Quantité autorisée: <strong>{{ getQuantiteAutorisee(selectedClient.id) | number:'1.0-2' }} kg</strong>
+              </span>
+              <span *ngIf="isClientEnDepassement()" class="meta-item" style="color: #dc2626; font-weight: 700;">
+                <i class="bi bi-exclamation-circle-fill"></i>
+                DÉPASSEMENT DÉTECTÉ !
               </span>
             </div>
           </div>
@@ -234,7 +243,9 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let voyage of paginatedVoyages" class="table-row">
+            <tr *ngFor="let voyage of paginatedVoyages" class="table-row"
+                [style.background-color]="isClientEnDepassement() ? '#fee2e2' : ''"
+                [style.border-left]="isClientEnDepassement() ? '4px solid #dc2626' : ''">
               <td>
                 <span class="date-badge">
                   <i class="bi bi-calendar-event"></i>
@@ -251,13 +262,16 @@
               </td>
               <td>{{ getChauffeurNom(voyage.chauffeurId) }}</td>
               <td>
-                <span class="poids-badge">
+                <span class="poids-badge" [style.background]="isClientEnDepassement() ? '#fca5a5' : ''">
                   {{ voyage.poidsClient | number:'1.0-2' }}
                 </span>
               </td>
               <td>
-                <span class="reste-badge" [style.background]="getResteBadgeColor(voyage.reste || 0)" [style.color]="'white'">
+                <span class="reste-badge" 
+                      [style.background]="isClientEnDepassement() ? '#dc2626' : getResteBadgeColor(voyage.reste || 0)" 
+                      [style.color]="'white'">
                   {{ voyage.reste | number:'1.0-2' }}
+                  <i *ngIf="isClientEnDepassement()" class="bi bi-exclamation-triangle-fill" style="margin-left: 6px;"></i>
                 </span>
               </td>
             </tr>

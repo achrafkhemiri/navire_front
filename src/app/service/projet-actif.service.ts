@@ -33,6 +33,8 @@ export class ProjetActifService {
     console.log('💾 Projet sauvegardé dans localStorage');
     this.projetActifSubject.next(projet);
     console.log('📡 Notification émise aux abonnés');
+    // Assurer l'UI en mode "vue projet" quand un projet actif est défini
+    this.setViewMode(false);
   }
 
   getProjetActif() {
@@ -51,6 +53,8 @@ export class ProjetActifService {
     this.projetActif = null;
     localStorage.removeItem(this.STORAGE_KEY);
     this.projetActifSubject.next(null);
+    // Quand on n'a plus de projet actif, repasser en vue globale
+    this.setViewMode(true);
   }
 
   setViewMode(isAllVoyages: boolean) {

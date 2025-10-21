@@ -16,10 +16,6 @@
           <p class="page-subtitle">{{ filteredChauffeurs.length }} chauffeur(s) trouvé(s)</p>
         </div>
       </div>
-      <button class="add-btn" (click)="openAddDialog()">
-        <i class="bi bi-plus-lg"></i>
-        <span>Ajouter un chauffeur</span>
-      </button>
     </div>
 
     <div *ngIf="error" class="error">{{ error }}</div>
@@ -83,7 +79,6 @@
                 }"></i>
               </div>
             </th>
-            <th class="actions-header text-center">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -91,17 +86,9 @@
             <td class="id-cell">{{ ch.id }}</td>
             <td>{{ ch.nom }}</td>
             <td>{{ ch.numCin }}</td>
-            <td class="actions-cell">
-              <button class="action-btn edit-btn" (click)="editChauffeur(ch)" title="Modifier">
-                <i class="bi bi-pencil-fill"></i>
-              </button>
-              <button class="action-btn delete-btn" (click)="deleteChauffeur(ch.id)" title="Supprimer">
-                <i class="bi bi-trash-fill"></i>
-              </button>
-            </td>
           </tr>
           <tr *ngIf="paginatedChauffeurs.length === 0" class="no-data-row">
-            <td colspan="4">
+            <td colspan="3">
               <div class="no-data">
                 <i class="bi bi-inbox"></i>
                 <p>Aucun chauffeur trouvé</p>

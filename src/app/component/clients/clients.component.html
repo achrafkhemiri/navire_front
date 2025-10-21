@@ -13,10 +13,6 @@
 					<p class="page-subtitle">{{ filteredClients.length }} client(s) trouvé(s)</p>
 				</div>
 			</div>
-			<button class="add-btn" (click)="addClient()">
-				<i class="bi bi-plus-lg"></i>
-				<span>Nouveau Client</span>
-			</button>
 		</div>
 
 		<!-- Toolbar -->
@@ -88,7 +84,6 @@
 								}"></i>
 							</div>
 						</th>
-						<th class="actions-header text-center">Actions</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -106,17 +101,9 @@
 							<i class="bi bi-file-text" style="margin-right: 8px; color: #f59e0b;"></i>
 							{{ cl.mf || '-' }}
 						</td>
-						<td class="actions-cell">
-							<button class="action-btn edit-btn" (click)="editClient(cl)" title="Modifier">
-								<i class="bi bi-pencil-fill"></i>
-							</button>
-							<button class="action-btn delete-btn" (click)="deleteClient(cl)" title="Supprimer">
-								<i class="bi bi-trash-fill"></i>
-							</button>
-						</td>
 					</tr>
 					<tr *ngIf="paginatedClients.length === 0" class="no-data-row">
-						<td colspan="5">
+						<td colspan="4">
 							<div class="no-data">
 								<i class="bi bi-inbox"></i>
 								<p>Aucun client trouvé</p>

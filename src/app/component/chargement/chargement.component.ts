@@ -131,6 +131,10 @@ export class ChargementComponent {
     return this.weightsAreIntegers && this.isBrutGreaterThanTar && !!this.dialogDechargement.numTicket && ((this.dialogDechargement._type === 'client' && !!this.dialogDechargement.clientId) || (this.dialogDechargement._type === 'depot' && !!this.dialogDechargement.depotId));
   }
 
+  // Modal de confirmation de dépassement
+  showDepassementModal: boolean = false;
+  depassementQuantite: number = 0;
+
   constructor(
     private chargementService: ChargementControllerService,
     private dechargementService: DechargementControllerService,
@@ -576,6 +580,38 @@ export class ChargementComponent {
   }
 
   saveDechargement() {
+    // Réinitialiser l'erreur
+    this.error = '';
+    
+    // Vérifier immédiatement si le client dépasse sa quantité autorisée (PREMIÈRE VÉRIFICATION)
+    const poidsNet = this.calculatePoids();
+    if (this.dialogDechargement._type === 'client' && this.dialogDechargement.clientId) {
+      const resteClient = this.getResteClient(this.dialogDechargement.clientId);
+      if (poidsNet > resteClient) {
+        const depassement = poidsNet - resteClient;
+        this.depassementQuantite = depassement;
+        this.showDepassementModal = true;
+        return; // Afficher la modal immédiatement
+      }
+    }
+
+    // Si pas de dépassement, faire les validations normales
+    this.proceedWithSaveDechargement();
+  }
+
+  // Confirmer le dépassement et continuer l'enregistrement
+  confirmDepassement() {
+    this.showDepassementModal = false;
+    this.proceedWithSaveDechargement();
+  }
+
+  // Annuler le dépassement
+  cancelDepassement() {
+    this.showDepassementModal = false;
+  }
+
+  // Procéder avec l'enregistrement du déchargement
+  private proceedWithSaveDechargement() {
     // Validate integer weights and brut > tar before submit
     this.validateWeights();
     if (!this.weightsAreIntegers) {
@@ -601,6 +637,13 @@ export class ChargementComponent {
       return;
     }
 
+    // Valider que le poids ne dépasse pas le reste du projet
+    const poidsNet = this.calculatePoids();
+    const resteProjet = this.getResteProjet();
+    if (poidsNet > resteProjet) {
+      this.error = `Le poids net (${poidsNet}) dépasse le reste disponible du projet (${resteProjet})`;
+      return;
+    }
     // Calculer le poids selon le type
     if (this.dialogDechargement._type === 'client') {
       this.dialogDechargement.poidsClient = this.dialogDechargement.poidComplet - this.dialogDechargement.poidCamionVide;
@@ -741,6 +784,31 @@ export class ChargementComponent {
     const quantiteAutorisee = this.getQuantiteAutorisee(clientId);
     const totalLivre = this.getTotalLivreClient(clientId);
     return quantiteAutorisee - totalLivre;
+  }
+
+  // Vérifier si un client a dépassé sa quantité autorisée
+  isClientEnDepassement(clientId: number | undefined): boolean {
+    if (!clientId) return false;
+    const reste = this.getResteClient(clientId);
+    return reste < 0;
+  }
+
+  // Calculer le reste total du projet (quantité totale - somme des livraisons)
+  getResteProjet(): number {
+    const projet = this.contextProjet || this.projetActif;
+    if (!projet) return 0;
+    
+    const quantiteTotale = projet.quantiteTotale || 0;
+    
+    // Calculer le total déjà livré à partir de tous les déchargements du projet
+    const totalLivre = this.dechargements
+      .filter((d: any) => d.projetId === projet.id)
+      .reduce((sum: number, d: any) => {
+        const poidsNet = (d.poidComplet || 0) - (d.poidCamionVide || 0);
+        return sum + poidsNet;
+      }, 0);
+    
+    return quantiteTotale - totalLivre;
   }
 
   // Obtenir la couleur selon le pourcentage restant

@@ -2,11 +2,8 @@ import { ProjetParametreComponent } from './component/projet/projet-parametre.co
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
 
-import { HomeComponent } from './home/home.component';
 import { LoginComponent } from './login/login.component';
-import { EtatGeneraleComponent } from './etat-generale/etat-generale.component';
-import { EtatVenteComponent } from './etat-vente/etat-vente.component';
-import { RecapVenteComponent } from './recap-vente/recap-vente.component';
+
 
 import { ChauffeurComponent } from './component/chauffeur/chauffeur.component';
 import { CamionComponent } from './component/camion/camion.component';
@@ -34,13 +31,11 @@ const routes: Routes = [
   // Route de connexion - accessible seulement si non authentifié
   { path: 'login', component: LoginComponent, canActivate: [LoginGuard] },
   
+  // Route par défaut - redirige vers la page des projets
+  { path: '', redirectTo: '/projet', pathMatch: 'full' },
+  
   // Routes protégées - nécessitent une authentification
   { path: 'projet-list', component: ProjetListComponent, canActivate: [AuthGuard] },
-  { path: 'home', component: HomeComponent, canActivate: [AuthGuard] },
-  { path: '', redirectTo: '/login', pathMatch: 'full' }, // Page par défaut = login
-  { path: 'etat-generale', component: EtatGeneraleComponent, canActivate: [AuthGuard] },
-  { path: 'etat-vente', component: EtatVenteComponent, canActivate: [AuthGuard] },
-  { path: 'recap-vente', component: RecapVenteComponent, canActivate: [AuthGuard] },
   { path: 'chauffeur', component: ChauffeurComponent, canActivate: [AuthGuard] },
   { path: 'camion', component: CamionComponent, canActivate: [AuthGuard] },
   { path: 'client', component: ClientComponent, canActivate: [AuthGuard] },
@@ -62,8 +57,8 @@ const routes: Routes = [
   { path: 'projet-client', component: ProjetClientComponent, canActivate: [AuthGuard] },
   { path: 'notifications', component: NotificationsComponent, canActivate: [AuthGuard] },
   
-  // Redirection par défaut
-  { path: '**', redirectTo: '' } // Redirige toute route inconnue vers Home
+  // Redirection par défaut - toute route inconnue vers la page des projets
+  { path: '**', redirectTo: '/projet' }
 ];
 
 @NgModule({

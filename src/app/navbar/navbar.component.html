@@ -1,16 +1,36 @@
 <header class="navbar" [ngStyle]="{'left.px': isSidebarOpen ? sidebarWidth : sidebarClosedWidth}">
   <div class="navbar-left">
-    <div class="logo ms-5 px-3">
+    <!-- Logo du Projet Actif - Visible seulement si un projet est actif ET qu'on est en vue projet -->
+    <div class="logo" *ngIf="!isAllVoyagesView && (projetActif || currentProjet)">
       <i class="bi bi-compass"></i>
-      <div class=" logo-text">
+      <div class="logo-text">
         <span class="project-label">Projet Actif</span>
         <span class="project-name">{{ getProjectDisplay() }}</span>
+      </div>
+    </div>
+
+  <!-- Quantité Restante Widget - Visible seulement si un projet est actif ET qu'on est en vue projet -->
+  <div class="reste-container" *ngIf="!isAllVoyagesView && (projetActif || currentProjet)" [ngClass]="getResteColorClass()">
+      <div class="reste-header">
+        <i class="bi" [ngClass]="getResteIcon()"></i>
+        <span class="reste-label">Reste</span>
+      </div>
+      <div class="reste-content">
+        <div class="reste-value">
+          {{ formatNumber(resteQuantite) }} T
+        </div>
+        <div class="reste-percentage">
+          {{ pourcentageRestant }}%
+        </div>
+      </div>
+      <div class="reste-progress-bar">
+        <div class="reste-progress-fill" [style.width.%]="pourcentageRestant"></div>
       </div>
     </div>
   </div>
 
   <div class="navbar-right">
-    <button class="toggle-view-btn" (click)="toggleViewMode()">
+    <button class="toggle-view-btn" *ngIf="hasActiveProjet()" (click)="toggleViewMode()">
       <i class="bi" [ngClass]="isAllVoyagesView ? 'bi-folder2' : 'bi-grid-3x3-gap'"></i>
       <span>{{ getButtonText() }}</span>
     </button>

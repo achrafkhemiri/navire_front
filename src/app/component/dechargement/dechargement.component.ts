@@ -6,6 +6,8 @@ import { DepotControllerService } from '../../api/api/depotController.service';
 import { CamionControllerService } from '../../api/api/camionController.service';
 import { ChauffeurControllerService } from '../../api/api/chauffeurController.service';
 import { VoyageControllerService } from '../../api/api/voyageController.service';
+import { ProjetClientControllerService } from '../../api/api/projetClientController.service';
+import { NotificationService } from '../../service/notification.service';
 import { DechargementDTO } from '../../api/model/dechargementDTO';
 import { ChargementDTO } from '../../api/model/chargementDTO';
 import { ClientDTO } from '../../api/model/clientDTO';
@@ -15,6 +17,7 @@ import { ChauffeurDTO } from '../../api/model/chauffeurDTO';
 import { VoyageDTO } from '../../api/model/voyageDTO';
 import { SocieteDTO } from '../../api/model/societeDTO';
 import { ProjetActifService } from '../../service/projet-actif.service';
+import { TypeNotification, NiveauAlerte } from '../../model/notification.model';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -40,6 +43,7 @@ export class DechargementComponent implements OnInit {
   chargements: ChargementDTO[] = [];
   camions: CamionDTO[] = [];
   chauffeurs: ChauffeurDTO[] = [];
+  projetsClients: any[] = [];
   
   // Filters
   activeFilter: string = 'all';
@@ -85,13 +89,17 @@ export class DechargementComponent implements OnInit {
   showClientDropdown: boolean = false;
   showDepotDropdown: boolean = false;
   
+  // Modal de confirmation de dépassement
+  showDepassementModal: boolean = false;
+  depassementQuantite: number = 0;
+  
   error: string = '';
   isSidebarOpen: boolean = true;
   Math = Math;
   
   breadcrumbItems = [
     { label: 'Accueil', route: '/home' },
-    { label: 'Déchargements', route: '/dechargement' }
+    { label: 'Bons des chargements', route: '/dechargement' }
   ];
 
   // Contexte projet
@@ -123,7 +131,9 @@ export class DechargementComponent implements OnInit {
     private camionService: CamionControllerService,
     private chauffeurService: ChauffeurControllerService,
     private voyageService: VoyageControllerService,
-    private projetActifService: ProjetActifService
+    private projetClientService: ProjetClientControllerService,
+    private projetActifService: ProjetActifService,
+    private notificationService: NotificationService
   ) {}
 
   ngOnInit(): void {
@@ -144,6 +154,7 @@ export class DechargementComponent implements OnInit {
     this.loadChargements();
     this.loadCamions();
     this.loadChauffeurs();
+    this.loadProjetsClients();
   }
 
   loadDechargements(): void {
@@ -437,6 +448,23 @@ export class DechargementComponent implements OnInit {
         console.error('Erreur chargement chauffeurs:', err);
       }
     });
+  }
+
+  loadProjetsClients(): void {
+    if (!this.projetActif || !this.projetActif.id) {
+      this.projetsClients = [];
+      return;
+    }
+    
+    const projetId = this.projetActif.id;
+    
+    // Utiliser directement les clients chargés pour créer les projetsClients
+    this.projetsClients = this.clients.map((client: any) => ({
+      id: client.id,
+      projetId: projetId,
+      clientId: client.id,
+      quantiteAutorisee: client.quantitesAutoriseesParProjet?.[projetId] || 0
+    }));
   }
 
   loadClients(): void {
@@ -1144,14 +1172,149 @@ export class DechargementComponent implements OnInit {
     this.showDepotDropdown = false;
   }
 
+  // Calculer le reste total du projet (quantité totale - somme des livraisons)
+  getResteProjet(): number {
+    if (!this.projetActif) return 0;
+    
+    const quantiteTotale = this.projetActif.quantiteTotale || 0;
+    
+    // Calculer le total déjà livré à partir de tous les déchargements du projet
+    const totalLivre = this.dechargements
+      .filter(d => d.projetId === this.projetActif.id)
+      .reduce((sum, d) => {
+        const poidsNet = (d.poidComplet || 0) - (d.poidCamionVide || 0);
+        return sum + poidsNet;
+      }, 0);
+    
+    return quantiteTotale - totalLivre;
+  }
+
+  // Obtenir la couleur selon le pourcentage restant
+  getResteColor(reste: number, quantiteTotale: number): string {
+    if (quantiteTotale === 0) return '#64748b'; // gris
+    const pourcentage = (reste / quantiteTotale) * 100;
+    
+    if (pourcentage > 50) return '#10b981'; // vert
+    if (pourcentage > 20) return '#f59e0b'; // orange
+    return '#ef4444'; // rouge
+  }
+
+  // Valider que le poids ne dépasse pas le reste du projet
+  validatePoidsDechargement(): boolean {
+    if (!this.dialogDechargement.poidComplet || !this.dialogDechargement.poidCamionVide) {
+      return true; // Les validations de champs vides sont gérées ailleurs
+    }
+
+    const poidsNet = (this.dialogDechargement.poidComplet || 0) - (this.dialogDechargement.poidCamionVide || 0);
+    
+    // Vérifier le reste du projet
+    const resteProjet = this.getResteProjet();
+    
+    // En mode édition, on doit retirer le poids actuel du déchargement qu'on modifie
+    let resteDisponible = resteProjet;
+    if (this.editMode && this.selectedDechargement) {
+      const poidsActuelDechargement = (this.selectedDechargement.poidComplet || 0) - (this.selectedDechargement.poidCamionVide || 0);
+      resteDisponible = resteProjet + poidsActuelDechargement;
+    }
+    
+    if (poidsNet > resteDisponible) {
+      this.error = `Le poids net (${poidsNet}) dépasse le reste disponible du projet (${resteDisponible})`;
+      return false;
+    }
+    
+    return true;
+  }
+
+  // Obtenir la quantité autorisée pour un client
+  getQuantiteAutorisee(clientId: number | undefined): number {
+    if (!clientId || !this.projetActif) return 0;
+    
+    const projetClient = this.projetsClients.find(
+      pc => pc.projetId === this.projetActif.id && pc.clientId === clientId
+    );
+    
+    return projetClient?.quantiteAutorisee || 0;
+  }
+
+  // Calculer le total déjà livré pour un client
+  getTotalLivreClient(clientId: number): number {
+    if (!this.projetActif) return 0;
+    
+    return this.dechargements
+      .filter(d => d.clientId === clientId && d.projetId === this.projetActif.id)
+      .reduce((sum, d) => {
+        const poidsNet = (d.poidComplet || 0) - (d.poidCamionVide || 0);
+        return sum + poidsNet;
+      }, 0);
+  }
+
+  // Calculer le reste pour un client
+  getResteClient(clientId: number): number {
+    const quantiteAutorisee = this.getQuantiteAutorisee(clientId);
+    const totalLivre = this.getTotalLivreClient(clientId);
+    return quantiteAutorisee - totalLivre;
+  }
+
+  // Vérifier si un client a dépassé sa quantité autorisée
+  isClientEnDepassement(clientId: number | undefined): boolean {
+    if (!clientId) return false;
+    const reste = this.getResteClient(clientId);
+    return reste < 0;
+  }
+
   saveDechargement(): void {
-    // Validation
+    // Réinitialiser l'erreur
+    this.error = '';
+    
+    // Vérifier immédiatement si le client dépasse sa quantité autorisée (PREMIÈRE VÉRIFICATION)
+    const poidsNet = (this.dialogDechargement.poidComplet || 0) - (this.dialogDechargement.poidCamionVide || 0);
+    
+    if (this.dialogDechargement.clientId) {
+      const resteClient = this.getResteClient(this.dialogDechargement.clientId);
+      
+      // En mode édition, ajouter le poids actuel du déchargement au reste
+      let resteDisponibleClient = resteClient;
+      if (this.editMode && this.selectedDechargement && this.selectedDechargement.clientId === this.dialogDechargement.clientId) {
+        const poidsActuel = (this.selectedDechargement.poidComplet || 0) - (this.selectedDechargement.poidCamionVide || 0);
+        resteDisponibleClient = resteClient + poidsActuel;
+      }
+      
+      if (poidsNet > resteDisponibleClient) {
+        const depassement = poidsNet - resteDisponibleClient;
+        this.depassementQuantite = depassement;
+        this.showDepassementModal = true;
+        return; // Afficher la modal immédiatement
+      }
+    }
+
+    // Si pas de dépassement, faire les validations normales
+    this.proceedWithSaveDechargement();
+  }
+
+  // Confirmer le dépassement et continuer l'enregistrement
+  confirmDepassement() {
+    this.showDepassementModal = false;
+    this.proceedWithSaveDechargement();
+  }
+
+  // Annuler le dépassement
+  cancelDepassement() {
+    this.showDepassementModal = false;
+  }
+
+  // Procéder avec l'enregistrement du déchargement
+  private proceedWithSaveDechargement(): void {
+    // Validation des champs obligatoires
     if (!this.dialogDechargement.numTicket || !this.dialogDechargement.poidComplet || 
         !this.dialogDechargement.poidCamionVide) {
       this.error = 'Veuillez remplir tous les champs obligatoires';
       return;
     }
 
+    // Valider que le poids ne dépasse pas le reste du projet
+    if (!this.validatePoidsDechargement()) {
+      return;
+    }
     // Préparer les données pour l'envoi
     const dechargementToSave = { ...this.dialogDechargement } as DechargementDTO;
     
@@ -1324,17 +1487,200 @@ export class DechargementComponent implements OnInit {
 
   confirmDelete(): void {
     if (this.dechargementToDelete && this.dechargementToDelete.id) {
-      this.dechargementService.deleteDechargement(this.dechargementToDelete.id).subscribe({
+      const dechargementId = this.dechargementToDelete.id;
+      const numTicket = this.dechargementToDelete.numTicket;
+      const numBonLivraison = this.dechargementToDelete.numBonLivraison;
+      
+      // Afficher les détails du déchargement
+      const destination = this.dechargementToDelete.clientId 
+        ? `Client: ${this.getClientName(this.dechargementToDelete.clientId)}`
+        : `Dépôt: ${this.getDepotName(this.dechargementToDelete.depotId)}`;
+      
+      console.log('🗑️ Suppression déchargement:', {
+        dechargementId,
+        destination,
+        numTicket,
+        numBonLivraison
+      });
+
+      // 1. Supprimer le déchargement
+      this.dechargementService.deleteDechargement(dechargementId).subscribe({
         next: () => {
-          this.loadDechargements();
-          this.closeDeleteDialog();
+          console.log('✅ Déchargement supprimé avec succès');
+          
+          // 2. Trouver et supprimer le voyage associé par numTicket ou numBonLivraison
+          this.voyageService.getAllVoyages('body').subscribe({
+            next: async (voyagesData) => {
+              let voyages: VoyageDTO[] = [];
+              
+              // Parser les données si c'est un Blob
+              if (voyagesData instanceof Blob) {
+                const text = await voyagesData.text();
+                try {
+                  voyages = JSON.parse(text);
+                } catch (e) {
+                  console.error('❌ Erreur parsing voyages:', e);
+                }
+              } else {
+                voyages = voyagesData || [];
+              }
+
+              // Trouver le voyage lié par numTicket ou numBonLivraison
+              const voyageAssocie = voyages.find(v => 
+                (numTicket && v.numTicket === numTicket) || 
+                (numBonLivraison && v.numBonLivraison === numBonLivraison)
+              );
+              
+              if (voyageAssocie && voyageAssocie.id) {
+                console.log('🔍 Voyage associé trouvé:', voyageAssocie.id);
+                
+                // Supprimer le voyage
+                this.voyageService.deleteVoyage(voyageAssocie.id, 'body').subscribe({
+                  next: () => {
+                    console.log('✅ Voyage synchronisé et supprimé');
+                    
+                    // 3. Créer une notification de danger
+                    const notificationMessage = `⚠️ OPÉRATION DANGEREUSE EFFECTUÉE
+
+Suppression d'un déchargement avec synchronisation automatique:
+
+📦 DÉCHARGEMENT SUPPRIMÉ:
+   • ID: ${dechargementId}
+   • Ticket: ${numTicket || 'N/A'}
+   • Bon de livraison: ${numBonLivraison || 'N/A'}
+   • Destination: ${destination}
+   • Date: ${this.formatDate(this.dechargementToDelete?.dateDechargement)}
+
+🚚 VOYAGE SYNCHRONISÉ ET SUPPRIMÉ:
+   • ID Voyage: ${voyageAssocie.id}
+   • Bon de livraison: ${voyageAssocie.numBonLivraison || 'N/A'}
+   • Ticket: ${voyageAssocie.numTicket || 'N/A'}
+   • Date: ${this.formatDate(voyageAssocie.date)}
+   • Camion: ${voyageAssocie.camionNom || voyageAssocie.camionId || 'N/A'}
+   • Chauffeur: ${voyageAssocie.chauffeurNom || 'N/A'}
+
+⚠️ ATTENTION: Cette opération a supprimé automatiquement le voyage associé pour maintenir la cohérence des données entre déchargements et voyages.
+
+⏰ Date de l'opération: ${new Date().toLocaleString('fr-FR')}`;
+
+                    this.notificationService.creerNotification({
+                      type: TypeNotification.INFO_GENERALE,
+                      niveau: NiveauAlerte.DANGER,
+                      message: notificationMessage,
+                      entiteType: 'DECHARGEMENT',
+                      entiteId: dechargementId,
+                      lu: false,
+                      deletable: false, // ⚠️ NOTIFICATION CRITIQUE - NON SUPPRIMABLE
+                      dateCreation: new Date().toISOString()
+                    } as any).subscribe({
+                      next: () => {
+                        console.log('✅ Notification de danger créée pour DECHARGEMENT');
+                        this.notificationService.rafraichir();
+                      },
+                      error: (err) => {
+                        console.error('❌ Erreur création notification DECHARGEMENT:', err);
+                        console.error('📋 Détails:', {
+                          status: err.status,
+                          statusText: err.statusText,
+                          message: err.message,
+                          error: err.error,
+                          url: err.url,
+                          entiteType: 'DECHARGEMENT',
+                          entiteId: dechargementId
+                        });
+                        // Ne pas bloquer l'opération si la notification échoue
+                        // L'opération de suppression a déjà réussi
+                        if (err.status === 403) {
+                          console.warn('⚠️ Session expirée - notification DECHARGEMENT non créée (opération déjà effectuée)');
+                          console.warn('💡 Solution: Reconnectez-vous pour activer les notifications');
+                        }
+                      }
+                    });
+                  },
+                  error: (err) => {
+                    console.error('❌ Erreur suppression voyage:', err);
+                    this.error = 'Le déchargement a été supprimé mais le voyage associé n\'a pas pu être supprimé';
+                  }
+                });
+              } else {
+                console.warn('⚠️ Aucun voyage associé trouvé');
+                
+                // Notification sans voyage
+                const notificationMessage = `⚠️ OPÉRATION EFFECTUÉE
+
+Suppression d'un déchargement:
+
+📦 DÉCHARGEMENT SUPPRIMÉ:
+   • ID: ${dechargementId}
+   • Ticket: ${numTicket || 'N/A'}
+   • Bon de livraison: ${numBonLivraison || 'N/A'}
+   • Destination: ${destination}
+   • Date: ${this.formatDate(this.dechargementToDelete?.dateDechargement)}
+
+ℹ️ Aucun voyage associé n'a été trouvé pour synchronisation.
+
+⏰ Date de l'opération: ${new Date().toLocaleString('fr-FR')}`;
+
+                this.notificationService.creerNotification({
+                  type: TypeNotification.INFO_GENERALE,
+                  niveau: NiveauAlerte.WARNING,
+                  message: notificationMessage,
+                  entiteType: 'DECHARGEMENT',
+                  entiteId: dechargementId,
+                  lu: false,
+                  deletable: false, // ⚠️ NOTIFICATION CRITIQUE - NON SUPPRIMABLE
+                  dateCreation: new Date().toISOString()
+                } as any).subscribe({
+                  next: () => {
+                    console.log('✅ Notification DECHARGEMENT créée (sans voyage associé)');
+                    this.notificationService.rafraichir();
+                  },
+                  error: (err) => {
+                    console.error('❌ Erreur création notification DECHARGEMENT (sans voyage):', err);
+                    console.error('📋 Détails:', {
+                      status: err.status,
+                      statusText: err.statusText,
+                      message: err.message,
+                      error: err.error,
+                      url: err.url,
+                      entiteType: 'DECHARGEMENT',
+                      entiteId: dechargementId
+                    });
+                    // Ne pas bloquer l'opération si la notification échoue
+                    if (err.status === 403) {
+                      console.warn('⚠️ Session expirée - notification DECHARGEMENT non créée');
+                      console.warn('💡 Solution: Reconnectez-vous pour activer les notifications');
+                    }
+                  }
+                });
+              }
+              
+              // Recharger les données
+              this.loadDechargements();
+              this.closeDeleteDialog();
+            },
+            error: (err) => {
+              console.error('❌ Erreur chargement voyages:', err);
+              this.loadDechargements();
+              this.closeDeleteDialog();
+            }
+          });
         },
         error: (err) => {
-          console.error('Erreur lors de la suppression:', err);
+          console.error('❌ Erreur lors de la suppression:', err);
           this.error = 'Erreur lors de la suppression du déchargement';
           this.closeDeleteDialog();
         }
       });
+    }
+  }
+
+  private formatDate(date: any): string {
+    if (!date) return 'N/A';
+    try {
+      return new Date(date).toLocaleString('fr-FR');
+    } catch {
+      return String(date);
     }
   }
 

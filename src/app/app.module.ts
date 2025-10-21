@@ -18,11 +18,7 @@ import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { SidebarComponent } from './sidebar/sidebar.component';
 import { NavbarComponent } from './navbar/navbar.component';
-import { HomeComponent } from './home/home.component';
-import { EtatGeneraleComponent } from './etat-generale/etat-generale.component';
-import { EditRowDialogComponent } from './etat-generale/edit-row-dialog.component';
-import { EtatVenteComponent } from './etat-vente/etat-vente.component';
-import { RecapVenteComponent } from './recap-vente/recap-vente.component';
+
 import { FormsModule } from '@angular/forms';
 // FormsModule est déjà importé correctement
 import { MatTableModule } from '@angular/material/table';
@@ -47,18 +43,15 @@ import { RouterModule } from '@angular/router';
 import { AuthErrorInterceptor } from './auth-error.interceptor';
 import { NotificationsComponent } from './component/notifications/notifications.component';
 import { DeclarationComponent } from './component/declaration/declaration.component';
+import { Configuration } from './api/configuration';
 
 @NgModule({ 
   declarations: [
   AppComponent,
   SidebarComponent,
   NavbarComponent,
-  HomeComponent,
   LoginComponent,
-  EtatGeneraleComponent,
-  EditRowDialogComponent,
-  EtatVenteComponent,
-  RecapVenteComponent,
+
   ChauffeurComponent,
   ProjetComponent,
   VoyageComponent,
@@ -107,7 +100,14 @@ import { DeclarationComponent } from './component/declaration/declaration.compon
       useClass: AuthErrorInterceptor,
       multi: true
     },
-    { provide: BASE_PATH, useValue: 'http://localhost:8086' }
+    { provide: BASE_PATH, useValue: 'http://localhost:8086' },
+    {
+      provide: Configuration,
+      useFactory: () => new Configuration({
+        basePath: 'http://localhost:8086',
+        withCredentials: true  // Important pour recevoir et envoyer les cookies JWT
+      })
+    }
   ],
   bootstrap: [AppComponent]
 })

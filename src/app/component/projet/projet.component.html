@@ -28,7 +28,21 @@
 			</button>
 		</div>
 
-		<div *ngIf="error" class="alert alert-danger">{{ error }}</div>
+		<!-- Message d'erreur amélioré avec style moderne -->
+		<div *ngIf="error" class="error-message-container">
+			<div class="error-message-card">
+				<div class="error-icon">
+					<i class="bi bi-exclamation-triangle-fill"></i>
+				</div>
+				<div class="error-content">
+					<h5 class="error-title">Attention</h5>
+					<div class="error-text">{{ error }}</div>
+				</div>
+				<button type="button" class="error-close" (click)="error = ''" aria-label="Close">
+					<i class="bi bi-x-lg"></i>
+				</button>
+			</div>
+		</div>
 
 		<!-- Toolbar -->
 		<div class="toolbar-section">
@@ -60,12 +74,12 @@
 				<!-- Container avec perspective pour l'effet 3D -->
 				<div class="projet-card-container">
 					<!-- Carte avec 2 faces (avant/arrière) -->
-					<div class="projet-card" [class.flipped]="pr.isFlipped" [class.active-project]="pr.active">
+					<div class="projet-card" [class.active-project]="pr.active">
 						
 						<!-- ========== FACE AVANT ========== -->
 						<div class="projet-card-front">
 							<!-- Header avec gradient et sociétés -->
-							<div class="projet-card-header" (click)="toggleCardFlip(pr)">
+							<div class="projet-card-header">
 								<!-- Badge Projet Actif -->
 								<div class="active-badge" *ngIf="pr.active">
 									<i class="bi bi-check-circle-fill"></i>
@@ -93,7 +107,7 @@
 							</div>
 
 							<!-- Body avec informations principales -->
-							<div class="projet-card-body" (click)="toggleCardFlip(pr)">
+							<div class="projet-card-body">
 								<div class="projet-info-item">
 									<span class="projet-info-label">
 										<i class="bi bi-box-seam"></i>
@@ -144,8 +158,8 @@
 							</div>
 						</div>
 						
-						<!-- ========== FACE ARRIÈRE (DÉCLARATIONS + DATES) ========== -->
-						<div class="projet-card-back" (click)="toggleCardFlip(pr)">
+						<!-- ========== FACE ARRIÈRE (DÉCLARATIONS + DATES) - Masquée car flip désactivé ========== -->
+						<div class="projet-card-back" style="display: none;">
 							<div class="back-header">
 								<h3>
 									<i class="bi bi-file-earmark-text"></i>
@@ -462,7 +476,11 @@
 												name="nomProduit" 
 												class="form-control modern-input" 
 												placeholder="Ex: Céréales, Phosphate..."
-												required />
+												required 
+												minlength="1"/>
+											<small class="text-muted" *ngIf="!newProjet.nomProduit || newProjet.nomProduit.trim() === ''">
+												<i class="bi bi-exclamation-circle text-danger"></i> Ce champ est obligatoire
+											</small>
 										</div>
 									</div>
 									
@@ -470,12 +488,18 @@
 										<div class="form-group">
 											<label class="form-label">
 												<i class="bi bi-geo-alt-fill"></i> Port
+												<span class="text-danger">*</span>
 											</label>
 											<input 
 												[(ngModel)]="newProjet.port" 
 												name="port" 
 												class="form-control modern-input" 
-												placeholder="Ex: Port de Tunis" />
+												placeholder="Ex: Port de Tunis"
+												required 
+												minlength="1"/>
+											<small class="text-muted" *ngIf="!newProjet.port || newProjet.port.trim() === ''">
+												<i class="bi bi-exclamation-circle text-danger"></i> Ce champ est obligatoire
+											</small>
 										</div>
 									</div>
 									
@@ -483,12 +507,18 @@
 										<div class="form-group">
 											<label class="form-label">
 												<i class="bi bi-truck-front"></i> Navire
+												<span class="text-danger">*</span>
 											</label>
 											<input 
 												[(ngModel)]="newProjet.nomNavire" 
 												name="nomNavire" 
 												class="form-control modern-input" 
-												placeholder="Nom du navire" />
+												placeholder="Nom du navire"
+												required 
+												minlength="1"/>
+											<small class="text-muted" *ngIf="!newProjet.nomNavire || newProjet.nomNavire.trim() === ''">
+												<i class="bi bi-exclamation-circle text-danger"></i> Ce champ est obligatoire
+											</small>
 										</div>
 									</div>
 									
@@ -503,10 +533,13 @@
 												name="quantiteTotale" 
 												type="number" 
 												step="0.01"
-												min="0"
+												min="0.01"
 												class="form-control modern-input" 
-												placeholder=""
+												placeholder="Ex: 1000"
 												required />
+											<small class="text-muted" *ngIf="!newProjet.quantiteTotale || newProjet.quantiteTotale <= 0">
+												<i class="bi bi-exclamation-circle text-danger"></i> La quantité doit être supérieure à 0
+											</small>
 										</div>
 									</div>
 								</div>
@@ -625,7 +658,7 @@
 							<span>Annuler</span>
 						</button>
 			<button type="submit" form="addProjetForm" class="btn-submit-modal"
-				[disabled]="isAddDateInvalid()">
+				[disabled]="!isAddFormValid()">
 							<i class="bi bi-check-circle-fill"></i>
 							<span>Créer le projet</span>
 						</button>
@@ -823,16 +856,57 @@
 							</div>
 							
 							<div class="mb-3">
-								<label for="editNomProduit" class="form-label">Produit</label>
-								<input [(ngModel)]="selectedProjet.nomProduit" name="editNomProduit" id="editNomProduit" class="form-control" required />
+								<label for="editNomProduit" class="form-label">
+									<i class="bi bi-box-seam"></i> Produit
+									<span class="text-danger">*</span>
+								</label>
+								<input 
+									[(ngModel)]="selectedProjet.nomProduit" 
+									name="editNomProduit" 
+									id="editNomProduit" 
+									class="form-control" 
+									placeholder="Ex: Céréales, Phosphate..."
+									required 
+									minlength="1"/>
+								<small class="text-muted" *ngIf="!selectedProjet.nomProduit || selectedProjet.nomProduit.trim() === ''">
+									<i class="bi bi-exclamation-circle text-danger"></i> Ce champ est obligatoire
+								</small>
 							</div>
 							<div class="mb-3">
-								<label for="editQuantiteTotale" class="form-label">Quantité</label>
-								<input [(ngModel)]="selectedProjet.quantiteTotale" name="editQuantiteTotale" id="editQuantiteTotale" type="number" class="form-control" required />
+								<label for="editQuantiteTotale" class="form-label">
+									<i class="bi bi-calculator"></i> Quantité
+									<span class="text-danger">*</span>
+								</label>
+								<input 
+									[(ngModel)]="selectedProjet.quantiteTotale" 
+									name="editQuantiteTotale" 
+									id="editQuantiteTotale" 
+									type="number" 
+									step="0.01"
+									min="0.01"
+									class="form-control" 
+									placeholder="Ex: 1000"
+									required />
+								<small class="text-muted" *ngIf="!selectedProjet.quantiteTotale || selectedProjet.quantiteTotale <= 0">
+									<i class="bi bi-exclamation-circle text-danger"></i> La quantité doit être supérieure à 0
+								</small>
 							</div>
 							<div class="mb-3">
-								<label for="editNomNavire" class="form-label">Navire</label>
-								<input [(ngModel)]="selectedProjet.nomNavire" name="editNomNavire" id="editNomNavire" class="form-control" />
+								<label for="editNomNavire" class="form-label">
+									<i class="bi bi-truck-front"></i> Navire
+									<span class="text-danger">*</span>
+								</label>
+								<input 
+									[(ngModel)]="selectedProjet.nomNavire" 
+									name="editNomNavire" 
+									id="editNomNavire" 
+									class="form-control" 
+									placeholder="Nom du navire"
+									required 
+									minlength="1"/>
+								<small class="text-muted" *ngIf="!selectedProjet.nomNavire || selectedProjet.nomNavire.trim() === ''">
+									<i class="bi bi-exclamation-circle text-danger"></i> Ce champ est obligatoire
+								</small>
 							</div>
 							<!-- <div class="mb-3">
 								<label for="editPaysNavire" class="form-label">Pays</label>
@@ -843,8 +917,21 @@
 								<input [(ngModel)]="selectedProjet.etat" name="editEtat" id="editEtat" class="form-control" />
 							</div> -->
 							<div class="mb-3">
-								<label for="editPort" class="form-label">Port</label>
-								<input [(ngModel)]="selectedProjet.port" name="editPort" id="editPort" class="form-control" placeholder="Nom du port" />
+								<label for="editPort" class="form-label">
+									<i class="bi bi-geo-alt-fill"></i> Port
+									<span class="text-danger">*</span>
+								</label>
+								<input 
+									[(ngModel)]="selectedProjet.port" 
+									name="editPort" 
+									id="editPort" 
+									class="form-control" 
+									placeholder="Ex: Port de Tunis" 
+									required 
+									minlength="1"/>
+								<small class="text-muted" *ngIf="!selectedProjet.port || selectedProjet.port.trim() === ''">
+									<i class="bi bi-exclamation-circle text-danger"></i> Ce champ est obligatoire
+								</small>
 							</div>
 							<div class="mb-3">
 								<label for="editDateDebut" class="form-label">Date début</label>
@@ -864,7 +951,7 @@
 							</div>
 							<div class="modal-footer">
 				<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-				<button type="submit" class="btn btn-primary" [disabled]="isEditDateInvalid()">Enregistrer</button>
+				<button type="submit" class="btn btn-primary" [disabled]="!isEditFormValid()">Enregistrer</button>
 							</div>
 						</form>
 					</div>
@@ -874,23 +961,55 @@
 
 		<!-- Modal Confirmation Suppression Projet -->
 		<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
-			<div class="modal-dialog">
-				<div class="modal-content">
-					<div class="modal-header bg-danger text-white">
-						<h5 class="modal-title" id="deleteConfirmModalLabel">Confirmer la suppression</h5>
+			<div class="modal-dialog modal-dialog-centered">
+				<div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
+					<div class="modal-header" style="background: linear-gradient(135deg, #f87171 0%, #dc2626 100%); color: white; border: none; padding: 24px;">
+						<div style="display: flex; align-items: center; gap: 12px;">
+							<i class="bi bi-exclamation-triangle-fill" style="font-size: 28px;"></i>
+							<h5 class="modal-title" id="deleteConfirmModalLabel" style="margin: 0; font-weight: 700;">Confirmer la suppression</h5>
+						</div>
 						<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
 					</div>
-					<div class="modal-body">
-						<p>Voulez-vous vraiment supprimer le projet
-							<strong>« {{ selectedProjet?.nomProduit || ('Projet ' + (selectedProjet?.id || '')) }} »</strong> ?</p>
-						<p class="mb-0 text-muted"><i class="bi bi-exclamation-triangle-fill me-2 text-warning"></i>
-							Cette action est irréversible.</p>
+					<div class="modal-body" style="padding: 30px;">
+						<p style="font-size: 16px; margin-bottom: 20px;">
+							Voulez-vous vraiment supprimer le projet
+							<strong style="color: #dc2626;">« {{ selectedProjet?.nomProduit || ('Projet ' + (selectedProjet?.id || '')) }} »</strong> ?
+						</p>
+						
+						<div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 16px; border-radius: 12px; border-left: 4px solid #f59e0b; margin-bottom: 16px;">
+							<div style="display: flex; align-items: start; gap: 12px;">
+								<i class="bi bi-exclamation-triangle-fill" style="color: #f59e0b; font-size: 20px; flex-shrink: 0;"></i>
+								<div>
+									<p style="margin: 0; font-weight: 600; color: #92400e; font-size: 14px;">⚠️ Attention</p>
+									<p style="margin: 4px 0 0 0; font-size: 13px; color: #78350f;">
+										Cette action est <strong>irréversible</strong>. Le projet et toutes ses données associées seront définitivement supprimés.
+									</p>
+								</div>
+							</div>
+						</div>
+						
+						<div style="background: #f3f4f6; padding: 16px; border-radius: 12px; border-left: 4px solid #6b7280;">
+							<div style="display: flex; align-items: start; gap: 12px;">
+								<i class="bi bi-info-circle-fill" style="color: #6b7280; font-size: 18px; flex-shrink: 0;"></i>
+								<div>
+									<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">ℹ️ Information</p>
+									<p style="margin: 4px 0 0 0; font-size: 12px; color: #4b5563;">
+										Si le projet contient des <strong>voyages</strong>, <strong>chargements</strong> ou <strong>déchargements</strong>, 
+										vous devrez d'abord les supprimer avant de pouvoir supprimer le projet.
+									</p>
+								</div>
+							</div>
+						</div>
 					</div>
-					<div class="modal-footer">
-						<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-						<button type="button" class="btn btn-danger" (click)="deleteProjet(selectedProjet?.id)">
-							<i class="bi bi-trash"></i>
-							<span>Supprimer</span>
+					<div class="modal-footer" style="border: none; padding: 20px 30px; background: #f9fafb;">
+						<button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="padding: 10px 24px; border-radius: 10px; font-weight: 600;">
+							<i class="bi bi-x-lg"></i>
+							Annuler
+						</button>
+						<button type="button" class="btn btn-danger" (click)="deleteProjet(selectedProjet?.id)" 
+								style="padding: 10px 24px; border-radius: 10px; font-weight: 600; background: linear-gradient(135deg, #f87171 0%, #dc2626 100%); border: none;">
+							<i class="bi bi-trash-fill"></i>
+							Supprimer définitivement
 						</button>
 					</div>
 				</div>

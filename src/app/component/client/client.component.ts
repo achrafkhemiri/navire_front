@@ -851,6 +851,13 @@ export class ClientComponent {
     const totalLivre = this.getTotalLivreClient(client.id);
     return quantiteAutorisee - totalLivre;
   }
+
+  // Vérifier si un client a dépassé sa quantité autorisée
+  isClientEnDepassement(client: any): boolean {
+    if (!client) return false;
+    const reste = this.getResteClient(client);
+    return reste < 0;
+  }
   
   // Obtenir la couleur selon le reste
   getResteColor(reste: number, quantiteAutorisee: number): string {

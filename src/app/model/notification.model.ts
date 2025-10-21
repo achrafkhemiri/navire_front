@@ -8,6 +8,7 @@ export interface Notification {
   dateCreation: string;
   lu: boolean;
   dateLecture?: string;
+  deletable?: boolean; // Indique si la notification peut être supprimée
 }
 
 export enum TypeNotification {

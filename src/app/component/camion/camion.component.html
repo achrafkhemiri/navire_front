@@ -16,10 +16,6 @@
           <p class="page-subtitle">{{ filteredCamions.length }} camion(s) trouvé(s)</p>
         </div>
       </div>
-      <button class="add-btn" (click)="openAddDialog()">
-        <i class="bi bi-plus-lg"></i>
-        <span>Ajouter un camion</span>
-      </button>
     </div>
 
     <div *ngIf="error" class="error">{{ error }}</div>
@@ -83,17 +79,6 @@
                 }"></i>
               </div>
             </th> -->
-            <th class="sortable" (click)="sortBy('numBonLivraison')">
-              <div class="th-content">
-                <span>Bon Livraison</span>
-                <i class="bi" [ngClass]="{
-                  'bi-chevron-down': sortColumn === 'numBonLivraison' && sortDirection === 'desc',
-                  'bi-chevron-up': sortColumn === 'numBonLivraison' && sortDirection === 'asc',
-                  'bi-chevron-expand': sortColumn !== 'numBonLivraison'
-                }"></i>
-              </div>
-            </th>
-            <th class="actions-header text-center">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -101,18 +86,9 @@
             <td class="id-cell">{{ cam.id }}</td>
             <td>{{ cam.matricule }}</td>
             <!-- <td>{{ cam.societe }}</td> -->
-            <td>{{ cam.numBonLivraison }}</td>
-            <td class="actions-cell">
-              <button class="action-btn edit-btn" (click)="editCamion(cam)" title="Modifier">
-                <i class="bi bi-pencil-fill"></i>
-              </button>
-              <button class="action-btn delete-btn" (click)="deleteCamion(cam.id)" title="Supprimer">
-                <i class="bi bi-trash-fill"></i>
-              </button>
-            </td>
           </tr>
           <tr *ngIf="paginatedCamions.length === 0" class="no-data-row">
-            <td colspan="5">
+            <td colspan="2">
               <div class="no-data">
                 <i class="bi bi-inbox"></i>
                 <p>Aucun camion trouvé</p>

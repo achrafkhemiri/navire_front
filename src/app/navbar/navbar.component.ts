@@ -4,6 +4,8 @@ import { ProjetActifService } from '../service/projet-actif.service';
 import { AuthService } from '../service/auth.service';
 import { ProjetControllerService } from '../api/api/projetController.service';
 import { NotificationService } from '../service/notification.service';
+import { VoyageControllerService } from '../api/api/voyageController.service';
+import { VoyageDTO } from '../api/model/voyageDTO';
 import { filter } from 'rxjs/operators';
 
 @Component({
@@ -21,13 +23,17 @@ export class NavbarComponent {
   currentProjet: any = null; // Projet actuellement consulté (peut être différent du projet actif)
   private loadingProjectDetails: boolean = false;
   notificationsCount: number = 0;
+  voyages: VoyageDTO[] = [];
+  resteQuantite: number = 0;
+  pourcentageRestant: number = 0;
 
   constructor(
     private router: Router, 
     private projetActifService: ProjetActifService,
     private authService: AuthService,
     private projetControllerService: ProjetControllerService,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
+    private voyageControllerService: VoyageControllerService
   ) {
     this.subscribeStreams();
     this.subscribeToRouteChanges();
@@ -42,6 +48,9 @@ export class NavbarComponent {
     
     // Vérifier la route actuelle pour initialiser currentProjet
     this.checkCurrentRoute();
+    
+    // Charger les voyages et calculer le reste
+    this.loadVoyagesAndCalculateReste();
   }
 
   private subscribeToRouteChanges() {
@@ -59,13 +68,28 @@ export class NavbarComponent {
     
     if (projetMatch) {
       const projetId = parseInt(projetMatch[1]);
+      // On force le mode vue projet si on arrive via navigation directe depuis "Tous les projets"
+      if (this.isAllVoyagesView) {
+        this.isAllVoyagesView = false;
+        try { this.projetActifService.setViewMode(false); } catch {}
+      }
       // On est sur un projet spécifique, charger ses détails
       if (!this.currentProjet || this.currentProjet.id !== projetId) {
+        // Définir un projet minimal immédiatement pour afficher la navbar sans attendre l'API
+        this.currentProjet = { id: projetId } as any;
+        // Lancer le chargement des détails et le calcul du reste
         this.loadProjectForDisplay(projetId);
+        this.loadVoyagesAndCalculateReste();
       }
     } else {
       // On n'est pas sur un projet spécifique, réinitialiser currentProjet
       this.currentProjet = null;
+      // 🔥 FIX: Ne basculer en vue globale QUE si aucun projet actif n'existe
+      // Cela permet de conserver la sidebar du projet actif lors de la navigation
+      const projetActifExiste = this.projetActifService.getProjetActif();
+      if (!projetActifExiste) {
+        try { this.projetActifService.setViewMode(true); } catch {}
+      }
     }
   }
 
@@ -92,6 +116,10 @@ export class NavbarComponent {
         
         if (projet && projet.id) {
           this.currentProjet = projet;
+          // Synchroniser le projet actif pour cohérence globale
+          try { this.projetActifService.setProjetActif(projet); } catch {}
+          // Recharger les voyages quand le projet consulté change
+          this.loadVoyagesAndCalculateReste();
         }
         this.loadingProjectDetails = false;
       },
@@ -110,28 +138,44 @@ export class NavbarComponent {
       if (!p) {
         this.projetActif = null;
         console.log('❌ Projet actif mis à null');
+        // Reset affichages dépendants du projet
+        this.resteQuantite = 0;
+        this.pourcentageRestant = 0;
       } else if (p && Object.keys(p).length > 0) {
-        // Vérifier si l'objet a un nomNavire (projet complet)
+        // Si payload complet → affecter directement
         if (p.nomNavire || p.nomProduit) {
-          // Projet complet, on met à jour
           this.projetActif = p;
-          console.log('✅ Navbar - Projet actif mis à jour:', this.projetActif);
-        } else if (p.id && !this.projetActif) {
-          // Objet avec seulement ID et pas de projet actif existant
-          // Accepter temporairement mais charger les détails
-          this.projetActif = p;
-          console.log('⚠️ Projet actif incomplet, chargement des détails...');
+          console.log('✅ Navbar - Projet actif mis à jour (complet):', this.projetActif);
+          this.loadVoyagesAndCalculateReste();
+        } else if (p.id) {
+          // Payload partiel → mettre à jour au moins l'id pour afficher le bouton immédiatement
+          this.projetActif = { ...(this.projetActif || {}), ...p };
+          console.log('⚠️ Navbar - Projet actif partiel, chargement des détails...', this.projetActif);
           this.loadProjectForDisplay(p.id);
-        } else {
-          // Objet incomplet et on a déjà un projet actif → ignorer
-          console.warn('⚠️ Projet actif incomplet ignoré:', p, '- Garde l\'actuel:', this.projetActif);
+          this.loadVoyagesAndCalculateReste();
         }
       }
     });
     this.projetActifService.viewMode$.subscribe(mode => { 
       this.isAllVoyagesView = mode;
       console.log('🔔 Navbar - Mode vue changé:', mode ? 'Tous les projets' : 'Projet spécifique');
+      // Quand on passe en vue globale, masquer les widgets projet et reset les valeurs
+      if (mode) { // true => Tous les projets
+        this.resteQuantite = 0;
+        this.pourcentageRestant = 0;
+      } else {
+        // En revenant à la vue projet, recalculer si un projet est disponible
+        this.loadVoyagesAndCalculateReste();
+      }
     });
+  }
+
+  // Indique si un projet actif existe (utilisé pour afficher le bouton "Vue Projet Actif")
+  hasActiveProjet(): boolean {
+    return !!(
+      (this.projetActif && this.projetActif.id) ||
+      (this.currentProjet && this.currentProjet.id)
+    );
   }
 
   updateView() {
@@ -231,5 +275,100 @@ export class NavbarComponent {
     } catch (e) {
       return dateStr;
     }
+  }
+
+  // Charger les voyages et calculer le reste du projet
+  loadVoyagesAndCalculateReste() {
+    const projet = this.currentProjet || this.projetActif;
+    
+    if (!projet || !projet.id) {
+      this.resteQuantite = 0;
+      this.pourcentageRestant = 0;
+      return;
+    }
+
+    // Charger tous les voyages du projet
+    this.voyageControllerService.getAllVoyages('body').subscribe({
+      next: async (data) => {
+        let allVoyages: VoyageDTO[] = [];
+        
+        if (data instanceof Blob) {
+          const text = await data.text();
+          try {
+            allVoyages = JSON.parse(text);
+          } catch (e) {
+            console.error('Erreur parsing voyages:', e);
+            return;
+          }
+        } else {
+          allVoyages = data as VoyageDTO[];
+        }
+        
+        // Filtrer les voyages du projet actuel
+        this.voyages = allVoyages.filter(v => v.projetId === projet.id);
+        
+        // Calculer le reste
+        this.calculateReste();
+      },
+      error: (err) => {
+        console.error('Erreur lors du chargement des voyages:', err);
+        this.resteQuantite = 0;
+        this.pourcentageRestant = 0;
+      }
+    });
+  }
+
+  // Calculer le reste du projet
+  calculateReste() {
+    const projet = this.currentProjet || this.projetActif;
+    
+    if (!projet) {
+      this.resteQuantite = 0;
+      this.pourcentageRestant = 0;
+      return;
+    }
+    
+    const quantiteTotale = projet.quantiteTotale || 0;
+    const totalLivre = this.voyages.reduce((sum, v) => {
+      return sum + (v.poidsClient || 0) + (v.poidsDepot || 0);
+    }, 0);
+    
+    this.resteQuantite = quantiteTotale - totalLivre;
+    
+    // Calculer le pourcentage restant
+    if (quantiteTotale > 0) {
+      this.pourcentageRestant = Math.round((this.resteQuantite / quantiteTotale) * 100);
+    } else {
+      this.pourcentageRestant = 0;
+    }
+  }
+
+  // Obtenir la classe CSS pour la couleur selon le pourcentage
+  getResteColorClass(): string {
+    if (this.pourcentageRestant > 50) {
+      return 'reste-safe'; // Vert
+    } else if (this.pourcentageRestant > 20) {
+      return 'reste-warning'; // Orange
+    } else if (this.pourcentageRestant >= 0) {
+      return 'reste-danger'; // Rouge
+    } else {
+      return 'reste-critical'; // Rouge foncé (dépassement)
+    }
+  }
+
+  // Obtenir l'icône selon le pourcentage
+  getResteIcon(): string {
+    if (this.pourcentageRestant > 50) {
+      return 'bi-check-circle-fill';
+    } else if (this.pourcentageRestant > 20) {
+      return 'bi-exclamation-triangle-fill';
+    } else {
+      return 'bi-x-circle-fill';
+    }
+  }
+
+  // Formater les nombres avec séparateur de milliers
+  formatNumber(num: number): string {
+    return num.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
   }
 }

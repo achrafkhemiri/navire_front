@@ -598,6 +598,47 @@
             disabled 
             style="background: #f1f5f9; color: #667eea; font-weight: 600; width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; cursor: not-allowed;" 
           />
+
+          <!-- Reste disponible du projet -->
+          <div *ngIf="projetActif || contextProjet" style="margin-top: 16px; padding: 12px; background: white; border-radius: 8px; border: 2px solid #e2e8f0; font-size: 12px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: #64748b;">
+                <i class="bi bi-box-seam"></i> Quantité totale du projet:
+              </span>
+              <span style="font-weight: 600; color: #10b981;">
+                {{ (projetActif || contextProjet).quantiteTotale || 0 | number:'1.0-0' }} kg
+              </span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: #64748b;">
+                <i class="bi bi-truck-flatbed"></i> Déjà livré:
+              </span>
+              <span style="font-weight: 600; color: #f59e0b;">
+                {{ ((projetActif || contextProjet).quantiteTotale || 0) - getResteProjet() | number:'1.0-0' }} kg
+              </span>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+              <span style="color: #64748b; font-weight: 600;">
+                <i class="bi bi-calculator-fill"></i> Reste disponible:
+              </span>
+              <span style="font-weight: 700; font-size: 14px;" 
+                    [style.color]="getResteProjet() > 0 ? '#10b981' : '#ef4444'">
+                {{ getResteProjet() | number:'1.0-0' }} kg
+              </span>
+            </div>
+            <div *ngIf="dialogDechargement.poidComplet && dialogDechargement.poidCamionVide" 
+                 style="margin-top: 8px; padding: 8px; background: #fef3c7; border-radius: 6px;">
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: #92400e; font-size: 11px;">
+                  <i class="bi bi-exclamation-triangle-fill"></i> Après cette opération:
+                </span>
+                <span style="font-weight: 700; font-size: 13px;"
+                      [style.color]="(getResteProjet() - calculatePoids()) >= 0 ? '#15803d' : '#dc2626'">
+                  {{ getResteProjet() - calculatePoids() | number:'1.0-0' }} kg
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Type de destination -->
@@ -787,6 +828,60 @@
           >
             <i class="bi bi-trash-fill" style="margin-right: 6px;"></i>
             Supprimer définitivement
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de confirmation de dépassement -->
+    <div class="modal-overlay" *ngIf="showDepassementModal" (click)="cancelDepassement()" style="z-index: 2000;">
+      <div class="modal-container" (click)="$event.stopPropagation()" style="max-width: 500px; z-index: 2001;">
+        <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%); color: white;">
+          <i class="bi bi-exclamation-triangle" style="font-size: 24px; margin-right: 12px;"></i>
+          <h3 style="margin: 0; font-size: 20px; font-weight: 600;">Dépassement de quantité autorisée</h3>
+        </div>
+        
+        <div class="modal-body" style="padding: 32px; text-align: center;">
+          <div style="margin-bottom: 24px;">
+            <div style="width: 80px; height: 80px; margin: 0 auto 20px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);">
+              <i class="bi bi-exclamation-triangle" style="font-size: 40px; color: #f59e0b;"></i>
+            </div>
+          </div>
+          
+          <p style="font-size: 16px; color: #1f2937; margin-bottom: 16px; line-height: 1.6;">
+            Vous êtes sur le point de <strong>dépasser la quantité autorisée</strong> pour ce client.
+          </p>
+          
+          <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 20px; border-radius: 12px; margin: 20px 0; border: 2px solid #fbbf24;">
+            <div style="font-size: 14px; color: #92400e; margin-bottom: 8px; font-weight: 500;">
+              Quantité de dépassement
+            </div>
+            <div style="font-size: 32px; font-weight: 700; color: #f59e0b;">
+              {{ depassementQuantite | number:'1.0-0' }} <span style="font-size: 18px;">kg</span>
+            </div>
+          </div>
+          
+          <p style="font-size: 14px; color: #6b7280; margin-top: 20px;">
+            Êtes-vous sûr de vouloir continuer cette opération ?
+          </p>
+        </div>
+        
+        <div class="modal-footer" style="padding: 20px 32px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; gap: 12px; justify-content: flex-end;">
+          <button 
+            type="button" 
+            class="btn-secondary" 
+            (click)="cancelDepassement()"
+            style="padding: 10px 24px; border-radius: 8px; font-weight: 500; background: white; color: #6b7280; border: 1px solid #d1d5db; cursor: pointer; transition: all 0.2s;">
+            <i class="bi bi-x-circle" style="margin-right: 8px;"></i>
+            Annuler
+          </button>
+          <button 
+            type="button" 
+            class="btn-primary" 
+            (click)="confirmDepassement()"
+            style="padding: 10px 24px; border-radius: 8px; font-weight: 500; background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%); color: white; border: none; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3);">
+            <i class="bi bi-check-circle" style="margin-right: 8px;"></i>
+            Oui, continuer
           </button>
         </div>
       </div>

@@ -141,6 +141,29 @@ export class ProjetComponent {
     return !!(p.dateDebut && p.dateFin) && !this.isEndAfterStart(p.dateDebut, p.dateFin);
   }
 
+  // Validation du formulaire d'ajout
+  isAddFormValid(): boolean {
+    return !!(
+      this.newProjet.nomProduit && this.newProjet.nomProduit.trim() !== '' &&
+      this.newProjet.quantiteTotale && this.newProjet.quantiteTotale > 0 &&
+      this.newProjet.nomNavire && this.newProjet.nomNavire.trim() !== '' &&
+      this.newProjet.port && this.newProjet.port.trim() !== '' &&
+      !this.isAddDateInvalid()
+    );
+  }
+
+  // Validation du formulaire d'édition
+  isEditFormValid(): boolean {
+    if (!this.selectedProjet) return false;
+    return !!(
+      this.selectedProjet.nomProduit && this.selectedProjet.nomProduit.trim() !== '' &&
+      this.selectedProjet.quantiteTotale && this.selectedProjet.quantiteTotale > 0 &&
+      this.selectedProjet.nomNavire && this.selectedProjet.nomNavire.trim() !== '' &&
+      this.selectedProjet.port && this.selectedProjet.port.trim() !== '' &&
+      !this.isEditDateInvalid()
+    );
+  }
+
   // Charger toutes les sociétés
   loadSocietes(): void {
     this.societeService.getAllSocietes('body').subscribe({
@@ -223,6 +246,11 @@ export class ProjetComponent {
         this.projets = projets;
         // Sélectionne automatiquement le projet actif
         this.projetActif = this.projets.find(pr => pr.active) || null;
+        
+        // Si aucun projet n'est actif, notifier le service pour nettoyer la navbar
+        if (!this.projetActif) {
+          this.projetActifService.clearProjetActif();
+        }
         
         // Charger toutes les déclarations pour l'affichage au dos des cartes
         this.loadAllDeclarations();
@@ -338,6 +366,27 @@ export class ProjetComponent {
   }
 
   addProjet() {
+    // Validation des champs obligatoires
+    if (!this.newProjet.nomProduit || this.newProjet.nomProduit.trim() === '') {
+      this.error = 'Le nom du produit est obligatoire.';
+      return;
+    }
+    
+    if (!this.newProjet.quantiteTotale || this.newProjet.quantiteTotale <= 0) {
+      this.error = 'La quantité doit être supérieure à 0.';
+      return;
+    }
+    
+    if (!this.newProjet.nomNavire || this.newProjet.nomNavire.trim() === '') {
+      this.error = 'Le nom du navire est obligatoire.';
+      return;
+    }
+    
+    if (!this.newProjet.port || this.newProjet.port.trim() === '') {
+      this.error = 'Le port est obligatoire.';
+      return;
+    }
+    
     // Validate dates: dateFin > dateDebut when provided
     if (!this.isEndAfterStart(this.newProjet.dateDebut, this.newProjet.dateFin)) {
       this.error = 'La date de fin doit être strictement supérieure à la date de début.';
@@ -456,6 +505,28 @@ export class ProjetComponent {
 
   updateProjet() {
     if (!this.selectedProjet || !this.selectedProjet.id) return;
+    
+    // Validation des champs obligatoires
+    if (!this.selectedProjet.nomProduit || this.selectedProjet.nomProduit.trim() === '') {
+      this.error = 'Le nom du produit est obligatoire.';
+      return;
+    }
+    
+    if (!this.selectedProjet.quantiteTotale || this.selectedProjet.quantiteTotale <= 0) {
+      this.error = 'La quantité doit être supérieure à 0.';
+      return;
+    }
+    
+    if (!this.selectedProjet.nomNavire || this.selectedProjet.nomNavire.trim() === '') {
+      this.error = 'Le nom du navire est obligatoire.';
+      return;
+    }
+    
+    if (!this.selectedProjet.port || this.selectedProjet.port.trim() === '') {
+      this.error = 'Le port est obligatoire.';
+      return;
+    }
+    
     // Validate dates for edit
     if (!this.isEndAfterStart(this.selectedProjet.dateDebut, this.selectedProjet.dateFin)) {
       this.error = 'La date de fin doit être strictement supérieure à la date de début.';
@@ -575,16 +646,71 @@ export class ProjetComponent {
     if (id === undefined) return;
     const projet = this.projets.find(p => p.id === id);
     const nom = projet?.nomProduit || `Projet ${id}`;
-    // Vérifier s'il y a des voyages/chargements liés
+    
+    // Vérifier s'il y a des voyages/chargements/déchargements liés
     Promise.all([
       firstValueFrom(this.voyageService.getVoyagesByProjet(id!, 'body')).catch(() => []),
       firstValueFrom(this.chargementService.getChargementsByProjet(id!)).catch(() => [])
-    ]).then(([voyages, chargements]: any[]) => {
-      const hasLinks = Array.isArray(voyages) && voyages.length > 0 || Array.isArray(chargements) && chargements.length > 0;
+    ]).then(async ([voyages, chargements]: any[]) => {
+      // Gérer le cas où les réponses sont des Blobs
+      let voyagesList: any[] = [];
+      let chargementsList: any[] = [];
+      
+      if (voyages instanceof Blob) {
+        const text = await voyages.text();
+        try {
+          voyagesList = JSON.parse(text);
+        } catch (e) {
+          voyagesList = [];
+        }
+      } else if (Array.isArray(voyages)) {
+        voyagesList = voyages;
+      }
+      
+      if (chargements instanceof Blob) {
+        const text = await chargements.text();
+        try {
+          chargementsList = JSON.parse(text);
+        } catch (e) {
+          chargementsList = [];
+        }
+      } else if (Array.isArray(chargements)) {
+        chargementsList = chargements;
+      }
+      
+      const nbVoyages = voyagesList.length || 0;
+      const nbChargements = chargementsList.length || 0;
+      const hasLinks = nbVoyages > 0 || nbChargements > 0;
+      
       if (hasLinks) {
-        this.error = `Impossible de supprimer « ${nom} ». Le projet contient des voyages ou des chargements.`;
+        // Construire un message d'erreur détaillé et lisible
+        let details: string[] = [];
+        if (nbVoyages > 0) {
+          details.push(`${nbVoyages} voyage${nbVoyages > 1 ? 's' : ''}`);
+        }
+        if (nbChargements > 0) {
+          details.push(`${nbChargements} chargement${nbChargements > 1 ? 's' : ''}`);
+        }
+        
+        this.error = `Impossible de supprimer le projet « ${nom} »\n\n` +
+                    `Ce projet contient encore :\n` +
+                    details.map(d => `• ${d}`).join('\n') + '\n\n' +
+                    `Veuillez d'abord supprimer ces éléments avant de pouvoir supprimer le projet.`;
+        
+        // Fermer le modal de confirmation
+        const modalEl = document.getElementById('deleteConfirmModal');
+        const modalInstance = (window as any).bootstrap?.Modal?.getOrCreateInstance(modalEl);
+        modalInstance?.hide();
+        
+        // Faire défiler vers le haut pour voir le message d'erreur
+        setTimeout(() => {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 300);
+        
         return;
       }
+      
+      // Aucun lien trouvé, procéder à la suppression
       this.projetService.deleteProjet(id!, 'body').subscribe({
         next: () => {
           this.projets = this.projets.filter(p => p.id !== id);
@@ -596,9 +722,68 @@ export class ProjetComponent {
           const modalInstance = (window as any).bootstrap?.Modal?.getOrCreateInstance(modalEl);
           modalInstance?.hide();
           this.selectedProjet = null;
+          
+          // Afficher un message de succès
+          console.log(`✅ Projet « ${nom} » supprimé avec succès`);
         },
-        error: (err) => this.error = 'Erreur suppression: ' + (err.error?.message || err.message)
+        error: async (err) => {
+          // Améliorer l'affichage des erreurs HTTP
+          let errorMessage = '';
+          
+          // Si l'erreur contient un status 403
+          if (err.status === 403) {
+            errorMessage = `Impossible de supprimer le projet « ${nom} »\n\n` +
+                          `Le projet contient des éléments liés (voyages, chargements ou déchargements).\n\n` +
+                          `Veuillez supprimer ces éléments en premier.`;
+          } 
+          // Si l'erreur contient un message
+          else if (err.error) {
+            if (err.error instanceof Blob) {
+              try {
+                const text = await err.error.text();
+                errorMessage = `Erreur : ${text}`;
+              } catch (e) {
+                errorMessage = `Une erreur est survenue lors de la suppression du projet.`;
+              }
+            } else if (typeof err.error === 'string') {
+              errorMessage = err.error;
+            } else if (err.error.message) {
+              errorMessage = err.error.message;
+            } else {
+              errorMessage = `Erreur ${err.status || ''} : Impossible de supprimer le projet`;
+            }
+          } 
+          // Message générique
+          else {
+            errorMessage = `Une erreur est survenue lors de la suppression du projet « ${nom} »`;
+          }
+          
+          this.error = errorMessage;
+          
+          // Fermer le modal
+          const modalEl = document.getElementById('deleteConfirmModal');
+          const modalInstance = (window as any).bootstrap?.Modal?.getOrCreateInstance(modalEl);
+          modalInstance?.hide();
+          
+          // Faire défiler vers le haut pour voir le message d'erreur
+          setTimeout(() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }, 300);
+        }
       });
+    }).catch((err) => {
+      this.error = `Erreur lors de la vérification des dépendances du projet.\n\n` +
+                  `Veuillez réessayer ou contacter l'administrateur.`;
+      
+      // Fermer le modal
+      const modalEl = document.getElementById('deleteConfirmModal');
+      const modalInstance = (window as any).bootstrap?.Modal?.getOrCreateInstance(modalEl);
+      modalInstance?.hide();
+      
+      // Faire défiler vers le haut pour voir le message d'erreur
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 300);
     });
   }
 

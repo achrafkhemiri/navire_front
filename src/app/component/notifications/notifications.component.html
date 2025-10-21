@@ -161,12 +161,78 @@
               <i class="bi bi-check2"></i>
               Lu
             </span>
+            <span class="meta-item critical" *ngIf="n.deletable === false" title="Notification critique non supprimable">
+              <i class="bi bi-lock-fill"></i>
+              Protégée
+            </span>
           </div>
         </div>
-        <button class="delete-btn" (click)="supprimer(n); $event.stopPropagation();" title="Supprimer">
-          <i class="bi bi-trash"></i>
+        <button 
+          class="delete-btn" 
+          [class.disabled]="n.deletable === false"
+          [title]="n.deletable === false ? 'Cette notification est protégée et ne peut pas être supprimée' : 'Supprimer'"
+          (click)="ouvrirModalSuppression(n); $event.stopPropagation();">
+          <i class="bi" [ngClass]="n.deletable === false ? 'bi-lock-fill' : 'bi-trash'"></i>
         </button>
       </div>
     </div>
   </main>
+</div>
+
+<!-- Modal de Confirmation de Suppression -->
+<div class="modal-overlay" *ngIf="showDeleteModal" (click)="fermerModalSuppression()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>
+        <i class="bi" [ngClass]="notificationToDelete?.deletable === false ? 'bi-lock-fill' : 'bi-trash'"></i>
+        Supprimer la notification
+      </h2>
+      <button class="modal-close" (click)="fermerModalSuppression()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    
+    <div class="modal-body">
+      <div *ngIf="notificationToDelete?.deletable === false" class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <div>
+          <strong>⚠️ Notification Critique Protégée</strong>
+          <p>Cette notification a été créée automatiquement lors d'une opération de suppression de voyage ou déchargement.</p>
+          <p><strong>Elle ne peut pas être supprimée</strong> car elle est essentielle pour la traçabilité des opérations critiques.</p>
+        </div>
+      </div>
+      
+      <div *ngIf="notificationToDelete?.deletable !== false" class="alert alert-info">
+        <i class="bi bi-info-circle-fill"></i>
+        <div>
+          <p>Êtes-vous sûr de vouloir supprimer cette notification ?</p>
+          <div class="notification-preview" *ngIf="notificationToDelete && notificationToDelete.message">
+            <strong>Message :</strong>
+            <p>{{ notificationToDelete.message!.substring(0, 150) }}{{ notificationToDelete.message!.length > 150 ? '...' : '' }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="fermerModalSuppression()">
+        <i class="bi bi-x-circle"></i>
+        Annuler
+      </button>
+      <button 
+        *ngIf="notificationToDelete?.deletable !== false"
+        class="btn-danger" 
+        (click)="confirmerSuppression()">
+        <i class="bi bi-trash"></i>
+        Supprimer
+      </button>
+      <button 
+        *ngIf="notificationToDelete?.deletable === false"
+        class="btn-primary" 
+        (click)="fermerModalSuppression()">
+        <i class="bi bi-check-lg"></i>
+        Compris
+      </button>
+    </div>
+  </div>
 </div>

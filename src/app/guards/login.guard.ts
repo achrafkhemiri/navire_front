@@ -16,9 +16,11 @@ export class LoginGuard implements CanActivate {
     route: ActivatedRouteSnapshot,
     state: RouterStateSnapshot
   ): boolean {
+    // Vérifier si l'utilisateur est vraiment authentifié (avec token valide)
     if (this.authService.isAuthenticated()) {
-      // Si l'utilisateur est déjà authentifié, rediriger vers la page projet
-      this.router.navigate(['/projet']);
+      // Si l'utilisateur est déjà authentifié avec un token valide,
+      // rediriger vers la page projet-list au lieu de /projet
+      this.router.navigate(['/projet-list']);
       return false;
     } else {
       // Permettre l'accès à la page de connexion si non authentifié

@@ -235,11 +235,14 @@
 					</tr>
 				</thead>
 				<tbody>
-					<tr *ngFor="let cl of paginatedClients" class="table-row">
+					<tr *ngFor="let cl of paginatedClients" class="table-row"
+					    [style.background-color]="isClientEnDepassement(cl) ? '#fee2e2' : ''"
+					    [style.border-left]="isClientEnDepassement(cl) ? '4px solid #dc2626' : ''">
 						<td class="name-cell">
 							<div class="client-name">
-								<i class="bi bi-person-circle"></i>
-								<span>{{ cl.nom }}</span>
+								<i class="bi bi-person-circle" [style.color]="isClientEnDepassement(cl) ? '#dc2626' : ''"></i>
+								<span [style.font-weight]="isClientEnDepassement(cl) ? '700' : ''">{{ cl.nom }}</span>
+								<i *ngIf="isClientEnDepassement(cl)" class="bi bi-exclamation-triangle-fill" style="color: #dc2626; margin-left: 8px;"></i>
 							</div>
 						</td>
 						<td class="numero-cell">{{ cl.numero }}</td>

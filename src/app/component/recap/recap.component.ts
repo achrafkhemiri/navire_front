@@ -571,6 +571,12 @@ export class RecapComponent {
     return quantiteAutorisee - totalLivre;
   }
 
+  // Vérifier si le client sélectionné a dépassé sa quantité autorisée
+  isClientEnDepassement(): boolean {
+    const reste = this.getReste();
+    return reste < 0;
+  }
+
   getResteColor(): string {
     const reste = this.getReste();
     const quantiteAutorisee = this.getQuantiteAutorisee(this.selectedClient?.id);

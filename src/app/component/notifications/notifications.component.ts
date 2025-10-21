@@ -14,6 +14,10 @@ export class NotificationsComponent implements OnInit {
   chargement = false;
   afficherSeulementNonLues = false;
   isSidebarOpen = true;
+  
+  // Modal de suppression
+  showDeleteModal = false;
+  notificationToDelete?: Notification;
 
   constructor(private notificationService: NotificationService) {}
 
@@ -79,6 +83,49 @@ export class NotificationsComponent implements OnInit {
     this.notificationService.marquerToutesCommeLues().subscribe(() => {
       this.notifications.forEach(n => n.lu = true);
       this.chargerStats();
+    });
+  }
+
+  // Ouvrir le modal de confirmation de suppression
+  ouvrirModalSuppression(n: Notification): void {
+    this.notificationToDelete = n;
+    this.showDeleteModal = true;
+  }
+
+  // Fermer le modal
+  fermerModalSuppression(): void {
+    this.showDeleteModal = false;
+    this.notificationToDelete = undefined;
+  }
+
+  // Confirmer la suppression
+  confirmerSuppression(): void {
+    if (!this.notificationToDelete) return;
+    
+    const notif = this.notificationToDelete;
+    
+    // Vérifier si la notification est supprimable
+    if (notif.deletable === false) {
+      alert('⚠️ Cette notification est critique et ne peut pas être supprimée.\n\nElle a été créée automatiquement lors d\'une opération de suppression de voyage ou déchargement et doit être conservée pour la traçabilité.');
+      this.fermerModalSuppression();
+      return;
+    }
+    
+    this.notificationService.supprimerNotification(notif.id).subscribe({
+      next: () => {
+        this.notifications = this.notifications.filter(x => x.id !== notif.id);
+        this.chargerStats();
+        this.fermerModalSuppression();
+      },
+      error: (err) => {
+        console.error('Erreur suppression notification:', err);
+        if (err.status === 500 || err.error?.message?.includes('critique')) {
+          alert('⚠️ Impossible de supprimer cette notification.\n\nCette notification est marquée comme critique pour la traçabilité et ne peut pas être supprimée.');
+        } else {
+          alert('❌ Erreur lors de la suppression de la notification.');
+        }
+        this.fermerModalSuppression();
+      }
     });
   }
 

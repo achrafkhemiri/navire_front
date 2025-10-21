@@ -1,7 +1,7 @@
 import { ProjetActifService } from '../service/projet-actif.service';
 import { AuthService } from '../service/auth.service';
 import { Component, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { UserControllerService } from '../api/api/userController.service';
 import { LoginDTO } from '../api/model/loginDTO';
 import { ProjetControllerService } from '../api/api/projetController.service';
@@ -12,9 +12,12 @@ import { ProjetControllerService } from '../api/api/projetController.service';
   styleUrls: ['./login.component.css']
 })
 export class LoginComponent implements OnInit {
+  sessionExpired: boolean = false;
+  
   constructor(
     private userService: UserControllerService,
     private router: Router,
+    private route: ActivatedRoute,
     private projetActifService: ProjetActifService,
     private projetControllerService: ProjetControllerService,
     private authService: AuthService
@@ -69,6 +72,13 @@ export class LoginComponent implements OnInit {
   
   // Charger et afficher tous les projets (comme /projet) au chargement du composant
   ngOnInit(): void {
+    // Vérifier si l'utilisateur a été redirigé suite à une expiration de session
+    this.route.queryParams.subscribe(params => {
+      if (params['expired'] === 'true') {
+        this.sessionExpired = true;
+      }
+    });
+    
     this.projetControllerService.getAllProjets('body').subscribe({
       next: (projets: any) => {
         if (projets instanceof Blob) {
@@ -98,8 +108,9 @@ export class LoginComponent implements OnInit {
         if (result instanceof Blob) {
           try { const txt = await result.text(); if (txt) { try { result = JSON.parse(txt); } catch {} } } catch {}
         }
-        this.authService.markLoggedIn();
 
+        console.log('🔐 Login réussi, le backend a envoyé le cookie JWT (HttpOnly)');
+        
         const projetActif = result?.projetActif || null;
         // Redirection vers la page projet après connexion réussie
         let cibleNavig = ['/projet'];
@@ -111,18 +122,17 @@ export class LoginComponent implements OnInit {
           await this.chargerProjetActifApresLogin();
         }
         
-        this.router.navigate(cibleNavig);
-        
-        // Fallback si toujours sur /login après 400ms
+        // Attendre un court instant pour que le cookie JWT soit enregistré par le navigateur
         setTimeout(() => {
-          if (window.location.pathname.includes('login')) {
-            this.authService.markLoggedIn();
-            this.router.navigate(cibleNavig);
-          }
-        }, 400);
+          // Marquer l'utilisateur comme connecté
+          // Le cookie HttpOnly sera automatiquement envoyé avec les requêtes
+          this.authService.markLoggedIn();
+          console.log('✅ Utilisateur marqué comme connecté, navigation vers:', cibleNavig);
+          this.router.navigate(cibleNavig);
+        }, 100); // Délai de 100ms pour que le cookie soit enregistré
       },
       error: (err: any) => {
-        console.error('Login error:', err);
+        console.error('❌ Erreur de login:', err);
       }
     });
   }
