@@ -6,6 +6,7 @@ import { ChargementDTO } from '../../api/model/chargementDTO';
 import { ChauffeurControllerService } from '../../api/api/chauffeurController.service';
 import { CamionControllerService } from '../../api/api/camionController.service';
 import { ProjetControllerService } from '../../api/api/projetController.service';
+import { ProjetDepotControllerService } from '../../api/api/projetDepotController.service';
 import { ClientControllerService } from '../../api/api/clientController.service';
 import { DepotControllerService } from '../../api/api/depotController.service';
 import { ChauffeurDTO } from '../../api/model/chauffeurDTO';
@@ -47,6 +48,7 @@ export class ChargementComponent {
   
   // Dialog dechargement
   dialogDechargement: any = {
+    id: undefined, // ID du déchargement en édition
     chargementId: 0,
     numTicket: '',
     numBonLivraison: '',
@@ -56,9 +58,13 @@ export class ChargementComponent {
     depotId: undefined,
     poidsClient: 0,
     poidsDepot: 0,
-    _type: 'client' // 'client' ou 'depot'
+    societeP: '', // Société du projet/chargement
+    _type: 'client', // 'client' ou 'depot'
+    _originalClientId: undefined, // Stocker la valeur initiale pour empêcher de changer les deux
+    _originalDepotId: undefined
   };
   selectedChargementForDechargement: ChargementDTO | null = null;
+  editingDechargement: boolean = false; // Flag pour savoir si on édite ou crée
   clients: any[] = [];
   depots: any[] = [];
   projetsClients: any[] = [];
@@ -142,7 +148,8 @@ export class ChargementComponent {
     private camionService: CamionControllerService,
     private projetService: ProjetControllerService,
     private clientService: ClientControllerService,
-    private depotService: DepotControllerService,
+  private depotService: DepotControllerService,
+  private projetDepotService: ProjetDepotControllerService,
     private projetActifService: ProjetActifService,
     private http: HttpClient,
     private route: ActivatedRoute,
@@ -214,6 +221,7 @@ export class ChargementComponent {
     this.loadProjets();
     this.loadChauffeurs();
     this.loadCamions();
+    this.loadClientsAndDepots();
   }
 
   ngOnInit() {
@@ -223,8 +231,35 @@ export class ChargementComponent {
   }
 
   reloadData() {
+    console.log('🔄 [Chargement] reloadData() - Projet actif:', this.projetActif?.nom, 'ID:', this.projetActifId);
+    
+    const currentUrl = window.location.pathname;
+    const isOnParametrePage = currentUrl.includes('/parametre');
+    
+    if (isOnParametrePage) {
+      const contextId = window.sessionStorage.getItem('projetActifId');
+      if (contextId) {
+        const contextIdNumber = Number(contextId);
+        console.log('📌 [Chargement] Page paramètre - Contexte:', contextIdNumber);
+        this.contextProjetId = contextIdNumber;
+        if (contextIdNumber !== this.projetActifId) {
+          this.loadProjetDetails(this.contextProjetId, true);
+        } else {
+          this.contextProjet = this.projetActif;
+        }
+      }
+    } else {
+      console.log('🏠 [Chargement] Mode Vue Projet Actif - Projet:', this.projetActif?.nom);
+      this.contextProjetId = null;
+      this.contextProjet = null;
+    }
+    
+    // Recharger toutes les données
     this.loadChargements();
     this.loadProjets();
+    this.loadChauffeurs();
+    this.loadCamions();
+    this.loadClientsAndDepots();
     this.updateBreadcrumb();
   }
 
@@ -246,7 +281,7 @@ export class ChargementComponent {
       });
     }
     
-    this.breadcrumbItems.push({ label: 'Chargements' });
+    this.breadcrumbItems.push({ label: 'Order de Chargements' });
   }
 
   // Générer la date et heure actuelle pour la Tunisie (UTC+1)
@@ -285,29 +320,26 @@ export class ChargementComponent {
   }
 
   loadChargements() {
+    // 🔥 FIX: Utiliser le projet actif pour filtrer les chargements
     const projectId = this.contextProjetId || this.projetActifId;
     console.log('📊 [loadChargements] contextProjetId:', this.contextProjetId, 'projetActifId:', this.projetActifId, '→ projectId:', projectId);
     
+    // 🔥 Si on a un projet actif, charger UNIQUEMENT les chargements de CE projet
     if (projectId) {
       console.log('📤 [loadChargements] Appel API getChargementsByProjet:', projectId);
       this.chargementService.getChargementsByProjet(projectId).subscribe({
         next: async (data) => {
-          console.log('✅ [loadChargements] Réponse reçue:', data);
-          console.log('   Type:', typeof data, 'isArray:', Array.isArray(data), 'constructor:', data?.constructor?.name);
+          console.log('✅ [loadChargements] Réponse reçue pour projet', projectId, ':', data);
           
           // Si c'est un Blob, le convertir en JSON
           if (data instanceof Blob) {
-            console.warn('⚠️ [loadChargements] Réponse est un Blob (taille:', data.size, 'octets), conversion...');
             try {
               const text = await data.text();
-              console.log('📄 [loadChargements] Contenu Blob:', text);
-              
               if (!text || text.trim() === '') {
                 console.warn('⚠️ Blob vide, aucun chargement pour ce projet');
                 this.chargements = [];
               } else {
                 const jsonData = JSON.parse(text);
-                console.log('✅ JSON parsé:', jsonData);
                 this.chargements = Array.isArray(jsonData) ? jsonData : [];
               }
             } catch (e) {
@@ -325,37 +357,32 @@ export class ChargementComponent {
           // Extraire les informations du projet depuis le premier chargement
           this.extractProjetInfo();
           
-          console.log('📦 [loadChargements] Chargements après conversion:', this.chargements.length, 'éléments');
+          console.log('📦 [loadChargements] Chargements filtrés du projet', projectId, ':', this.chargements.length, 'éléments');
           this.applyFilter();
         },
         error: (err) => {
           console.error('❌ [loadChargements] Erreur API:', err);
-          console.error('   Status:', err.status, 'Message:', err.message);
-          this.error = 'Impossible de charger les chargements';
+          this.error = 'Impossible de charger les chargements du projet';
           this.chargements = [];
           this.applyFilter();
         }
       });
     } else {
-      console.log('📤 [loadChargements] Appel API getAllChargements (pas de projet)');
+      // Sinon charger tous les chargements (vue globale)
+      console.log('📤 [loadChargements] Appel API getAllChargements (vue globale)');
       this.chargementService.getAllChargements().subscribe({
         next: async (data) => {
-          console.log('✅ [loadChargements] Réponse reçue:', data);
-          console.log('   Type:', typeof data, 'isArray:', Array.isArray(data), 'constructor:', data?.constructor?.name);
+          console.log('✅ [loadChargements] Réponse reçue (tous):', data);
           
           // Si c'est un Blob, le convertir en JSON
           if (data instanceof Blob) {
-            console.warn('⚠️ [loadChargements] Réponse est un Blob (taille:', data.size, 'octets), conversion...');
             try {
               const text = await data.text();
-              console.log('📄 [loadChargements] Contenu Blob:', text);
-              
               if (!text || text.trim() === '') {
                 console.warn('⚠️ Blob vide, aucun chargement');
                 this.chargements = [];
               } else {
                 const jsonData = JSON.parse(text);
-                console.log('✅ JSON parsé:', jsonData);
                 this.chargements = Array.isArray(jsonData) ? jsonData : [];
               }
             } catch (e) {
@@ -373,12 +400,11 @@ export class ChargementComponent {
           // Extraire les informations du projet depuis le premier chargement
           this.extractProjetInfo();
           
-          console.log('📦 [loadChargements] Chargements après conversion:', this.chargements.length, 'éléments');
+          console.log('📦 [loadChargements] Tous les chargements:', this.chargements.length, 'éléments');
           this.applyFilter();
         },
         error: (err) => {
           console.error('❌ [loadChargements] Erreur API:', err);
-          console.error('   Status:', err.status, 'Message:', err.message);
           this.error = 'Impossible de charger les chargements';
           this.chargements = [];
           this.applyFilter();
@@ -444,7 +470,9 @@ export class ChargementComponent {
 
   openDechargementForm(chargement: ChargementDTO) {
     this.selectedChargementForDechargement = chargement;
+    this.editingDechargement = false; // Mode création
     this.dialogDechargement = {
+      id: undefined,
       chargementId: chargement.id,
       numTicket: '',
       numBonLivraison: '',
@@ -454,7 +482,10 @@ export class ChargementComponent {
       depotId: undefined,
       poidsClient: 0,
       poidsDepot: 0,
-      _type: 'client'
+      societeP: chargement.societeP || '', // 🔥 Initialiser avec la société du chargement
+      _type: 'client',
+      _originalClientId: undefined,
+      _originalDepotId: undefined
     };
     this.clientSearchInput = '';
     this.depotSearchInput = '';
@@ -465,6 +496,52 @@ export class ChargementComponent {
     // Reset validation state
     this.weightsAreIntegers = true;
     this.isBrutGreaterThanTar = true;
+  }
+
+  // 🆕 Fonction pour éditer un déchargement existant
+  editDechargement(dechargement: any, chargement: ChargementDTO) {
+    this.selectedChargementForDechargement = chargement;
+    this.editingDechargement = true; // Mode édition
+    
+    // Déterminer le type et les valeurs initiales
+    const hasClient = dechargement.clientId !== undefined && dechargement.clientId !== null;
+    const hasDepot = dechargement.depotId !== undefined && dechargement.depotId !== null;
+    
+    this.dialogDechargement = {
+      id: dechargement.id, // Stocker l'ID pour l'édition
+      chargementId: dechargement.chargementId || chargement.id,
+      numTicket: dechargement.numTicket || '',
+      numBonLivraison: dechargement.numBonLivraison || '',
+      poidCamionVide: dechargement.poidCamionVide || 0,
+      poidComplet: dechargement.poidComplet || 0,
+      clientId: dechargement.clientId,
+      depotId: dechargement.depotId,
+      poidsClient: dechargement.poidsClient || 0,
+      poidsDepot: dechargement.poidsDepot || 0,
+      societeP: chargement.societeP || '',
+      _type: hasClient ? 'client' : 'depot',
+      _originalClientId: dechargement.clientId, // 🔒 Stocker la valeur initiale
+      _originalDepotId: dechargement.depotId     // 🔒 Stocker la valeur initiale
+    };
+    
+    // Initialiser les champs de recherche si nécessaire
+    this.clientSearchInput = '';
+    this.depotSearchInput = '';
+    
+    this.showDechargementDialog = true;
+    this.loadClientsAndDepots();
+    this.loadDechargements();
+
+    // Reset validation state
+    this.weightsAreIntegers = true;
+    this.isBrutGreaterThanTar = true;
+    
+    console.log('✏️ Mode édition déchargement:', {
+      id: dechargement.id,
+      type: this.dialogDechargement._type,
+      clientId: dechargement.clientId,
+      depotId: dechargement.depotId
+    });
   }
 
   loadClientsAndDepots() {
@@ -515,47 +592,92 @@ export class ChargementComponent {
       }
     });
 
-    // Charger les dépôts du projet
-    console.log(`📥 Chargement des dépôts du projet ${projetId}...`);
+    // Charger les dépôts du projet et récupérer les quantités autorisées via ProjetDepot
+    console.log(`📥 Chargement des dépôts + projet-depots pour le projet ${projetId}...`);
+    // 1) charger la liste basique des dépôts (infos) via depotService
     const depotUrl = `${this.basePath}/api/projets/${projetId}/depots`;
-    console.log(`🔗 URL dépôts: ${depotUrl}`);
-    
     this.http.get(depotUrl).subscribe({
       next: async (data: any) => {
         let depotsData: any[] = [];
-        
         if (data instanceof Blob) {
           const text = await data.text();
-          try {
-            const parsed = JSON.parse(text);
-            depotsData = Array.isArray(parsed) ? parsed : [];
-          } catch (e) {
-            console.error('❌ Erreur parsing dépôts:', e);
-            depotsData = [];
-          }
-        } else {
-          depotsData = Array.isArray(data) ? data : [];
-        }
-        
-        // Stocker les dépôts
+          try { depotsData = JSON.parse(text); } catch(e) { depotsData = []; console.error('❌ Erreur parsing dépôts:', e); }
+        } else { depotsData = Array.isArray(data) ? data : []; }
         this.depots = depotsData;
-        
-        // Créer les projetsDepots pour cohérence avec les clients
-        this.projetsDepots = depotsData.map((depot: any) => ({
-          id: depot.id,
-          projetId: projetId,
-          depotId: depot.id
-        }));
-        
-        console.log('✅ Dépôts chargés:', this.depots.length);
-        console.log('✅ Projets-dépôts créés:', this.projetsDepots.length);
-      },
-      error: (err: any) => {
-        console.error('❌ Erreur chargement dépôts du projet:', err);
-        this.depots = [];
+
+        // 2) charger les associations ProjetDepot (avec quantiteAutorisee)
         this.projetsDepots = [];
-      }
+        this.projetDepotService.getProjetDepotsByProjetId(projetId).subscribe({
+          next: async (pdData: any) => {
+            let pdArray: any[] = [];
+            
+            // Gérer le cas Blob
+            if (pdData instanceof Blob) {
+              const text = await pdData.text();
+              try { 
+                pdArray = JSON.parse(text); 
+              } catch(e) { 
+                console.error('❌ Erreur parsing projet-depots:', e); 
+                pdArray = []; 
+              }
+            } else {
+              pdArray = Array.isArray(pdData) ? pdData : [];
+            }
+            
+            // projetsDepots contient id (projetDepot id), projetId, depotId, quantiteAutorisee
+            this.projetsDepots = pdArray.map((pd: any) => ({
+              id: pd.id,
+              projetId: pd.projetId || projetId,
+              depotId: pd.depotId,
+              quantiteAutorisee: pd.quantiteAutorisee || 0
+            }));
+
+            console.log('✅ Dépôts chargés:', this.depots.length);
+            console.log('✅ Projets-dépôts chargés:', this.projetsDepots.length, this.projetsDepots);
+          },
+          error: (err: any) => {
+            console.error('❌ Erreur chargement projet-depots:', err);
+            // fallback minimal: créer projetsDepots sans quantite
+            this.projetsDepots = this.depots.map((d: any) => ({ id: d.id, projetId: projetId, depotId: d.id, quantiteAutorisee: 0 }));
+          }
+        });
+      },
+      error: (err: any) => { console.error('❌ Erreur chargement dépôts du projet:', err); this.depots = []; this.projetsDepots = []; }
     });
+  }
+
+  // Obtenir la quantité autorisée pour un dépôt
+  getQuantiteAutoriseeDepot(depotId: number | undefined): number {
+    if (!depotId) return 0;
+    const projetId = this.contextProjetId || this.projetActifId;
+    if (!projetId) return 0;
+    const projetDepot = this.projetsDepots.find(pd => pd.projetId === projetId && pd.depotId === depotId);
+    return projetDepot?.quantiteAutorisee || 0;
+  }
+
+  // Calculer total livré au dépôt
+  getTotalLivreDepot(depotId: number): number {
+    const projetId = this.contextProjetId || this.projetActifId;
+    if (!projetId) return 0;
+    return this.dechargements
+      .filter(d => d.depotId === depotId)
+      .reduce((sum, d) => {
+        const poidsNet = (d.poidComplet || 0) - (d.poidCamionVide || 0);
+        return sum + poidsNet;
+      }, 0);
+  }
+
+  // Calculer le reste pour un dépôt
+  getResteDepot(depotId: number): number {
+    const quantiteAutorisee = this.getQuantiteAutoriseeDepot(depotId);
+    const totalLivre = this.getTotalLivreDepot(depotId);
+    return quantiteAutorisee - totalLivre;
+  }
+
+  isDepotEnDepassement(depotId: number | undefined): boolean {
+    if (!depotId) return false;
+    const reste = this.getResteDepot(depotId);
+    return reste < 0;
   }
 
   loadDechargements() {
@@ -595,6 +717,17 @@ export class ChargementComponent {
       }
     }
 
+    // Si type depot, vérifier la quantité autorisée du dépôt
+    if (this.dialogDechargement._type === 'depot' && this.dialogDechargement.depotId) {
+      const resteDepot = this.getResteDepot(this.dialogDechargement.depotId);
+      if (poidsNet > resteDepot) {
+        const depassement = poidsNet - resteDepot;
+        this.depassementQuantite = depassement;
+        this.showDepassementModal = true;
+        return; // Afficher la modal immédiatement
+      }
+    }
+
     // Si pas de dépassement, faire les validations normales
     this.proceedWithSaveDechargement();
   }
@@ -626,13 +759,58 @@ export class ChargementComponent {
       this.error = 'Le numéro de ticket est obligatoire';
       return;
     }
+    
+    // Validation de societeP
+    if (!this.dialogDechargement.societeP) {
+      this.error = 'Veuillez sélectionner une société';
+      return;
+    }
 
-    if (this.dialogDechargement._type === 'client' && !this.dialogDechargement.clientId) {
+    // 🔒 VALIDATION STRICTE: Un déchargement ne peut avoir QU'UNE SEULE destination
+    const hasClient = this.dialogDechargement.clientId !== undefined && this.dialogDechargement.clientId !== null;
+    const hasDepot = this.dialogDechargement.depotId !== undefined && this.dialogDechargement.depotId !== null;
+    
+    if (hasClient && hasDepot) {
+      this.error = '❌ ERREUR: Un déchargement ne peut pas avoir à la fois un client ET un dépôt. Veuillez choisir UNE SEULE destination.';
+      console.error('🚫 Tentative de sauvegarder avec clientId ET depotId:', {
+        clientId: this.dialogDechargement.clientId,
+        depotId: this.dialogDechargement.depotId,
+        type: this.dialogDechargement._type
+      });
+      return;
+    }
+
+    // 🔒 EN MODE ÉDITION: Empêcher de changer les DEUX destinations
+    if (this.editingDechargement) {
+      const originalHadClient = this.dialogDechargement._originalClientId !== undefined && this.dialogDechargement._originalClientId !== null;
+      const originalHadDepot = this.dialogDechargement._originalDepotId !== undefined && this.dialogDechargement._originalDepotId !== null;
+      
+      // Si l'original avait un client et maintenant on a un dépôt (ou vice-versa), c'est OK
+      // MAIS si l'original avait client et maintenant on a AUSSI client + depot, c'est interdit
+      if (originalHadClient && hasDepot && hasClient) {
+        this.error = '❌ Vous ne pouvez pas avoir à la fois un client ET un dépôt. Choisissez UN SEUL.';
+        return;
+      }
+      if (originalHadDepot && hasClient && hasDepot) {
+        this.error = '❌ Vous ne pouvez pas avoir à la fois un client ET un dépôt. Choisissez UN SEUL.';
+        return;
+      }
+
+      console.log('✏️ Édition:', {
+        originalClient: this.dialogDechargement._originalClientId,
+        originalDepot: this.dialogDechargement._originalDepotId,
+        newClient: this.dialogDechargement.clientId,
+        newDepot: this.dialogDechargement.depotId,
+        type: this.dialogDechargement._type
+      });
+    }
+
+    if (this.dialogDechargement._type === 'client' && !hasClient) {
       this.error = 'Veuillez sélectionner un client';
       return;
     }
 
-    if (this.dialogDechargement._type === 'depot' && !this.dialogDechargement.depotId) {
+    if (this.dialogDechargement._type === 'depot' && !hasDepot) {
       this.error = 'Veuillez sélectionner un dépôt';
       return;
     }
@@ -644,15 +822,21 @@ export class ChargementComponent {
       this.error = `Le poids net (${poidsNet}) dépasse le reste disponible du projet (${resteProjet})`;
       return;
     }
-    // Calculer le poids selon le type
+    
+    // 🔒 NETTOYER: S'assurer que seulement la destination choisie est présente
+    // Calculer le poids selon le type et FORCER l'autre à null
     if (this.dialogDechargement._type === 'client') {
       this.dialogDechargement.poidsClient = this.dialogDechargement.poidComplet - this.dialogDechargement.poidCamionVide;
+      // FORCER depot à null (effacer l'ancien depot si on passe à client)
       this.dialogDechargement.depotId = null;
       this.dialogDechargement.poidsDepot = null;
+      console.log('✅ Sauvegarde CLIENT - depotId forcé à null');
     } else {
       this.dialogDechargement.poidsDepot = this.dialogDechargement.poidComplet - this.dialogDechargement.poidCamionVide;
+      // FORCER client à null (effacer l'ancien client si on passe à depot)
       this.dialogDechargement.clientId = null;
       this.dialogDechargement.poidsClient = null;
+      console.log('✅ Sauvegarde DEPOT - clientId forcé à null');
     }
 
     // Générer la date et heure de Tunisie automatiquement
@@ -669,21 +853,80 @@ export class ChargementComponent {
       dateDechargement: dateDechargement
     };
 
-    this.dechargementService.createDechargement(dechargementDTO).subscribe({
-      next: () => {
-        this.showDechargementDialog = false;
-        this.error = '';
-        this.loadChargements(); // Recharger pour retirer le chargement déchargé
-      },
-      error: (err) => {
-        console.error('Erreur création déchargement:', err);
-        this.error = 'Erreur lors de la création du déchargement';
-      }
-    });
+    // 🔀 ÉDITION vs CRÉATION
+    if (this.editingDechargement && this.dialogDechargement.id) {
+      // MODE ÉDITION: Appeler updateDechargement
+      console.log('📝 Mise à jour du déchargement ID:', this.dialogDechargement.id);
+      this.dechargementService.updateDechargement(this.dialogDechargement.id, dechargementDTO).subscribe({
+        next: () => {
+          console.log('✅ Déchargement mis à jour avec succès');
+          this.handleDechargementSuccess();
+        },
+        error: (err) => {
+          console.error('❌ Erreur mise à jour déchargement:', err);
+          this.error = 'Erreur lors de la mise à jour du déchargement';
+        }
+      });
+    } else {
+      // MODE CRÉATION: Appeler createDechargement
+      console.log('➕ Création d\'un nouveau déchargement');
+      this.dechargementService.createDechargement(dechargementDTO).subscribe({
+        next: () => {
+          console.log('✅ Déchargement créé avec succès');
+          this.handleDechargementSuccess();
+        },
+        error: (err) => {
+          console.error('❌ Erreur création déchargement:', err);
+          this.error = 'Erreur lors de la création du déchargement';
+        }
+      });
+    }
+  }
+
+  // Fonction helper pour gérer le succès de création/édition
+  private handleDechargementSuccess() {
+    // 🔥 Si societeP a été modifiée, mettre à jour le chargement
+    if (this.dialogDechargement.societeP && 
+        this.selectedChargementForDechargement && 
+        this.dialogDechargement.societeP !== this.selectedChargementForDechargement.societeP) {
+      
+      console.log('📝 Mise à jour de la société du chargement:', this.dialogDechargement.societeP);
+      
+      // Mettre à jour le chargement avec la nouvelle societeP
+      const chargementToUpdate = {
+        ...this.selectedChargementForDechargement,
+        societeP: this.dialogDechargement.societeP
+      };
+      
+      this.chargementService.updateChargement(chargementToUpdate.id!, chargementToUpdate).subscribe({
+        next: () => {
+          console.log('✅ Société du chargement mise à jour avec succès');
+          this.closeDechargementSuccess();
+        },
+        error: (err) => {
+          console.error('❌ Erreur mise à jour du chargement:', err);
+          // Même si la mise à jour du chargement échoue, le déchargement a réussi
+          this.closeDechargementSuccess();
+        }
+      });
+    } else {
+      // Pas de modification de societeP
+      this.closeDechargementSuccess();
+    }
+  }
+
+  // Fermer le dialog après succès
+  private closeDechargementSuccess() {
+    this.showDechargementDialog = false;
+    this.editingDechargement = false;
+    this.error = '';
+    this.loadChargements(); // Recharger pour mettre à jour l'affichage
+    this.loadDechargements(); // Recharger les déchargements
   }
 
   closeDechargementDialog() {
     this.showDechargementDialog = false;
+    this.editingDechargement = false; // Réinitialiser le flag d'édition
     this.clientSearchInput = '';
     this.depotSearchInput = '';
     this.showClientDropdown = false;
@@ -919,7 +1162,7 @@ export class ChargementComponent {
       camionId: 0,
       chauffeurId: 0,
       societe: '',
-      societeP: this.societesList.length === 1 ? this.societesList[0] : undefined,
+      societeP: undefined, // 🔥 Par défaut undefined (optionnel)
       projetId: this.contextProjetId || this.projetActifId || 0,
       dateChargement: tunisiaDate
     };
@@ -958,14 +1201,12 @@ export class ChargementComponent {
 
   saveChargement() {
     if (!this.dialogChargement.camionId || !this.dialogChargement.chauffeurId || 
-        !this.dialogChargement.societe || !this.dialogChargement.projetId ||
-        !this.dialogChargement.societeP) {
+        !this.dialogChargement.societe || !this.dialogChargement.projetId) {
       this.error = 'Veuillez remplir tous les champs obligatoires';
       console.error('Validation échouée:', {
         camionId: this.dialogChargement.camionId,
         chauffeurId: this.dialogChargement.chauffeurId,
         societe: this.dialogChargement.societe,
-        societeP: this.dialogChargement.societeP,
         projetId: this.dialogChargement.projetId
       });
       return;
@@ -1597,7 +1838,7 @@ export class ChargementComponent {
         
         <div class="receipt-container">
         <div class="header">
-          <div class="company-name">${chargement.societeP || 'PROJET'}</div>
+          ${chargement.societeP ? `<div class="company-name">${chargement.societeP}</div>` : ''}
           <div>${chargement.produit || 'Produit'}</div>
           <div style="font-size: 10px; margin-top: 5px;">
             Port: ${chargement.port || ''} | Navire: ${chargement.navire || ''}

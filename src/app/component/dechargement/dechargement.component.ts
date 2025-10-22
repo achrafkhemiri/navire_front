@@ -1,4 +1,5 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, Inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { DechargementControllerService } from '../../api/api/dechargementController.service';
 import { ChargementControllerService } from '../../api/api/chargementController.service';
 import { ClientControllerService } from '../../api/api/clientController.service';
@@ -18,6 +19,7 @@ import { VoyageDTO } from '../../api/model/voyageDTO';
 import { SocieteDTO } from '../../api/model/societeDTO';
 import { ProjetActifService } from '../../service/projet-actif.service';
 import { TypeNotification, NiveauAlerte } from '../../model/notification.model';
+import { BASE_PATH } from '../../api/variables';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -133,20 +135,38 @@ export class DechargementComponent implements OnInit {
     private voyageService: VoyageControllerService,
     private projetClientService: ProjetClientControllerService,
     private projetActifService: ProjetActifService,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
+    private http: HttpClient,
+    @Inject(BASE_PATH) private basePath: string
   ) {}
 
   ngOnInit(): void {
     // Initialiser la date du jour pour limiter les sélections futures
     this.today = this.getTodayString();
+    
+    // 🔥 Écouter les changements du projet actif
+    this.projetActifService.projetActif$.subscribe(projet => {
+      console.log('📡 [Dechargement] Notification reçue - Nouveau projet:', projet);
+      
+      if (projet && projet.id) {
+        const previousId = this.projetActif?.id;
+        this.projetActif = projet;
+        
+        // 🔥 FIX : Recharger si le projet change OU si c'est la première fois
+        if (!previousId || previousId !== projet.id) {
+          console.log('🔄 [Dechargement] Rechargement - previousId:', previousId, 'newId:', projet.id);
+          setTimeout(() => {
+            this.reloadData();
+          }, 50);
+        }
+      }
+    });
+    
     // Charger le projet actif pour l'afficher dans l'en-tête même s'il n'y a pas de données
     const storedProjet = this.projetActifService.getProjetActif();
     if (storedProjet) {
       this.projetActif = storedProjet;
     }
-    this.projetActifService.projetActif$.subscribe(p => {
-      if (p) this.projetActif = p;
-    });
 
     this.loadDechargements();
     this.loadClients();
@@ -157,14 +177,81 @@ export class DechargementComponent implements OnInit {
     this.loadProjetsClients();
   }
 
+  // 🔥 Méthode pour recharger toutes les données
+  reloadData() {
+    console.log('🔄 [Dechargement] reloadData() - Projet actif:', this.projetActif?.nom, 'ID:', this.projetActif?.id);
+    
+    // Utiliser forkJoin pour attendre que déchargements ET chargements soient chargés
+    forkJoin({
+      dechargements: this.dechargementService.getAllDechargements(),
+      chargements: this.chargementService.getAllChargements()
+    }).subscribe({
+      next: async (results) => {
+        // Traiter les déchargements
+        let allDechargements: any[] = [];
+        if (results.dechargements instanceof Blob) {
+          const text = await results.dechargements.text();
+          allDechargements = JSON.parse(text);
+        } else {
+          allDechargements = results.dechargements as any[];
+        }
+        
+        const projetActifId = this.projetActif?.id;
+        if (projetActifId) {
+          this.dechargements = allDechargements.filter((d: any) => d.projetId === projetActifId);
+        } else {
+          this.dechargements = allDechargements;
+        }
+        
+        // Traiter les chargements
+        if (results.chargements instanceof Blob) {
+          const text = await results.chargements.text();
+          this.chargements = JSON.parse(text);
+        } else {
+          this.chargements = results.chargements as any[];
+        }
+        
+        // Maintenant que les deux sont chargés, extraire les filtres et appliquer
+        this.extractFilters();
+        this.applyFilter();
+        
+        console.log('✅ [Dechargement] Données rechargées:', this.dechargements.length, 'déchargements');
+      },
+      error: (err) => {
+        console.error('❌ [Dechargement] Erreur rechargement données:', err);
+      }
+    });
+    
+    // Recharger les autres données en arrière-plan
+    this.loadClients();
+    this.loadDepots();
+    this.loadCamions();
+    this.loadChauffeurs();
+    this.loadProjetsClients();
+  }
+
   loadDechargements(): void {
+    const projetActifId = this.projetActif?.id;
+    console.log('📊 [loadDechargements] projetActifId:', projetActifId);
+    
     this.dechargementService.getAllDechargements().subscribe({
       next: (data) => {
         if (data instanceof Blob) {
           const reader = new FileReader();
           reader.onload = () => {
             try {
-              this.dechargements = JSON.parse(reader.result as string);
+              let allDechargements = JSON.parse(reader.result as string);
+              
+              // 🔥 FIX: Filtrer par projet actif si disponible
+              if (projetActifId) {
+                console.log('🔍 [loadDechargements] Filtrage par projet:', projetActifId);
+                this.dechargements = allDechargements.filter((d: any) => d.projetId === projetActifId);
+                console.log('✅ [loadDechargements] Déchargements filtrés:', this.dechargements.length, '/', allDechargements.length);
+              } else {
+                console.log('📋 [loadDechargements] Tous les déchargements:', allDechargements.length);
+                this.dechargements = allDechargements;
+              }
+              
               this.extractFilters();
               this.applyFilter();
             } catch (e) {
@@ -174,7 +261,18 @@ export class DechargementComponent implements OnInit {
           };
           reader.readAsText(data);
         } else {
-          this.dechargements = data as any;
+          let allDechargements = data as any;
+          
+          // 🔥 FIX: Filtrer par projet actif si disponible
+          if (projetActifId) {
+            console.log('🔍 [loadDechargements] Filtrage par projet:', projetActifId);
+            this.dechargements = allDechargements.filter((d: any) => d.projetId === projetActifId);
+            console.log('✅ [loadDechargements] Déchargements filtrés:', this.dechargements.length, '/', allDechargements.length);
+          } else {
+            console.log('📋 [loadDechargements] Tous les déchargements:', allDechargements.length);
+            this.dechargements = allDechargements;
+          }
+          
           this.extractFilters();
           this.applyFilter();
         }
@@ -468,50 +566,65 @@ export class DechargementComponent implements OnInit {
   }
 
   loadClients(): void {
-    this.clientService.getAllClients().subscribe({
-      next: (data) => {
-        if (data instanceof Blob) {
-          const reader = new FileReader();
-          reader.onload = () => {
+    const projetActifId = this.projetActif?.id;
+    
+    // 🔥 TOUJOURS charger seulement les clients du projet actif
+    if (projetActifId) {
+      console.log('📥 [Dechargement] Chargement des clients pour le projet:', projetActifId);
+      this.clientService.getClientsByProjet(projetActifId, 'body').subscribe({
+        next: async (data) => {
+          if (data instanceof Blob) {
+            const text = await data.text();
             try {
-              this.clients = JSON.parse(reader.result as string);
+              const parsed = JSON.parse(text);
+              this.clients = Array.isArray(parsed) ? parsed : [];
+              console.log('✅ [Dechargement] Clients du projet chargés:', this.clients.length);
             } catch (e) {
-              console.error('Erreur parsing clients:', e);
+              console.error('❌ Erreur parsing clients:', e);
               this.clients = [];
             }
-          };
-          reader.readAsText(data);
-        } else {
-          this.clients = Array.isArray(data) ? data : [];
+          } else {
+            this.clients = Array.isArray(data) ? data : [];
+            console.log('✅ [Dechargement] Clients du projet chargés:', this.clients.length);
+          }
+        },
+        error: (err) => {
+          console.error('❌ Erreur chargement clients du projet:', err);
+          this.clients = [];
         }
-      },
-      error: (err) => {
-        console.error('Erreur lors du chargement des clients:', err);
-        this.clients = [];
-      }
-    });
+      });
+    } else {
+      // 🔥 Si pas de projet actif, vider la liste au lieu de charger tous les clients
+      console.warn('⚠️ [Dechargement] Pas de projet actif, impossible de charger les clients');
+      this.clients = [];
+    }
   }
 
   loadDepots(): void {
-    this.depotService.getAllDepots().subscribe({
+    const projetActifId = this.projetActif?.id;
+    
+    if (!projetActifId) {
+      console.log('⚠️ [Dechargement] Pas de projet actif, impossible de charger les dépôts');
+      this.depots = [];
+      return;
+    }
+    
+    console.log(`📦 [Dechargement] Chargement des dépôts du projet ${projetActifId}...`);
+    
+    // Vider la liste des dépôts avant de charger les nouveaux
+    this.depots = [];
+    
+    // Utiliser l'endpoint spécifique au projet avec HttpClient
+    const url = `${this.basePath}/api/projets/${projetActifId}/depots`;
+    console.log(`🔗 URL: ${url}`);
+    
+    this.http.get<DepotDTO[]>(url).subscribe({
       next: (data) => {
-        if (data instanceof Blob) {
-          const reader = new FileReader();
-          reader.onload = () => {
-            try {
-              this.depots = JSON.parse(reader.result as string);
-            } catch (e) {
-              console.error('Erreur parsing dépôts:', e);
-              this.depots = [];
-            }
-          };
-          reader.readAsText(data);
-        } else {
-          this.depots = Array.isArray(data) ? data : [];
-        }
+        this.depots = data;
+        console.log(`✅ [Dechargement] ${this.depots.length} dépôt(s) chargé(s) pour le projet ${projetActifId}:`, this.depots.map(d => d.nom));
       },
       error: (err) => {
-        console.error('Erreur lors du chargement des dépôts:', err);
+        console.error('❌ Erreur chargement dépôts:', err);
         this.depots = [];
       }
     });
@@ -1089,6 +1202,11 @@ export class DechargementComponent implements OnInit {
       this.dialogDechargement.societeP = chargement.societeP;
     }
     
+    // Vérifier que societeP existe
+    if (!this.dialogDechargement.societeP) {
+      this.error = '⚠️ Attention: Ce déchargement n\'a pas de société associée. Veuillez en sélectionner une.';
+    }
+    
     // Initialiser le type en fonction du client ou dépôt
     if (dech.clientId) {
       this.dialogDechargement._type = 'client';
@@ -1114,7 +1232,11 @@ export class DechargementComponent implements OnInit {
     }
     
     this.showEditDialog = true;
-    this.error = '';
+    if (!this.dialogDechargement.societeP) {
+      // Le message d'erreur est déjà défini ci-dessus
+    } else {
+      this.error = '';
+    }
   }
 
   closeEditDialog(): void {
@@ -1306,8 +1428,8 @@ export class DechargementComponent implements OnInit {
   private proceedWithSaveDechargement(): void {
     // Validation des champs obligatoires
     if (!this.dialogDechargement.numTicket || !this.dialogDechargement.poidComplet || 
-        !this.dialogDechargement.poidCamionVide) {
-      this.error = 'Veuillez remplir tous les champs obligatoires';
+        !this.dialogDechargement.poidCamionVide || !this.dialogDechargement.societeP) {
+      this.error = 'Veuillez remplir tous les champs obligatoires (Société, N° Ticket, Poids)';
       return;
     }
 
@@ -1328,12 +1450,47 @@ export class DechargementComponent implements OnInit {
       const oldNumBonLivraison = this.selectedDechargement.numBonLivraison;
       const oldNumTicket = this.selectedDechargement.numTicket;
       
+      // 🔥 Récupérer le chargement associé pour vérifier si societeP a changé
+      const chargementAssocie = this.chargements.find(c => c.id === this.selectedDechargement!.chargementId);
+      const societeHasChanged = chargementAssocie && 
+                                this.dialogDechargement.societeP && 
+                                this.dialogDechargement.societeP !== chargementAssocie.societeP;
+      
       this.dechargementService.updateDechargement(this.selectedDechargement.id, dechargementToSave).subscribe({
         next: () => {
-          // Synchroniser avec le voyage lié en utilisant les anciennes valeurs pour la recherche
-          this.syncVoyageFromDechargement(dechargementToSave, oldNumBonLivraison, oldNumTicket);
-          this.loadDechargements();
-          this.closeEditDialog();
+          // 🔥 Si societeP a été modifiée, mettre à jour le chargement
+          if (societeHasChanged && chargementAssocie) {
+            console.log('📝 Mise à jour de la société du chargement:', this.dialogDechargement.societeP);
+            
+            const chargementToUpdate = {
+              ...chargementAssocie,
+              societeP: this.dialogDechargement.societeP
+            };
+            
+            this.chargementService.updateChargement(chargementAssocie.id!, chargementToUpdate).subscribe({
+              next: () => {
+                console.log('✅ Société du chargement mise à jour avec succès');
+                // Synchroniser avec le voyage lié en utilisant les anciennes valeurs pour la recherche
+                // Passer la nouvelle societeP pour la mettre à jour dans le voyage
+                this.syncVoyageFromDechargement(dechargementToSave, oldNumBonLivraison, oldNumTicket, this.dialogDechargement.societeP);
+                // Fermer le dialogue et recharger après synchronisation
+                this.closeEditDialog();
+              },
+              error: (err) => {
+                console.error('❌ Erreur mise à jour du chargement:', err);
+                // Même si la mise à jour du chargement échoue, le déchargement a été mis à jour
+                this.syncVoyageFromDechargement(dechargementToSave, oldNumBonLivraison, oldNumTicket, this.dialogDechargement.societeP);
+                // Fermer le dialogue et recharger après synchronisation
+                this.closeEditDialog();
+              }
+            });
+          } else {
+            // Pas de modification de societeP, mais passer quand même la societeP actuelle
+            const currentSocieteP = chargementAssocie?.societeP;
+            this.syncVoyageFromDechargement(dechargementToSave, oldNumBonLivraison, oldNumTicket, currentSocieteP);
+            // Fermer le dialogue et recharger après synchronisation
+            this.closeEditDialog();
+          }
         },
         error: (err) => {
           console.error('Erreur mise à jour:', err);
@@ -1344,9 +1501,10 @@ export class DechargementComponent implements OnInit {
   }
 
   // Synchroniser le voyage quand le déchargement est modifié
-  syncVoyageFromDechargement(dech: DechargementDTO, oldNumBonLivraison?: string, oldNumTicket?: string): void {
+  syncVoyageFromDechargement(dech: DechargementDTO, oldNumBonLivraison?: string, oldNumTicket?: string, societeP?: string): void {
     console.log('🔄 Début synchronisation Déchargement → Voyage');
     console.log('Déchargement:', dech);
+    console.log('SocieteP à synchroniser:', societeP);
     
     // Utiliser les anciennes valeurs si fournies, sinon les valeurs actuelles
     const searchBonLivraison = oldNumBonLivraison || dech.numBonLivraison;
@@ -1373,7 +1531,7 @@ export class DechargementComponent implements OnInit {
             try {
               voyagesList = JSON.parse(reader.result as string);
               console.log(`📦 ${voyagesList.length} voyages chargés (Blob)`);
-              this.updateMatchingVoyage(voyagesList, dech, searchBonLivraison, searchTicket);
+              this.updateMatchingVoyage(voyagesList, dech, searchBonLivraison, searchTicket, societeP);
             } catch (e) {
               console.error('❌ Erreur parsing voyages:', e);
             }
@@ -1382,7 +1540,7 @@ export class DechargementComponent implements OnInit {
         } else {
           voyagesList = voyages;
           console.log(`📦 ${voyagesList.length} voyages chargés (JSON direct)`);
-          this.updateMatchingVoyage(voyagesList, dech, searchBonLivraison, searchTicket);
+          this.updateMatchingVoyage(voyagesList, dech, searchBonLivraison, searchTicket, societeP);
         }
       },
       error: (err) => {
@@ -1391,7 +1549,7 @@ export class DechargementComponent implements OnInit {
     });
   }
 
-  updateMatchingVoyage(voyages: VoyageDTO[], dech: DechargementDTO, searchBonLivraison: string, searchTicket: string): void {
+  updateMatchingVoyage(voyages: VoyageDTO[], dech: DechargementDTO, searchBonLivraison: string, searchTicket: string, societeP?: string): void {
     console.log('🔍 Recherche du voyage correspondant parmi', voyages.length, 'voyages');
     
     const matchingVoyage = voyages.find(v => 
@@ -1422,7 +1580,8 @@ export class DechargementComponent implements OnInit {
       reste: matchingVoyage.reste != null ? Number(matchingVoyage.reste) : 0,
       date: dech.dateDechargement || matchingVoyage.date,
       societe: (dech.societe || matchingVoyage.societe)?.trim() || undefined,
-      societeP: matchingVoyage.societeP?.trim(),
+      // 🔥 Utiliser la societeP passée en paramètre, sinon celle du voyage
+      societeP: societeP ? societeP.trim() : (matchingVoyage.societeP?.trim() || undefined),
       chauffeurId: dech.chauffeurId || matchingVoyage.chauffeurId,
       camionId: dech.camionId || matchingVoyage.camionId,
       projetId: dech.projetId || matchingVoyage.projetId,
@@ -1432,6 +1591,8 @@ export class DechargementComponent implements OnInit {
       clientId: undefined as number | undefined,
       depotId: undefined as number | undefined
     };
+    
+    console.log('🏢 SocieteP dans le payload:', payload.societeP);
 
     // Mutuelle exclusivité client/depot basé sur les données du déchargement
     if (dech.clientId && dech.clientId > 0) {
@@ -1460,10 +1621,14 @@ export class DechargementComponent implements OnInit {
     this.voyageService.updateVoyage(matchingVoyage.id, payload, 'body').subscribe({
       next: () => {
         console.log('✅ Voyage synchronisé avec succès!');
-        console.log('🔄 Rechargement des voyages recommandé');
+        console.log('🔄 Rechargement de toutes les données...');
+        // Recharger toutes les données (déchargements + chargements pour societeP)
+        this.reloadData();
       },
       error: (err) => {
         console.error('❌ Erreur synchronisation voyage:', err);
+        // Même en cas d'erreur, recharger pour voir les changements du déchargement
+        this.reloadData();
         if (err.error instanceof Blob) {
           const reader = new FileReader();
           reader.onload = () => {

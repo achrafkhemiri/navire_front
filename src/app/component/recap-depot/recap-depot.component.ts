@@ -9,6 +9,7 @@ import { CamionDTO } from '../../api/model/camionDTO';
 import { ChauffeurControllerService } from '../../api/api/chauffeurController.service';
 import { ChauffeurDTO } from '../../api/model/chauffeurDTO';
 import { ProjetControllerService } from '../../api/api/projetController.service';
+import { ProjetActifService } from '../../service/projet-actif.service';
 import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
 import { HttpClient } from '@angular/common/http';
 import { BASE_PATH } from '../../api/variables';
@@ -35,7 +36,9 @@ export class RecapDepotComponent {
   showDepotDropdown: boolean = false;
   
   projetActifId: number | null = null;
+  projetActif: any = null;
   contextProjetId: number | null = null;
+  contextProjet: any = null;
   breadcrumbItems: BreadcrumbItem[] = [];
   
   isSidebarOpen: boolean = true;
@@ -62,10 +65,30 @@ export class RecapDepotComponent {
     private camionService: CamionControllerService,
     private chauffeurService: ChauffeurControllerService,
     private projetService: ProjetControllerService,
+    private projetActifService: ProjetActifService,
     private route: ActivatedRoute,
     private http: HttpClient,
     @Inject(BASE_PATH) private basePath: string
   ) {
+    // 🔥 Écouter les changements du projet actif
+    this.projetActifService.projetActif$.subscribe(projet => {
+      console.log('📡 [RecapDepot] Notification reçue - Nouveau projet:', projet);
+      
+      if (projet && projet.id) {
+        const previousId = this.projetActifId;
+        this.projetActifId = projet.id;
+        this.projetActif = projet;
+        
+        // 🔥 FIX : Recharger si le projet change OU si c'est la première fois
+        if (!previousId || previousId !== projet.id) {
+          console.log('🔄 [RecapDepot] Rechargement - previousId:', previousId, 'newId:', projet.id);
+          setTimeout(() => {
+            this.reloadData();
+          }, 50);
+        }
+      }
+    });
+    
     this.initializeContext();
   }
 
@@ -87,10 +110,53 @@ export class RecapDepotComponent {
       }
     });
 
+    // Charger le projet actif initial
+    const storedProjet = this.projetActifService.getProjetActif();
+    if (storedProjet && storedProjet.id) {
+      this.projetActifId = storedProjet.id;
+      this.projetActif = storedProjet;
+      console.log('✅ [RecapDepot] Projet actif initialisé:', this.projetActif.nom);
+    }
+
     // Load data
     this.loadDepots();
     this.loadCamions();
     this.loadChauffeurs();
+    this.updateBreadcrumb();
+  }
+
+  // 🔥 Méthode pour recharger toutes les données
+  reloadData() {
+    console.log('🔄 [RecapDepot] reloadData() - Projet actif:', this.projetActif?.nom, 'ID:', this.projetActifId);
+    
+    const currentUrl = window.location.pathname;
+    const isOnParametrePage = currentUrl.includes('/parametre');
+    
+    if (isOnParametrePage) {
+      const contextId = window.sessionStorage.getItem('projetActifId');
+      if (contextId) {
+        const contextIdNumber = Number(contextId);
+        console.log('📌 [RecapDepot] Page paramètre - Contexte:', contextIdNumber);
+        this.contextProjetId = contextIdNumber;
+        if (contextIdNumber !== this.projetActifId) {
+          this.loadProjetDetails(this.contextProjetId);
+        } else {
+          this.contextProjet = this.projetActif;
+        }
+      }
+    } else {
+      console.log('🏠 [RecapDepot] Mode Vue Projet Actif - Projet:', this.projetActif?.nom);
+      this.contextProjetId = null;
+      this.contextProjet = null;
+    }
+    
+    // Recharger toutes les données
+    this.loadDepots();
+    this.loadCamions();
+    this.loadChauffeurs();
+    if (this.selectedDepot) {
+      this.loadVoyagesForDepot();
+    }
     this.updateBreadcrumb();
   }
 
@@ -112,22 +178,31 @@ export class RecapDepotComponent {
   }
 
   loadDepots() {
-    this.depotService.getAllDepots('body').subscribe({
-      next: async (data) => {
-        if (data instanceof Blob) {
-          const text = await data.text();
-          try {
-            this.depots = JSON.parse(text);
-          } catch (e) {
-            this.depots = [];
-          }
-        } else {
-          this.depots = Array.isArray(data) ? data : [];
-        }
-        console.log('Dépôts chargés:', this.depots);
+    const projetId = this.contextProjetId || this.projetActifId;
+    
+    // 🔥 FIX: Charger UNIQUEMENT les dépôts du projet actif
+    if (!projetId) {
+      console.log('⚠️ [RecapDepot] Pas de projet actif, impossible de charger les dépôts');
+      this.depots = [];
+      return;
+    }
+    
+    console.log(`📦 [RecapDepot] Chargement des dépôts du projet ${projetId}...`);
+    
+    // Vider la liste des dépôts avant de charger les nouveaux
+    this.depots = [];
+    
+    // Utiliser l'endpoint spécifique au projet
+    const url = `${this.basePath}/api/projets/${projetId}/depots`;
+    console.log(`🔗 URL: ${url}`);
+    
+    this.http.get<DepotDTO[]>(url).subscribe({
+      next: (data) => {
+        this.depots = data;
+        console.log(`✅ [RecapDepot] ${this.depots.length} dépôt(s) chargé(s) pour le projet ${projetId}:`, this.depots.map(d => d.nom));
       },
       error: (err) => {
-        console.error('Erreur chargement dépôts:', err);
+        console.error('❌ Erreur chargement dépôts:', err);
         this.depots = [];
       }
     });
@@ -219,19 +294,38 @@ export class RecapDepotComponent {
       return;
     }
 
+    const projetId = this.contextProjetId || this.projetActifId;
+    console.log('📊 [loadVoyagesForDepot] Dépôt:', this.selectedDepot.nom, 'ProjetId:', projetId);
+
     this.voyageService.getAllVoyages('body').subscribe({
       next: async (data) => {
         if (data instanceof Blob) {
           const text = await data.text();
           try {
             const allVoyages = JSON.parse(text);
-            this.voyages = allVoyages.filter((v: VoyageDTO) => v.depotId === this.selectedDepot!.id);
+            
+            // 🔥 FIX: Filtrer par dépôt ET par projet actif
+            this.voyages = allVoyages.filter((v: VoyageDTO) => {
+              const matchDepot = v.depotId === this.selectedDepot!.id;
+              const matchProjet = projetId ? v.projetId === projetId : true;
+              return matchDepot && matchProjet;
+            });
+            
+            console.log('✅ [loadVoyagesForDepot] Voyages filtrés:', this.voyages.length, 'pour dépôt:', this.selectedDepot?.nom, 'et projet:', projetId);
           } catch (e) {
             this.voyages = [];
           }
         } else {
           const allVoyages = Array.isArray(data) ? data : [];
-          this.voyages = allVoyages.filter((v: VoyageDTO) => v.depotId === this.selectedDepot!.id);
+          
+          // 🔥 FIX: Filtrer par dépôt ET par projet actif
+          this.voyages = allVoyages.filter((v: VoyageDTO) => {
+            const matchDepot = v.depotId === this.selectedDepot!.id;
+            const matchProjet = projetId ? v.projetId === projetId : true;
+            return matchDepot && matchProjet;
+          });
+          
+          console.log('✅ [loadVoyagesForDepot] Voyages filtrés:', this.voyages.length, 'pour dépôt:', this.selectedDepot?.nom, 'et projet:', projetId);
         }
         
         // Sort by date descending
@@ -241,7 +335,6 @@ export class RecapDepotComponent {
         });
         
         this.applyFilter();
-        console.log('Voyages chargés pour le dépôt:', this.voyages);
       },
       error: (err) => {
         console.error('Erreur chargement voyages:', err);

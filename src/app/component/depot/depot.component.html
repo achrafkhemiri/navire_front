@@ -165,7 +165,25 @@
                 }"></i>
               </div>
             </th>
-            <th class="text-center quantity-header">
+            <th class="text-center quantity-header" *ngIf="isProjetActif()">
+              <div class="th-content">
+                <i class="bi bi-archive-fill"></i>
+                <span>Qté Autorisée</span>
+              </div>
+            </th>
+            <th class="text-center quantity-header" *ngIf="isProjetActif()">
+              <div class="th-content">
+                <i class="bi bi-box-seam-fill"></i>
+                <span>Qté Livrée</span>
+              </div>
+            </th>
+            <th class="text-center quantity-header" *ngIf="isProjetActif()">
+              <div class="th-content">
+                <i class="bi bi-clipboard-check-fill"></i>
+                <span>Reste</span>
+              </div>
+            </th>
+            <th class="text-center quantity-header" *ngIf="!isProjetActif()">
               <div class="th-content">
                 <i class="bi bi-box-seam-fill"></i>
                 <span>Quantité Vendue</span>
@@ -188,11 +206,37 @@
               <i class="bi bi-file-text" style="margin-right: 8px; color: #f59e0b;"></i>
               {{ dep.mf || '-' }}
             </td>
-            <td class="text-center">
+            <td class="text-center" *ngIf="isProjetActif()">
+              <span class="quantity-badge quantity-badge-primary" style="cursor: pointer;" (click)="openEditQuantiteModal(dep)" title="Cliquer pour modifier">
+                <i class="bi bi-archive-fill"></i>
+                <span class="quantity-value">{{ dep.quantiteAutorisee | number:'1.0-2' }}</span>
+                <i class="bi bi-pencil-fill" style="margin-left: 6px; font-size: 11px;"></i>
+              </span>
+            </td>
+            <td class="text-center" *ngIf="isProjetActif()">
+              <span class="quantity-badge quantity-badge-info">
+                <i class="bi bi-box-seam-fill"></i>
+                <span class="quantity-value">{{ getQuantiteLivree(dep) | number:'1.0-2' }}</span>
+              </span>
+            </td>
+            <td class="text-center" *ngIf="isProjetActif()">
+              <span class="quantity-badge" [ngClass]="{
+                'quantity-badge-success': getReste(dep) > 0,
+                'quantity-badge-warning': getReste(dep) === 0,
+                'quantity-badge-danger': getReste(dep) < 0
+              }">
+                <i class="bi" [ngClass]="{
+                  'bi-check-circle-fill': getReste(dep) > 0,
+                  'bi-exclamation-triangle-fill': getReste(dep) === 0,
+                  'bi-x-circle-fill': getReste(dep) < 0
+                }"></i>
+                <span class="quantity-value">{{ getReste(dep) | number:'1.0-2' }}</span>
+              </span>
+            </td>
+            <td class="text-center" *ngIf="!isProjetActif()">
               <span class="quantity-badge">
                 <i class="bi bi-box-seam-fill"></i>
-                <span class="quantity-value">{{ getTotalLivreDepot(dep.id) | number:'1.0-2' }}</span>
-                <span class="quantity-unit">kg</span>
+                <span class="quantity-value">{{ getQuantiteLivree(dep) | number:'1.0-2' }}</span>
               </span>
             </td>
             <td class="actions-cell">
@@ -205,7 +249,7 @@
             </td>
           </tr>
           <tr *ngIf="paginatedDepots.length === 0" class="no-data-row">
-            <td colspan="5">
+            <td [attr.colspan]="isProjetActif() ? 9 : 5">
               <div class="no-data">
                 <i class="bi bi-inbox"></i>
                 <p *ngIf="!isProjetActif()">Aucun dépôt trouvé</p>
@@ -372,4 +416,119 @@
       </div>
     </div>
   </main>
+</div>
+
+<!-- Modal d'alerte moderne -->
+<div class="alert-modal-backdrop" *ngIf="showAlert" (click)="closeAlert()">
+  <div class="alert-modal" [ngClass]="{
+    'alert-modal-success': alertType === 'success',
+    'alert-modal-danger': alertType === 'danger',
+    'alert-modal-warning': alertType === 'warning',
+    'alert-modal-info': alertType === 'info'
+  }">
+    <div class="alert-modal-icon">
+      <i class="bi" [ngClass]="{
+        'bi-check-circle-fill': alertType === 'success',
+        'bi-exclamation-triangle-fill': alertType === 'danger',
+        'bi-exclamation-circle-fill': alertType === 'warning',
+        'bi-info-circle-fill': alertType === 'info'
+      }"></i>
+    </div>
+    <h3 class="alert-modal-title">{{ getAlertTitle() }}</h3>
+    <p class="alert-modal-message">{{ alertMessage }}</p>
+    <button class="alert-modal-btn" (click)="closeAlert()">
+      <i class="bi bi-check-lg"></i> D'accord
+    </button>
+  </div>
+</div>
+
+<!-- Modal pour la quantité autorisée -->
+<div class="dialog-backdrop" *ngIf="showQuantiteModal" [@fadeIn] (click)="cancelAddDepotWithQuantite()">
+  <div class="quantite-modal" [@slideIn] (click)="$event.stopPropagation()">
+    <div class="quantite-modal-header">
+      <div class="quantite-modal-icon">
+        <i class="bi bi-calculator"></i>
+      </div>
+      <h3 class="quantite-modal-title">Quantité autorisée</h3>
+      <p class="quantite-modal-subtitle">
+        Définir la quantité autorisée pour ce dépôt sur le projet actif
+        <strong *ngIf="contextProjet || projetActif">
+          "{{ (contextProjet || projetActif).nom }}"
+        </strong>
+      </p>
+    </div>
+    
+    <div class="quantite-modal-body">
+      <label class="quantite-label">
+        <i class="bi bi-box-seam"></i> Quantité autorisée
+      </label>
+      <input 
+        type="number" 
+        [(ngModel)]="quantiteAutorisee" 
+        placeholder="Entrer la quantité (0 pour aucune limite)"
+        class="quantite-input"
+        min="0"
+        step="0.01"
+        autofocus
+        (keyup.enter)="confirmAddDepotWithQuantite()"
+      />
+      <p class="quantite-hint">
+        <i class="bi bi-info-circle"></i> 
+        Laisser 0 si vous ne souhaitez pas définir de limite pour ce dépôt
+      </p>
+    </div>
+    
+    <div class="quantite-modal-actions">
+      <button class="btn-cancel" (click)="cancelAddDepotWithQuantite()">
+        <i class="bi bi-x-lg"></i> Annuler
+      </button>
+      <button class="btn-confirm" (click)="confirmAddDepotWithQuantite()">
+        <i class="bi bi-check-lg"></i> Confirmer
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de modification de quantité -->
+<div class="dialog-backdrop" *ngIf="showEditQuantiteModal" [@fadeIn] (click)="cancelEditQuantite()">
+  <div class="quantite-modal" [@slideIn] (click)="$event.stopPropagation()">
+    <div class="quantite-modal-header">
+      <div class="quantite-modal-icon">
+        <i class="bi bi-pencil-square"></i>
+      </div>
+      <h3 class="quantite-modal-title">Modifier la quantité autorisée</h3>
+      <p class="quantite-modal-subtitle" *ngIf="editingDepot">
+        Dépôt : <strong>{{ editingDepot.nom }}</strong>
+      </p>
+    </div>
+    
+    <div class="quantite-modal-body">
+      <label class="quantite-label">
+        <i class="bi bi-box-seam"></i> Nouvelle quantité autorisée
+      </label>
+      <input 
+        type="number" 
+        [(ngModel)]="newQuantiteAutorisee" 
+        placeholder="Entrer la nouvelle quantité"
+        class="quantite-input"
+        min="0"
+        step="0.01"
+        autofocus
+        (keyup.enter)="confirmEditQuantite()"
+      />
+      <p class="quantite-hint" *ngIf="editingDepot">
+        <i class="bi bi-info-circle"></i> 
+        La quantité actuelle est de {{ editingDepot.quantiteAutorisee | number:'1.0-2' }} kg
+      </p>
+    </div>
+    
+    <div class="quantite-modal-actions">
+      <button class="btn-cancel" (click)="cancelEditQuantite()">
+        <i class="bi bi-x-lg"></i> Annuler
+      </button>
+      <button class="btn-confirm" (click)="confirmEditQuantite()">
+        <i class="bi bi-check-lg"></i> Confirmer
+      </button>
+    </div>
+  </div>
 </div>

@@ -349,16 +349,30 @@
         </div>
 
         <form (ngSubmit)="saveDechargement()">
+          <!-- Société (obligatoire) -->
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568; font-size: 13px;">
+              <i class="bi bi-building"></i> Société *
+            </label>
+            <select 
+              [(ngModel)]="dialogDechargement.societeP" 
+              name="societeP"
+              style="width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: white;"
+              required
+            >
+              <option [ngValue]="null" disabled>-- Sélectionner une société --</option>
+              <option *ngFor="let societe of societesList" [value]="societe">
+                {{ societe }}
+              </option>
+            </select>
+          </div>
+
           <!-- Informations du projet (lecture seule) -->
           <div style="background: #f8fafc; padding: 16px; border-radius: 12px; margin-bottom: 20px; border: 2px solid #e2e8f0;">
             <div style="font-size: 12px; font-weight: 600; color: #667eea; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
               <i class="bi bi-info-circle-fill"></i> Informations du projet
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
-              <div>
-                <div style="color: #64748b; margin-bottom: 4px;">Société</div>
-                <div style="font-weight: 600; color: #1e293b;">{{ dialogDechargement.societeP || 'N/A' }}</div>
-              </div>
               <div>
                 <div style="color: #64748b; margin-bottom: 4px;">Produit</div>
                 <div style="font-weight: 600; color: #1e293b;">{{ dialogDechargement.produit || 'N/A' }}</div>

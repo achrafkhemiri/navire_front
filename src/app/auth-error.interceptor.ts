@@ -37,6 +37,14 @@ export class AuthErrorInterceptor implements HttpInterceptor {
               return throwError(() => error);
             }
             
+            // Ignorer les erreurs 403 sur la modification de quantité autorisée
+            // car ce sont des erreurs métier (dépassement de quantité), pas des erreurs d'authentification
+            if ((urlPath.includes('/api/projet-client/') && urlPath.includes('/quantite-autorisee')) ||
+                (urlPath.includes('/api/projet-depot/') && urlPath.includes('/quantite-autorisee'))) {
+              console.warn('⚠️ Dépassement de quantité autorisée (403) - erreur métier, pas d\'authentification');
+              return throwError(() => error);
+            }
+            
             // Si l'utilisateur est censé être authentifié mais reçoit un 403,
             // c'est probablement dû à un token expiré
             if (this.authService.isAuthenticated()) {

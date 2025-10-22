@@ -1,5 +1,7 @@
 import { Component } from '@angular/core';
+import { trigger, state, style, transition, animate } from '@angular/animations';
 import { DepotControllerService } from '../../api/api/depotController.service';
+import { ProjetDepotControllerService } from '../../api/api/projetDepotController.service';
 import { VoyageControllerService } from '../../api/api/voyageController.service';
 import { HttpClient } from '@angular/common/http';
 import { Inject } from '@angular/core';
@@ -7,21 +9,51 @@ import { BASE_PATH } from '../../api/variables';
 import { ProjetActifService } from '../../service/projet-actif.service';
 import { ProjetControllerService } from '../../api/api/projetController.service';
 import { DepotDTO } from '../../api/model/depotDTO';
+import { ProjetDepotDTO } from '../../api/model/projetDepotDTO';
 import { VoyageDTO } from '../../api/model/voyageDTO';
 import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
+import { NotificationService } from '../../service/notification.service';
+import { QuantiteService } from '../../service/quantite.service';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
+// Interface étendue pour les dépôts avec quantités
+interface DepotWithQuantite extends DepotDTO {
+  projetDepotId?: number;
+  quantiteAutorisee?: number;
+}
+
 @Component({
   selector: 'app-depot',
   templateUrl: './depot.component.html',
-  styleUrls: ['./depot.component.css']
+  styleUrls: ['./depot.component.css'],
+  animations: [
+    trigger('fadeIn', [
+      transition(':enter', [
+        style({ opacity: 0 }),
+        animate('200ms ease-in', style({ opacity: 1 }))
+      ]),
+      transition(':leave', [
+        animate('200ms ease-out', style({ opacity: 0 }))
+      ])
+    ]),
+    trigger('slideIn', [
+      transition(':enter', [
+        style({ transform: 'scale(0.8)', opacity: 0 }),
+        animate('300ms cubic-bezier(0.34, 1.56, 0.64, 1)', style({ transform: 'scale(1)', opacity: 1 }))
+      ]),
+      transition(':leave', [
+        animate('200ms ease-out', style({ transform: 'scale(0.8)', opacity: 0 }))
+      ])
+    ])
+  ]
 })
 export class DepotComponent {
-  depots: DepotDTO[] = [];
-  filteredDepots: DepotDTO[] = [];
-  paginatedDepots: DepotDTO[] = [];
+  depots: DepotWithQuantite[] = [];
+  projetDepots: ProjetDepotDTO[] = [];
+  filteredDepots: DepotWithQuantite[] = [];
+  paginatedDepots: DepotWithQuantite[] = [];
   // Global active project
   projetActifId: number | null = null;
   projetActif: any = null;
@@ -29,7 +61,7 @@ export class DepotComponent {
   contextProjetId: number | null = null;
   contextProjet: any = null;
   breadcrumbItems: BreadcrumbItem[] = [];
-  selectedDepot: DepotDTO | null = null;
+  selectedDepot: DepotWithQuantite | null = null;
   dialogDepot: DepotDTO = { nom: '', adresse: '', mf: '' };
   editMode: boolean = false;
   error: string = '';
@@ -42,6 +74,11 @@ export class DepotComponent {
   filteredSuggestions: DepotDTO[] = [];
   showSuggestions: boolean = false;
   selectedExistingDepot: DepotDTO | null = null;
+  
+  // Modal de quantité
+  showQuantiteModal: boolean = false;
+  quantiteAutorisee: number = 0;
+  pendingDepotId: number | null = null;
   
   // Pagination
   currentPage: number = 1;
@@ -63,6 +100,11 @@ export class DepotComponent {
   // Date max pour le filtre (aujourd'hui)
   today: string = '';
   
+  // Alerte temporaire
+  showAlert: boolean = false;
+  alertMessage: string = '';
+  alertType: 'success' | 'danger' | 'warning' | 'info' = 'info';
+  
   // Modal de confirmation/erreur
   showConfirmModal: boolean = false;
   showErrorModal: boolean = false;
@@ -75,10 +117,13 @@ export class DepotComponent {
   Math = Math;
 
   constructor(
-    private depotService: DepotControllerService, 
+    private depotService: DepotControllerService,
+    private projetDepotService: ProjetDepotControllerService,
     private voyageService: VoyageControllerService,
     private projetActifService: ProjetActifService, 
-    private projetService: ProjetControllerService, 
+    private projetService: ProjetControllerService,
+    private notificationService: NotificationService,
+    private quantiteService: QuantiteService,
     private http: HttpClient, 
     @Inject(BASE_PATH) private basePath: string
   ) {
@@ -304,99 +349,115 @@ export class DepotComponent {
     
     const targetProjetId = this.contextProjetId || this.projetActifId;
     
-    // Si un dépôt existant a été sélectionné, on l'associe simplement au projet
+    // Si un dépôt existant a été sélectionné, demander la quantité
     if (this.selectedExistingDepot && this.selectedExistingDepot.id) {
       console.log('Association dépôt existant:', this.selectedExistingDepot.id, 'au projet:', targetProjetId);
       if (targetProjetId) {
-        this.projetService.addDepotToProjet(targetProjetId, this.selectedExistingDepot.id).subscribe({
-          next: () => {
-            console.log('Dépôt existant associé au projet');
-            this.loadDepots();
-            this.closeDialog();
-          },
-          error: (err) => {
-            this.error = 'Erreur association dépôt: ' + (err.error?.message || err.message);
-            console.error('Erreur association dépôt existant:', err);
-          }
-        });
+        // Stocker l'ID du dépôt en attente et ouvrir la modal de quantité
+        this.pendingDepotId = this.selectedExistingDepot.id;
+        this.quantiteAutorisee = 0;
+        this.showQuantiteModal = true;
+        this.closeDialog();
       }
       return;
     }
     
-    // Sinon, créer un nouveau dépôt
-    if (targetProjetId) {
-      this.dialogDepot.projetId = targetProjetId;
-    }
-
+    // Créer un nouveau dépôt puis demander la quantité
     console.log('Création nouveau depot - payload:', this.dialogDepot);
-    console.log('dialogDepot.nom:', this.dialogDepot.nom);
-    console.log('dialogDepot.adresse:', this.dialogDepot.adresse);
-    console.log('dialogDepot.mf:', this.dialogDepot.mf);
 
     this.depotService.createDepot(this.dialogDepot, 'body').subscribe({
-      next: (created) => {
-  // Log raw response
-  console.log('Réponse création depot (raw):', created);
+      next: async (created) => {
+        console.log('Réponse création depot (raw):', created);
 
-        // If backend returns Blob, parse it to extract created depot and id
+        let createdId: number | null = null;
+        
         if (created instanceof Blob) {
-          created.text().then(text => {
-            try {
-              const parsed = JSON.parse(text);
-              console.log('Réponse création depot (parsed):', parsed);
-              const parsedId = parsed?.id;
-              console.log('Parsed created depot id from Blob:', parsedId);
-              const associateProjetId = this.contextProjetId || this.projetActifId;
-              if (associateProjetId && parsedId) {
-                this.projetService.addDepotToProjet(associateProjetId, parsedId).subscribe({
-                  next: () => {
-                    console.log('Depot associé au projet (via Blob)');
-                    this.loadDepots();
-                  },
-                  error: (err) => {
-                    console.error('Erreur association depot-projet (via Blob):', err);
-                    this.loadDepots();
-                  }
-                });
-              } else {
-                this.loadDepots();
-              }
-            } catch (e) {
-              console.error('Erreur parsing création depot:', e);
-              this.loadDepots();
-            }
-          }).catch(e => {
-            console.error('Erreur lecture Blob création depot:', e);
-            this.loadDepots();
-          });
-        } else {
-          console.log('Depot créé:', created);
-          const createdId = (created as any)?.id;
-          const associateProjetId = this.contextProjetId || this.projetActifId;
-          if (associateProjetId && createdId) {
-            this.projetService.addDepotToProjet(associateProjetId, createdId).subscribe({
-              next: () => {
-                console.log('Depot associé (json) au projet');
-                this.loadDepots();
-              },
-              error: (err) => {
-                console.error('Erreur association depot-projet (json):', err);
-                this.loadDepots();
-              }
-            });
-          } else {
-            this.loadDepots();
+          const text = await created.text();
+          try {
+            const parsed = JSON.parse(text);
+            console.log('Réponse création depot (parsed):', parsed);
+            createdId = parsed?.id;
+          } catch (e) {
+            console.error('Erreur parsing création depot:', e);
           }
+        } else {
+          createdId = (created as any)?.id;
         }
 
-        this.dialogDepot = { nom: '', adresse: '', mf: '' };
-        this.closeDialog();
+        if (createdId && targetProjetId) {
+          // Stocker l'ID et ouvrir la modal de quantité
+          this.pendingDepotId = createdId;
+          this.quantiteAutorisee = 0;
+          this.showQuantiteModal = true;
+          this.closeDialog();
+        } else {
+          this.loadDepots();
+          this.closeDialog();
+        }
       },
       error: (err) => {
         this.error = 'Erreur ajout: ' + (err.error?.message || err.message);
         console.error('Erreur création depot:', err);
       }
     });
+  }
+
+  // Confirmer l'ajout avec quantité
+  confirmAddDepotWithQuantite() {
+    if (this.quantiteAutorisee === null || this.quantiteAutorisee === undefined || this.quantiteAutorisee < 0) {
+      this.showAlert = true;
+      this.alertType = 'danger';
+      this.alertMessage = 'Veuillez entrer une quantité autorisée valide (≥ 0)';
+      return;
+    }
+
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    
+    if (!this.pendingDepotId || !targetProjetId) {
+      this.showAlert = true;
+      this.alertType = 'danger';
+      this.alertMessage = 'Erreur: ID dépôt ou projet manquant';
+      return;
+    }
+
+    // Créer le ProjetDepot avec quantité
+    const projetDepot: any = {
+      projetId: targetProjetId,
+      depotId: this.pendingDepotId,
+      quantiteAutorisee: this.quantiteAutorisee
+    };
+
+    this.projetDepotService.createProjetDepot(projetDepot, 'body').subscribe({
+      next: () => {
+        console.log('✅ ProjetDepot créé avec quantité:', this.quantiteAutorisee);
+        this.showAlert = true;
+        this.alertType = 'success';
+        this.alertMessage = `Dépôt ajouté avec succès (Quantité: ${this.quantiteAutorisee} kg)`;
+        this.showQuantiteModal = false;
+        this.pendingDepotId = null;
+        this.quantiteAutorisee = 0;
+        
+        // Recharger les données avec un petit délai pour laisser la BD se mettre à jour
+        setTimeout(() => {
+          this.loadDepots();
+          this.loadVoyages();
+        }, 200);
+      },
+      error: (err) => {
+        console.error('❌ Erreur création ProjetDepot:', err);
+        this.showAlert = true;
+        this.alertType = 'danger';
+        this.alertMessage = 'Erreur: ' + (err.error?.message || err.message);
+        this.showQuantiteModal = false;
+      }
+    });
+  }
+
+  // Annuler l'ajout avec quantité
+  cancelAddDepotWithQuantite() {
+    this.showQuantiteModal = false;
+    this.pendingDepotId = null;
+    this.quantiteAutorisee = 0;
   }
 
   updateDialogDepot() {
@@ -425,17 +486,8 @@ export class DepotComponent {
     const filter = this.depotFilter.trim().toLowerCase();
     let depotsFiltrés = this.depots;
     
-    // Filtre par projet actif - similaire au composant client
-    const targetProjetId = this.contextProjetId || this.projetActifId;
-    if (targetProjetId) {
-      // Filtrer uniquement les dépôts qui appartiennent au projet ciblé
-      depotsFiltrés = depotsFiltrés.filter(d => d.projetId === targetProjetId);
-      console.log(`applyFilter() - Filtrage pour projet ${targetProjetId}:`, {
-        total: this.depots.length,
-        filtrés: depotsFiltrés.length,
-        dépôts: depotsFiltrés
-      });
-    }
+    // Note: Les dépôts sont déjà filtrés par projet dans loadDepotsDetails()
+    // Pas besoin de refiltrer par projetId ici
     
     // Filtre par texte
     if (filter) {
@@ -445,6 +497,7 @@ export class DepotComponent {
     }
     
     this.filteredDepots = depotsFiltrés;
+    console.log(`📊 applyFilter() - ${this.filteredDepots.length} dépôts après filtrage`);
     this.updatePagination();
   }
 
@@ -672,30 +725,98 @@ export class DepotComponent {
     if (!targetProjetId) {
       console.warn('⚠️ Aucun projet actif - liste des dépôts vide');
       this.depots = [];
+      this.projetDepots = [];
       this.applyFilter();
       return;
     }
     
-    // TOUJOURS charger via l'endpoint spécifique au projet pour garantir le filtrage
-    const url = `${this.basePath}/api/projets/${targetProjetId}/depots`;
-    console.log('📤 Appel endpoint projet-dépôts:', url);
-    
-    this.http.get<any[]>(url, { withCredentials: true, responseType: 'json' as 'json' }).subscribe({
-      next: (data) => {
-        console.log('✅ Réponse getDepotsByProjet:', data);
-        if (Array.isArray(data)) {
-          // Trier par ID décroissant (du plus récent au plus ancien)
-          this.depots = data.sort((a, b) => (b.id || 0) - (a.id || 0));
-          console.log(`✅ ${data.length} dépôts chargés et triés pour le projet ${targetProjetId}`);
+    // Charger les ProjetDepot pour ce projet
+    this.projetDepotService.getProjetDepotsByProjetId(targetProjetId, 'body').subscribe({
+      next: async (data: any) => {
+        console.log('✅ Réponse getProjetDepotsByProjetId:', data);
+        
+        if (data instanceof Blob) {
+          const text = await data.text();
+          try {
+            const parsed = JSON.parse(text);
+            if (Array.isArray(parsed)) {
+              this.projetDepots = parsed.sort((a, b) => (b.id || 0) - (a.id || 0));
+              // Charger les détails des dépôts
+              this.loadDepotsDetails();
+            }
+          } catch (e) {
+            console.error('Erreur parsing projetDepots:', e);
+            this.projetDepots = [];
+            this.depots = [];
+            this.applyFilter();
+          }
+        } else if (Array.isArray(data)) {
+          this.projetDepots = data.sort((a, b) => (b.id || 0) - (a.id || 0));
+          console.log(`✅ ${data.length} ProjetDepots chargés pour le projet ${targetProjetId}`);
+          // Charger les détails des dépôts
+          this.loadDepotsDetails();
         } else {
+          this.projetDepots = [];
           this.depots = [];
-          console.warn('⚠️ Réponse non-array:', data);
+          this.applyFilter();
         }
-        this.applyFilter();
       },
       error: err => {
-        console.error('❌ Erreur chargement dépôts pour projet:', err);
+        console.error('❌ Erreur chargement projetDepots:', err);
         this.error = 'Erreur chargement des dépôts: ' + (err.error?.message || err.message);
+        this.projetDepots = [];
+        this.depots = [];
+        this.applyFilter();
+      }
+    });
+  }
+
+  // Charger les détails des dépôts depuis les ProjetDepot
+  loadDepotsDetails() {
+    if (this.projetDepots.length === 0) {
+      this.depots = [];
+      this.applyFilter();
+      return;
+    }
+
+    // Récupérer les IDs uniques des dépôts
+    const depotIds = [...new Set(this.projetDepots.map(pd => pd.depotId))];
+    
+    // Charger tous les dépôts
+    this.depotService.getAllDepots('body').subscribe({
+      next: async (data: any) => {
+        let allDepots: DepotDTO[] = [];
+        
+        if (data instanceof Blob) {
+          const text = await data.text();
+          try {
+            const parsed = JSON.parse(text);
+            allDepots = Array.isArray(parsed) ? parsed : [];
+          } catch (e) {
+            console.error('Erreur parsing depots:', e);
+          }
+        } else if (Array.isArray(data)) {
+          allDepots = data;
+        }
+        
+        // Filtrer et enrichir avec les infos de ProjetDepot
+        this.depots = allDepots
+          .filter(depot => depotIds.includes(depot.id!))
+          .map(depot => {
+            const projetDepot = this.projetDepots.find(pd => pd.depotId === depot.id);
+            return {
+              ...depot,
+              projetDepotId: projetDepot?.id,
+              quantiteAutorisee: projetDepot?.quantiteAutorisee || 0
+            } as DepotWithQuantite;
+          })
+          .sort((a, b) => (b.id || 0) - (a.id || 0));
+        
+        console.log('✅ Dépôts enrichis avec quantités:', this.depots);
+        this.applyFilter();
+      },
+      error: (err: any) => {
+        console.error('❌ Erreur chargement détails dépôts:', err);
         this.depots = [];
         this.applyFilter();
       }
@@ -750,6 +871,125 @@ export class DepotComponent {
           this.voyages = [];
         }
       });
+    }
+  }
+
+  // Calculer la quantité livrée pour un dépôt
+  getQuantiteLivree(depot: DepotWithQuantite): number {
+    if (!depot.id) return 0;
+    return this.voyages
+      .filter(v => v.depotId === depot.id)
+      .reduce((sum, v) => sum + (v.quantite || 0), 0);
+  }
+
+  // Calculer le reste pour un dépôt
+  getReste(depot: DepotWithQuantite): number {
+    const quantiteAutorisee = depot.quantiteAutorisee || 0;
+    const quantiteLivree = this.getQuantiteLivree(depot);
+    return quantiteAutorisee - quantiteLivree;
+  }
+
+  // Calculer le pourcentage utilisé
+  getPourcentageUtilise(depot: DepotWithQuantite): number {
+    const quantiteAutorisee = depot.quantiteAutorisee || 0;
+    if (quantiteAutorisee === 0) return 0;
+    const quantiteLivree = this.getQuantiteLivree(depot);
+    return (quantiteLivree / quantiteAutorisee) * 100;
+  }
+
+  // Obtenir la classe CSS pour la barre de progression
+  getProgressBarClass(depot: DepotWithQuantite): string {
+    const pourcentage = this.getPourcentageUtilise(depot);
+    if (pourcentage >= 100) return 'progress-bar-danger';
+    if (pourcentage >= 80) return 'progress-bar-warning';
+    return 'progress-bar-success';
+  }
+
+  // Modal pour modifier la quantité autorisée
+  showEditQuantiteModal: boolean = false;
+  editingDepot: DepotWithQuantite | null = null;
+  newQuantiteAutorisee: number = 0;
+
+  openEditQuantiteModal(depot: DepotWithQuantite) {
+    this.editingDepot = depot;
+    this.newQuantiteAutorisee = depot.quantiteAutorisee || 0;
+    this.showEditQuantiteModal = true;
+  }
+
+  confirmEditQuantite() {
+    if (!this.editingDepot || !this.editingDepot.projetDepotId) {
+      this.showAlert = true;
+      this.alertType = 'danger';
+      this.alertMessage = 'Erreur: Dépôt invalide';
+      return;
+    }
+
+    if (this.newQuantiteAutorisee === null || this.newQuantiteAutorisee === undefined || this.newQuantiteAutorisee < 0) {
+      this.showAlert = true;
+      this.alertType = 'danger';
+      this.alertMessage = 'Veuillez entrer une quantité valide (≥ 0)';
+      return;
+    }
+
+    this.projetDepotService.updateQuantiteAutorisee(
+      this.editingDepot.projetDepotId,
+      this.newQuantiteAutorisee,
+      'body'
+    ).subscribe({
+      next: () => {
+        this.showAlert = true;
+        this.alertType = 'success';
+        this.alertMessage = `Quantité mise à jour avec succès (${this.newQuantiteAutorisee} kg)`;
+        this.showEditQuantiteModal = false;
+        this.editingDepot = null;
+        
+        // Recharger les données avec un petit délai
+        setTimeout(() => {
+          this.loadDepots();
+          this.loadVoyages();
+        }, 200);
+      },
+      error: (err) => {
+        console.error('❌ Erreur mise à jour quantité:', err);
+        this.showEditQuantiteModal = false;
+        this.editingDepot = null;
+        
+        // Afficher un message personnalisé selon le type d'erreur
+        this.showAlert = true;
+        this.alertType = 'danger';
+        
+        if (err.status === 403) {
+          // Erreur 403 - dépassement de quantité
+          this.alertMessage = '⚠️ Quantité non autorisée : La quantité demandée dépasse la quantité disponible du projet.';
+        } else if (err.status === 400 || err.status === 500) {
+          // Autres erreurs de validation
+          this.alertMessage = '❌ Impossible de modifier la quantité. Veuillez vérifier les données saisies.';
+        } else {
+          // Erreur générique
+          this.alertMessage = '❌ Une erreur est survenue lors de la modification de la quantité.';
+        }
+      }
+    });
+  }
+
+  cancelEditQuantite() {
+    this.showEditQuantiteModal = false;
+    this.editingDepot = null;
+    this.newQuantiteAutorisee = 0;
+  }
+
+  // Alertes
+  closeAlert() {
+    this.showAlert = false;
+  }
+
+  getAlertTitle(): string {
+    switch (this.alertType) {
+      case 'success': return 'Succès';
+      case 'danger': return 'Erreur';
+      case 'warning': return 'Attention';
+      case 'info': return 'Information';
+      default: return '';
     }
   }
 

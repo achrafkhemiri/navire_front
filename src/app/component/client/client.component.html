@@ -255,7 +255,10 @@
 							{{ cl.mf || '-' }}
 						</td>
 						<td *ngIf="projetActifId" class="quantite-cell">
-							<span class="badge">{{ getQuantitePourProjet(cl) || 0 }}</span>
+							<span class="badge" style="cursor: pointer;" (click)="openEditQuantiteModal(cl)" title="Cliquer pour modifier">
+								{{ getQuantitePourProjet(cl) || 0 }} kg
+								<i class="bi bi-pencil-fill" style="margin-left: 6px; font-size: 11px;"></i>
+							</span>
 						</td>
 						<td *ngIf="projetActifId" class="quantite-vendue-cell">
 							<span class="vendue-badge">
@@ -455,6 +458,50 @@
 									<i class="bi bi-x-lg"></i> Annuler
 								</button>
 								<button class="btn-confirm" (click)="confirmQuantiteAndAssociate()">
+									<i class="bi bi-check-lg"></i> Confirmer
+								</button>
+							</div>
+						</div>
+					</div>
+
+					<!-- Modal de modification de quantité -->
+					<div class="dialog-backdrop" *ngIf="showEditQuantiteModal" [@fadeIn] (click)="cancelEditQuantite()">
+						<div class="quantite-modal" [@slideIn] (click)="$event.stopPropagation()">
+							<div class="quantite-modal-header">
+								<div class="quantite-modal-icon">
+									<i class="bi bi-pencil-square"></i>
+								</div>
+								<h3 class="quantite-modal-title">Modifier la quantité autorisée</h3>
+								<p class="quantite-modal-subtitle">
+									Client : <strong>{{ editingClient?.nom }}</strong>
+								</p>
+							</div>
+							
+							<div class="quantite-modal-body">
+								<label class="quantite-label">
+									<i class="bi bi-box-seam"></i> Nouvelle quantité autorisée
+								</label>
+								<input 
+									type="number" 
+									[(ngModel)]="newQuantiteAutorisee" 
+									placeholder="Entrer la nouvelle quantité"
+									class="quantite-input"
+									min="0"
+									step="0.01"
+									autofocus
+									(keyup.enter)="confirmEditQuantite()"
+								/>
+								<p class="quantite-hint">
+									<i class="bi bi-info-circle"></i> 
+									La quantité actuelle est de {{ editingClient ? (getQuantitePourProjet(editingClient) || 0) : 0 }} kg
+								</p>
+							</div>
+							
+							<div class="quantite-modal-actions">
+								<button class="btn-cancel" (click)="cancelEditQuantite()">
+									<i class="bi bi-x-lg"></i> Annuler
+								</button>
+								<button class="btn-confirm" (click)="confirmEditQuantite()">
 									<i class="bi bi-check-lg"></i> Confirmer
 								</button>
 							</div>

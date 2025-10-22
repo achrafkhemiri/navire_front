@@ -81,6 +81,11 @@ export class ClientComponent {
   quantiteAutorisee: number = 0;
   pendingClientId: number | null = null;
   
+  // Modal de modification de quantité
+  showEditQuantiteModal: boolean = false;
+  editingClient: any = null;
+  newQuantiteAutorisee: number = 0;
+  
   // Pagination
   currentPage: number = 1;
   pageSize: number = 5;
@@ -627,24 +632,55 @@ export class ClientComponent {
       return;
     }
     
-    // TOUJOURS charger via l'endpoint spécifique au projet pour garantir le filtrage
-    const url = `${this.basePath}/api/clients/projet/${targetProjetId}`;
+    // Charger les ProjetClient pour ce projet via l'API
+    const url = `${this.basePath}/api/projet-client/projet/${targetProjetId}`;
     console.log('📤 Appel endpoint projet-clients:', url);
     
     this.http.get<any[]>(url, { withCredentials: true, responseType: 'json' as 'json' }).subscribe({
-      next: (data) => {
-        console.log('✅ Réponse getClientsByProjet:', data);
-        if (Array.isArray(data)) {
-          this.clients = data;
-          console.log(`✅ ${data.length} clients chargés pour le projet ${targetProjetId}`);
-        } else {
+      next: (projetClients) => {
+        console.log('✅ Réponse getProjetClientsByProjetId:', projetClients);
+        
+        if (!Array.isArray(projetClients) || projetClients.length === 0) {
           this.clients = [];
-          console.warn('⚠️ Réponse non-array:', data);
+          this.applyFilter();
+          return;
         }
-        this.applyFilter();
+        
+        // Récupérer les IDs uniques des clients
+        const clientIds = [...new Set(projetClients.map((pc: any) => pc.clientId))];
+        
+        // Charger tous les clients
+        this.http.get<any[]>(`${this.basePath}/api/clients`, { 
+          withCredentials: true, 
+          responseType: 'json' as 'json' 
+        }).subscribe({
+          next: (allClients) => {
+            // Filtrer et enrichir avec les infos de ProjetClient
+            this.clients = allClients
+              .filter((client: any) => clientIds.includes(client.id))
+              .map((client: any) => {
+                const projetClient = projetClients.find((pc: any) => pc.clientId === client.id);
+                return {
+                  ...client,
+                  projetClientId: projetClient?.id,
+                  quantiteAutorisee: projetClient?.quantiteAutorisee || 0,
+                  projetId: targetProjetId
+                };
+              })
+              .sort((a: any, b: any) => (b.id || 0) - (a.id || 0));
+            
+            console.log(`✅ ${this.clients.length} clients enrichis pour le projet ${targetProjetId}`);
+            this.applyFilter();
+          },
+          error: (err: any) => {
+            console.error('❌ Erreur chargement détails clients:', err);
+            this.clients = [];
+            this.applyFilter();
+          }
+        });
       },
       error: err => {
-        console.error('❌ Erreur chargement clients pour projet:', err);
+        console.error('❌ Erreur chargement projet-clients:', err);
         this.error = 'Erreur chargement des clients: ' + (err.error?.message || err.message);
         this.clients = [];
         this.applyFilter();
@@ -655,12 +691,8 @@ export class ClientComponent {
   applyFilter() {
     const filter = this.clientFilter.trim().toLowerCase();
     let clientsFiltrés = this.clients;
-    // Filtre par projet actif
-    const targetProjetId = this.contextProjetId || this.projetActifId;
-    if (targetProjetId) {
-      clientsFiltrés = clientsFiltrés.filter((c: any) => c.projetId === targetProjetId || c.projetId === undefined);
-    }
-    // Filtre par texte
+    
+    // Filtre par texte uniquement (clients déjà filtrés par projet lors du chargement)
     if (filter) {
       clientsFiltrés = clientsFiltrés.filter(c =>
         (c.nom?.toLowerCase().includes(filter) || false) ||
@@ -1164,5 +1196,91 @@ export class ClientComponent {
     // Télécharger le fichier
     const fileName = `Clients_${this.projetActif?.nomNavire || 'Liste'}_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.xlsx`;
     XLSX.writeFile(wb, fileName);
+  }
+
+  // Modal pour modifier la quantité autorisée
+  openEditQuantiteModal(client: any) {
+    this.editingClient = client;
+    this.newQuantiteAutorisee = this.getQuantitePourProjet(client) || 0;
+    this.showEditQuantiteModal = true;
+  }
+
+  confirmEditQuantite() {
+    if (!this.editingClient) {
+      this.showAlert = true;
+      this.alertType = 'danger';
+      this.alertMessage = 'Erreur: Client invalide';
+      return;
+    }
+
+    if (this.newQuantiteAutorisee === null || this.newQuantiteAutorisee === undefined || this.newQuantiteAutorisee < 0) {
+      this.showAlert = true;
+      this.alertType = 'danger';
+      this.alertMessage = 'Veuillez entrer une quantité valide (≥ 0)';
+      return;
+    }
+
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    if (!targetProjetId) {
+      this.showAlert = true;
+      this.alertType = 'danger';
+      this.alertMessage = 'Erreur: Aucun projet actif';
+      return;
+    }
+
+    // Trouver le ProjetClient ID
+    const projetClientId = this.editingClient.projetClientId;
+    if (!projetClientId) {
+      this.showAlert = true;
+      this.alertType = 'danger';
+      this.alertMessage = 'Erreur: Association projet-client introuvable';
+      return;
+    }
+
+    // Appeler le service pour mettre à jour la quantité
+    this.http.put(
+      `${this.basePath}/api/projet-client/${projetClientId}/quantite-autorisee`,
+      this.newQuantiteAutorisee,
+      { observe: 'body', responseType: 'json' }
+    ).subscribe({
+      next: () => {
+        this.showAlert = true;
+        this.alertType = 'success';
+        this.alertMessage = `Quantité mise à jour avec succès (${this.newQuantiteAutorisee} kg)`;
+        this.showEditQuantiteModal = false;
+        this.editingClient = null;
+        
+        // Recharger les données
+        setTimeout(() => {
+          this.loadClients();
+        }, 200);
+      },
+      error: (err) => {
+        console.error('❌ Erreur mise à jour quantité:', err);
+        this.showEditQuantiteModal = false;
+        this.editingClient = null;
+        
+        // Afficher un message personnalisé selon le type d'erreur
+        this.showAlert = true;
+        this.alertType = 'danger';
+        
+        if (err.status === 403) {
+          // Erreur 403 - dépassement de quantité
+          this.alertMessage = '⚠️ Quantité non autorisée : La quantité demandée dépasse la quantité disponible du projet.';
+        } else if (err.status === 400 || err.status === 500) {
+          // Autres erreurs de validation
+          this.alertMessage = '❌ Impossible de modifier la quantité. Veuillez vérifier les données saisies.';
+        } else {
+          // Erreur générique
+          this.alertMessage = '❌ Une erreur est survenue lors de la modification de la quantité.';
+        }
+      }
+    });
+  }
+
+  cancelEditQuantite() {
+    this.showEditQuantiteModal = false;
+    this.editingClient = null;
+    this.newQuantiteAutorisee = 0;
   }
 }

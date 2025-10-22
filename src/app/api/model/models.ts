@@ -7,6 +7,7 @@ export * from './declarationDTO';
 export * from './depotDTO';
 export * from './loginDTO';
 export * from './projetClientDTO';
+export * from './projetDepotDTO';
 export * from './projetDTO';
 export * from './societeDTO';
 export * from './voyageDTO';
