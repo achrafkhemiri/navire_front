@@ -577,7 +577,7 @@
           
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
             <div>
-              <label style="display: block; font-weight: 500; color: #4a5568; font-size: 13px;">Poids Tar </label>
+              <label style="display: block; font-weight: 500; color: #4a5568; font-size: 13px;">Poids Tare </label>
               <input 
                 [(ngModel)]="dialogDechargement.poidCamionVide" 
                 (ngModelChange)="onWeightChange('poidCamionVide', $event)"
@@ -599,7 +599,7 @@
               <i class="bi bi-x-circle"></i> Les poids doivent être des entiers (sans décimales).
             </div>
             <div *ngIf="!isBrutGreaterThanTar" style="color: #b45309;">
-              <i class="bi bi-exclamation-triangle"></i> Le poids brut doit être strictement supérieur au poids tar.
+              <i class="bi bi-exclamation-triangle"></i> Le poids brut doit être strictement supérieur au poids tare.
             </div>
           </div>
 

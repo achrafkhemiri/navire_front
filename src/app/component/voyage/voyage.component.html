@@ -351,19 +351,16 @@
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let vg of paginatedVoyages" class="table-row"
-              [style.background-color]="isClientEnDepassement(vg.clientId) ? '#fee2e2' : ''"
-              [style.border-left]="isClientEnDepassement(vg.clientId) ? '4px solid #dc2626' : ''">
+          <tr *ngFor="let vg of paginatedVoyages" class="table-row">
             <td>{{ vg.numBonLivraison }}</td>
             <td>{{ vg.numTicket }}</td>
             <td>{{ formatDateTime(vg.date) }}</td>
             <td style="background: #fef3c7;">{{ getDepotNom(vg.depotId) }}</td>
             <td style="background: #fef3c7;">{{ vg.poidsDepot || '-' }}</td>
-            <td [style.background]="isClientEnDepassement(vg.clientId) ? '#fecaca' : '#dbeafe'">
+            <td style="background: #dbeafe;">
               {{ getClientNomNumero(vg.clientId) }}
-              <i *ngIf="isClientEnDepassement(vg.clientId)" class="bi bi-exclamation-triangle-fill" style="color: #dc2626; margin-left: 6px;"></i>
             </td>
-            <td [style.background]="isClientEnDepassement(vg.clientId) ? '#fecaca' : '#dbeafe'">{{ vg.poidsClient || '-' }}</td>
+            <td style="background: #dbeafe;">{{ vg.poidsClient || '-' }}</td>
             <td>{{ getCamionInfo(vg.camionId, vg.societe) }}</td>
             <td>{{ getChauffeurInfo(vg.chauffeurId) }}</td>
             <td>

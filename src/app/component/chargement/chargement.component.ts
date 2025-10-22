@@ -2,7 +2,9 @@ import { Component, HostListener, Inject, ChangeDetectorRef } from '@angular/cor
 import { ActivatedRoute, Router } from '@angular/router';
 import { ChargementControllerService } from '../../api/api/chargementController.service';
 import { DechargementControllerService } from '../../api/api/dechargementController.service';
+import { VoyageControllerService } from '../../api/api/voyageController.service';
 import { ChargementDTO } from '../../api/model/chargementDTO';
+import { VoyageDTO } from '../../api/model/voyageDTO';
 import { ChauffeurControllerService } from '../../api/api/chauffeurController.service';
 import { CamionControllerService } from '../../api/api/camionController.service';
 import { ProjetControllerService } from '../../api/api/projetController.service';
@@ -144,6 +146,7 @@ export class ChargementComponent {
   constructor(
     private chargementService: ChargementControllerService,
     private dechargementService: DechargementControllerService,
+    private voyageService: VoyageControllerService,
     private chauffeurService: ChauffeurControllerService,
     private camionService: CamionControllerService,
     private projetService: ProjetControllerService,
@@ -596,7 +599,7 @@ export class ChargementComponent {
     console.log(`📥 Chargement des dépôts + projet-depots pour le projet ${projetId}...`);
     // 1) charger la liste basique des dépôts (infos) via depotService
     const depotUrl = `${this.basePath}/api/projets/${projetId}/depots`;
-    this.http.get(depotUrl).subscribe({
+    this.http.get(depotUrl, { withCredentials: true }).subscribe({
       next: async (data: any) => {
         let depotsData: any[] = [];
         if (data instanceof Blob) {
@@ -885,34 +888,166 @@ export class ChargementComponent {
 
   // Fonction helper pour gérer le succès de création/édition
   private handleDechargementSuccess() {
-    // 🔥 Si societeP a été modifiée, mettre à jour le chargement
-    if (this.dialogDechargement.societeP && 
+    // 🔥 Si societeP a été modifiée OU si le chargement n'a pas de societeP, mettre à jour le chargement
+    const needsUpdate = this.dialogDechargement.societeP && 
         this.selectedChargementForDechargement && 
-        this.dialogDechargement.societeP !== this.selectedChargementForDechargement.societeP) {
-      
+        (this.dialogDechargement.societeP !== this.selectedChargementForDechargement.societeP || 
+         !this.selectedChargementForDechargement.societeP);
+    
+    if (needsUpdate) {
       console.log('📝 Mise à jour de la société du chargement:', this.dialogDechargement.societeP);
       
       // Mettre à jour le chargement avec la nouvelle societeP
-      const chargementToUpdate = {
-        ...this.selectedChargementForDechargement,
+      const chargementToUpdate: ChargementDTO = {
+        id: this.selectedChargementForDechargement!.id,
+        camionId: this.selectedChargementForDechargement!.camionId || 0,
+        chauffeurId: this.selectedChargementForDechargement!.chauffeurId || 0,
+        societe: this.selectedChargementForDechargement!.societe || '',
+        projetId: this.selectedChargementForDechargement!.projetId || 0,
+        dateChargement: this.selectedChargementForDechargement!.dateChargement || '',
         societeP: this.dialogDechargement.societeP
       };
       
       this.chargementService.updateChargement(chargementToUpdate.id!, chargementToUpdate).subscribe({
         next: () => {
           console.log('✅ Société du chargement mise à jour avec succès');
-          this.closeDechargementSuccess();
+          // 🔥 Synchroniser avec le voyage
+          this.syncVoyageWithSocieteP(this.dialogDechargement, this.dialogDechargement.societeP!);
         },
         error: (err) => {
           console.error('❌ Erreur mise à jour du chargement:', err);
-          // Même si la mise à jour du chargement échoue, le déchargement a réussi
-          this.closeDechargementSuccess();
+          // Même si la mise à jour du chargement échoue, synchroniser quand même le voyage
+          this.syncVoyageWithSocieteP(this.dialogDechargement, this.dialogDechargement.societeP!);
         }
       });
     } else {
       // Pas de modification de societeP
       this.closeDechargementSuccess();
     }
+  }
+
+  // Synchroniser le voyage avec la nouvelle societeP
+  private syncVoyageWithSocieteP(dechargement: any, societeP: string) {
+    console.log('🔄 Synchronisation du voyage avec societeP:', societeP);
+    
+    const numBonLivraison = dechargement.numBonLivraison;
+    const numTicket = dechargement.numTicket;
+    
+    if (!numBonLivraison || !numTicket) {
+      console.warn('⚠️ Impossible de synchroniser: numBonLivraison ou numTicket manquant');
+      this.closeDechargementSuccess();
+      return;
+    }
+    
+    console.log(`🔍 Recherche voyage avec Bon: ${numBonLivraison}, Ticket: ${numTicket}`);
+    
+    // Trouver le voyage correspondant
+    this.voyageService.getAllVoyages().subscribe({
+      next: (voyages: any) => {
+        let voyagesList: VoyageDTO[] = [];
+        
+        if (voyages instanceof Blob) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              voyagesList = JSON.parse(reader.result as string);
+              console.log(`📦 ${voyagesList.length} voyages chargés`);
+              this.updateVoyageWithSocieteP(voyagesList, dechargement, numBonLivraison, numTicket, societeP);
+            } catch (e) {
+              console.error('❌ Erreur parsing voyages:', e);
+              this.closeDechargementSuccess();
+            }
+          };
+          reader.readAsText(voyages);
+        } else {
+          voyagesList = voyages;
+          console.log(`📦 ${voyagesList.length} voyages chargés`);
+          this.updateVoyageWithSocieteP(voyagesList, dechargement, numBonLivraison, numTicket, societeP);
+        }
+      },
+      error: (err) => {
+        console.error('❌ Erreur récupération voyages:', err);
+        this.closeDechargementSuccess();
+      }
+    });
+  }
+
+  // Mettre à jour le voyage correspondant
+  private updateVoyageWithSocieteP(voyages: VoyageDTO[], dechargement: any, numBonLivraison: string, numTicket: string, societeP: string) {
+    const matchingVoyage = voyages.find(v => 
+      v.numBonLivraison === numBonLivraison && 
+      v.numTicket === numTicket
+    );
+
+    if (!matchingVoyage) {
+      console.warn('⚠️ Aucun voyage trouvé avec Bon:', numBonLivraison, 'Ticket:', numTicket);
+      this.closeDechargementSuccess();
+      return;
+    }
+
+    console.log('✅ Voyage correspondant trouvé:', matchingVoyage);
+
+    if (!matchingVoyage.id) {
+      console.error('❌ Voyage sans ID, impossible de mettre à jour');
+      this.closeDechargementSuccess();
+      return;
+    }
+
+    // Calculer le poids net du déchargement
+    const poidsNet = (dechargement.poidComplet || 0) - (dechargement.poidCamionVide || 0);
+
+    // Préparer le payload pour la mise à jour
+    const payload: any = {
+      id: matchingVoyage.id,
+      numBonLivraison: matchingVoyage.numBonLivraison?.trim(),
+      numTicket: matchingVoyage.numTicket?.trim(),
+      reste: matchingVoyage.reste != null ? Number(matchingVoyage.reste) : 0,
+      date: dechargement.dateDechargement || matchingVoyage.date,
+      societe: matchingVoyage.societe?.trim() || undefined,
+      societeP: societeP.trim(), // 🔥 Mettre à jour avec la nouvelle societeP
+      chauffeurId: dechargement.chauffeurId || matchingVoyage.chauffeurId,
+      camionId: dechargement.camionId || matchingVoyage.camionId,
+      projetId: dechargement.projetId || matchingVoyage.projetId,
+      userId: matchingVoyage.userId || 1,
+      poidsClient: undefined as number | undefined,
+      poidsDepot: undefined as number | undefined,
+      clientId: undefined as number | undefined,
+      depotId: undefined as number | undefined
+    };
+
+    // Mutuelle exclusivité client/depot
+    if (dechargement.clientId && dechargement.clientId > 0) {
+      payload.clientId = dechargement.clientId;
+      payload.depotId = undefined;
+      payload.poidsClient = poidsNet;
+      payload.poidsDepot = undefined;
+    } else if (dechargement.depotId && dechargement.depotId > 0) {
+      payload.depotId = dechargement.depotId;
+      payload.clientId = undefined;
+      payload.poidsDepot = poidsNet;
+      payload.poidsClient = undefined;
+    } else {
+      payload.clientId = matchingVoyage.clientId;
+      payload.depotId = matchingVoyage.depotId;
+      payload.poidsClient = matchingVoyage.poidsClient;
+      payload.poidsDepot = matchingVoyage.poidsDepot;
+    }
+
+    // Nettoyage
+    Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+
+    console.log('📝 Payload voyage synchronisation:', payload);
+
+    this.voyageService.updateVoyage(matchingVoyage.id, payload, 'body').subscribe({
+      next: () => {
+        console.log('✅ Voyage synchronisé avec succès!');
+        this.closeDechargementSuccess();
+      },
+      error: (err) => {
+        console.error('❌ Erreur synchronisation voyage:', err);
+        this.closeDechargementSuccess();
+      }
+    });
   }
 
   // Fermer le dialog après succès

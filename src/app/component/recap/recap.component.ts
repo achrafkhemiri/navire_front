@@ -571,6 +571,23 @@ export class RecapComponent {
     return quantiteAutorisee - totalLivre;
   }
 
+  // Calculer le reste cumulé après chaque voyage (pour affichage dans le tableau)
+  getResteCumule(voyage: any, index: number): number {
+    if (!this.selectedClient || !this.selectedClient.id) return 0;
+    
+    const quantiteAutorisee = this.getQuantiteAutorisee(this.selectedClient.id);
+    
+    // Calculer le total livré jusqu'à ce voyage (inclus)
+    let totalLivreJusquIci = 0;
+    for (let i = 0; i <= index; i++) {
+      const v = this.paginatedVoyages[i];
+      totalLivreJusquIci += (v.poidsClient || 0);
+    }
+    
+    // Reste = Quantité autorisée - Total livré jusqu'ici
+    return quantiteAutorisee - totalLivreJusquIci;
+  }
+
   // Vérifier si le client sélectionné a dépassé sa quantité autorisée
   isClientEnDepassement(): boolean {
     const reste = this.getReste();

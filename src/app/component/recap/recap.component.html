@@ -243,7 +243,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let voyage of paginatedVoyages" class="table-row"
+            <tr *ngFor="let voyage of paginatedVoyages; let i = index" class="table-row"
                 [style.background-color]="isClientEnDepassement() ? '#fee2e2' : ''"
                 [style.border-left]="isClientEnDepassement() ? '4px solid #dc2626' : ''">
               <td>
@@ -268,10 +268,10 @@
               </td>
               <td>
                 <span class="reste-badge" 
-                      [style.background]="isClientEnDepassement() ? '#dc2626' : getResteBadgeColor(voyage.reste || 0)" 
+                      [style.background]="isClientEnDepassement() ? '#dc2626' : getResteBadgeColor(getResteCumule(voyage, i) || 0)" 
                       [style.color]="'white'">
-                  {{ voyage.reste | number:'1.0-2' }}
-                  <i *ngIf="isClientEnDepassement()" class="bi bi-exclamation-triangle-fill" style="margin-left: 6px;"></i>
+                  {{ getResteCumule(voyage, i) | number:'1.0-2' }}
+                  <i *ngIf="getResteCumule(voyage, i) < 0" class="bi bi-exclamation-triangle-fill" style="margin-left: 6px;"></i>
                 </span>
               </td>
             </tr>

@@ -9,6 +9,8 @@ import { CamionDTO } from '../../api/model/camionDTO';
 import { ChauffeurControllerService } from '../../api/api/chauffeurController.service';
 import { ChauffeurDTO } from '../../api/model/chauffeurDTO';
 import { ProjetControllerService } from '../../api/api/projetController.service';
+import { ProjetDepotControllerService } from '../../api/api/projetDepotController.service';
+import { ProjetDepotDTO } from '../../api/model/projetDepotDTO';
 import { ProjetActifService } from '../../service/projet-actif.service';
 import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
 import { HttpClient } from '@angular/common/http';
@@ -29,6 +31,7 @@ export class RecapDepotComponent {
   depots: DepotDTO[] = [];
   camions: CamionDTO[] = [];
   chauffeurs: ChauffeurDTO[] = [];
+  projetsDepots: ProjetDepotDTO[] = [];
   
   selectedDepot: DepotDTO | null = null;
   depotSearchInput: string = '';
@@ -65,6 +68,7 @@ export class RecapDepotComponent {
     private camionService: CamionControllerService,
     private chauffeurService: ChauffeurControllerService,
     private projetService: ProjetControllerService,
+    private projetDepotService: ProjetDepotControllerService,
     private projetActifService: ProjetActifService,
     private route: ActivatedRoute,
     private http: HttpClient,
@@ -179,30 +183,75 @@ export class RecapDepotComponent {
 
   loadDepots() {
     const projetId = this.contextProjetId || this.projetActifId;
-    
-    // 🔥 FIX: Charger UNIQUEMENT les dépôts du projet actif
     if (!projetId) {
-      console.log('⚠️ [RecapDepot] Pas de projet actif, impossible de charger les dépôts');
+      console.warn('⚠️ [RecapDepot] Pas de projet actif, impossible de charger les dépôts');
       this.depots = [];
+      this.projetsDepots = [];
       return;
     }
-    
-    console.log(`📦 [RecapDepot] Chargement des dépôts du projet ${projetId}...`);
-    
-    // Vider la liste des dépôts avant de charger les nouveaux
-    this.depots = [];
-    
-    // Utiliser l'endpoint spécifique au projet
-    const url = `${this.basePath}/api/projets/${projetId}/depots`;
-    console.log(`🔗 URL: ${url}`);
-    
-    this.http.get<DepotDTO[]>(url).subscribe({
-      next: (data) => {
-        this.depots = data;
-        console.log(`✅ [RecapDepot] ${this.depots.length} dépôt(s) chargé(s) pour le projet ${projetId}:`, this.depots.map(d => d.nom));
+
+    // 1. Charger les ProjetDepot pour ce projet
+    this.projetDepotService.getProjetDepotsByProjetId(projetId, 'body').subscribe({
+      next: async (projetDepotsData: any) => {
+        let projetDepots: ProjetDepotDTO[] = [];
+        if (projetDepotsData instanceof Blob) {
+          const text = await projetDepotsData.text();
+          try {
+            projetDepots = JSON.parse(text);
+          } catch (e) {
+            projetDepots = [];
+          }
+        } else if (Array.isArray(projetDepotsData)) {
+          projetDepots = projetDepotsData;
+        }
+        this.projetsDepots = projetDepots;
+        const depotIds = [...new Set(projetDepots.map(pd => pd.depotId))];
+
+        // 2. Charger tous les dépôts
+        this.depotService.getAllDepots('body').subscribe({
+          next: async (data: any) => {
+            let allDepots: DepotDTO[] = [];
+            if (data instanceof Blob) {
+              const text = await data.text();
+              try {
+                allDepots = Array.isArray(JSON.parse(text)) ? JSON.parse(text) : [];
+              } catch (e) {
+                allDepots = [];
+              }
+            } else if (Array.isArray(data)) {
+              allDepots = data;
+            }
+            // 3. Filtrer et enrichir avec les infos de ProjetDepot
+            this.depots = allDepots
+              .filter(depot => depotIds.includes(depot.id!))
+              .map(depot => {
+                const projetDepot = projetDepots.find(pd => pd.depotId === depot.id);
+                return {
+                  ...depot,
+                  projetDepotId: projetDepot?.id,
+                  quantiteAutorisee: projetDepot?.quantiteAutorisee || 0
+                };
+              })
+              .sort((a, b) => (b.id || 0) - (a.id || 0));
+            console.log('✅ Dépôts enrichis avec quantités:', this.depots);
+            // Si un dépôt est déjà sélectionné, rafraîchir ses données
+            if (this.selectedDepot) {
+              const updatedDepot = this.depots.find(d => d.id === this.selectedDepot!.id);
+              if (updatedDepot) {
+                this.selectedDepot = updatedDepot;
+                console.log(`🔄 Dépôt sélectionné mis à jour:`, this.selectedDepot);
+              }
+            }
+          },
+          error: (err) => {
+            console.error('❌ Erreur chargement détails dépôts:', err);
+            this.depots = [];
+          }
+        });
       },
       error: (err) => {
-        console.error('❌ Erreur chargement dépôts:', err);
+        console.error('❌ Erreur chargement projetDepots:', err);
+        this.projetsDepots = [];
         this.depots = [];
       }
     });
@@ -456,12 +505,51 @@ export class RecapDepotComponent {
     return chauffeur?.nom || 'N/A';
   }
 
+  getQuantiteAutorisee(depotId: number | undefined): number {
+    if (!depotId) {
+      console.log(`⚠️ getQuantiteAutorisee appelé sans depotId`);
+      return 0;
+    }
+    
+    // Essayer d'abord de récupérer depuis selectedDepot
+    if (this.selectedDepot && this.selectedDepot.id === depotId) {
+      const depot = this.selectedDepot as any;
+      if (depot.quantiteAutorisee !== undefined && depot.quantiteAutorisee !== null) {
+        console.log(`✅ Quantité autorisée pour dépôt ${depotId} (${depot.nom}) depuis selectedDepot:`, depot.quantiteAutorisee);
+        return depot.quantiteAutorisee;
+      }
+    }
+    
+    // Ensuite depuis la liste des dépôts
+    const depot = this.depots.find(d => d.id === depotId) as any;
+    if (depot) {
+      if (depot.quantiteAutorisee !== undefined && depot.quantiteAutorisee !== null) {
+        console.log(`✅ Quantité autorisée pour dépôt ${depotId} (${depot.nom}) depuis depots list:`, depot.quantiteAutorisee);
+        return depot.quantiteAutorisee;
+      }
+    }
+    
+    console.warn(`⚠️ Aucune quantité autorisée trouvée pour dépôt ${depotId}`);
+    return 0;
+  }
+
   getTotalLivre(): number {
     return this.filteredVoyages.reduce((sum, v) => sum + (v.poidsDepot || 0), 0);
   }
 
   getReste(): number {
-    return this.filteredVoyages.reduce((sum, v) => sum + (v.reste || 0), 0);
+    const quantiteAutorisee = this.getQuantiteAutorisee(this.selectedDepot?.id);
+    const totalLivre = this.getTotalLivre();
+    return quantiteAutorisee - totalLivre;
+  }
+
+  getResteCumule(voyage: any, index: number): number {
+    const quantiteAutorisee = this.getQuantiteAutorisee(this.selectedDepot?.id);
+    let totalLivreJusquIci = 0;
+    for (let i = 0; i <= index; i++) {
+      totalLivreJusquIci += (this.paginatedVoyages[i].poidsDepot || 0);
+    }
+    return quantiteAutorisee - totalLivreJusquIci;
   }
 
   getResteColor(): string {
@@ -502,16 +590,17 @@ export class RecapDepotComponent {
     doc.setFont('helvetica', 'bold');
     doc.text('Statistiques:', 14, 35);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Total voyages: ${this.filteredVoyages.length}`, 14, 41);
-    doc.text(`Total livré: ${this.getTotalLivre().toFixed(2)} kg`, 80, 41);
-    doc.text(`Reste: ${this.getReste().toFixed(2)} kg`, 160, 41);
+    doc.text(`Quantité autorisée: ${this.getQuantiteAutorisee(this.selectedDepot.id).toFixed(2)} kg`, 14, 41);
+    doc.text(`Total voyages: ${this.filteredVoyages.length}`, 14, 47);
+    doc.text(`Total livré: ${this.getTotalLivre().toFixed(2)} kg`, 80, 47);
+    doc.text(`Reste: ${this.getReste().toFixed(2)} kg`, 160, 47);
     
     // Filtres actifs
     if (this.voyageFilter || this.dateDebut || this.dateFin) {
       doc.setFont('helvetica', 'bold');
-      doc.text('Filtres appliqués:', 14, 49);
+      doc.text('Filtres appliqués:', 14, 55);
       doc.setFont('helvetica', 'normal');
-      let filterY = 55;
+      let filterY = 61;
       
       if (this.voyageFilter) {
         doc.text(`Recherche: ${this.voyageFilter}`, 14, filterY);
@@ -603,6 +692,7 @@ export class RecapDepotComponent {
       ['Dépôt', this.selectedDepot.nom],
       [],
       ['STATISTIQUES'],
+      ['Quantité autorisée', this.getQuantiteAutorisee(this.selectedDepot.id).toFixed(2) + ' kg'],
       ['Total voyages', this.filteredVoyages.length],
       ['Total livré', this.getTotalLivre().toFixed(2) + ' kg'],
       ['Reste', this.getReste().toFixed(2) + ' kg'],

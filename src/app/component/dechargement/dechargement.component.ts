@@ -169,12 +169,11 @@ export class DechargementComponent implements OnInit {
     }
 
     this.loadDechargements();
-    this.loadClients();
+    this.loadClients();  // loadProjetsClients() sera appelée automatiquement après
     this.loadDepots();
     this.loadChargements();
     this.loadCamions();
     this.loadChauffeurs();
-    this.loadProjetsClients();
   }
 
   // 🔥 Méthode pour recharger toutes les données
@@ -223,11 +222,10 @@ export class DechargementComponent implements OnInit {
     });
     
     // Recharger les autres données en arrière-plan
-    this.loadClients();
+    this.loadClients();  // loadProjetsClients() sera appelée automatiquement après
     this.loadDepots();
     this.loadCamions();
     this.loadChauffeurs();
-    this.loadProjetsClients();
   }
 
   loadDechargements(): void {
@@ -550,19 +548,28 @@ export class DechargementComponent implements OnInit {
 
   loadProjetsClients(): void {
     if (!this.projetActif || !this.projetActif.id) {
+      console.warn('⚠️ [loadProjetsClients] Pas de projet actif');
       this.projetsClients = [];
       return;
     }
     
     const projetId = this.projetActif.id;
+    console.log('🔄 [loadProjetsClients] Création des associations projet-client pour projet:', projetId);
+    console.log('📊 [loadProjetsClients] Nombre de clients à traiter:', this.clients.length);
     
     // Utiliser directement les clients chargés pour créer les projetsClients
-    this.projetsClients = this.clients.map((client: any) => ({
-      id: client.id,
-      projetId: projetId,
-      clientId: client.id,
-      quantiteAutorisee: client.quantitesAutoriseesParProjet?.[projetId] || 0
-    }));
+    this.projetsClients = this.clients.map((client: any) => {
+      const quantiteAutorisee = client.quantitesAutoriseesParProjet?.[projetId] || 0;
+      console.log(`  📝 Client ${client.id} (${client.nom}): quantité autorisée = ${quantiteAutorisee}`);
+      return {
+        id: client.id,
+        projetId: projetId,
+        clientId: client.id,
+        quantiteAutorisee: quantiteAutorisee
+      };
+    });
+    
+    console.log('✅ [loadProjetsClients] Associations créées:', this.projetsClients.length);
   }
 
   loadClients(): void {
@@ -579,6 +586,8 @@ export class DechargementComponent implements OnInit {
               const parsed = JSON.parse(text);
               this.clients = Array.isArray(parsed) ? parsed : [];
               console.log('✅ [Dechargement] Clients du projet chargés:', this.clients.length);
+              // 🔥 Appeler loadProjetsClients() APRÈS le chargement des clients
+              this.loadProjetsClients();
             } catch (e) {
               console.error('❌ Erreur parsing clients:', e);
               this.clients = [];
@@ -586,6 +595,8 @@ export class DechargementComponent implements OnInit {
           } else {
             this.clients = Array.isArray(data) ? data : [];
             console.log('✅ [Dechargement] Clients du projet chargés:', this.clients.length);
+            // 🔥 Appeler loadProjetsClients() APRÈS le chargement des clients
+            this.loadProjetsClients();
           }
         },
         error: (err) => {
@@ -1295,14 +1306,21 @@ export class DechargementComponent implements OnInit {
   }
 
   // Calculer le reste total du projet (quantité totale - somme des livraisons)
-  getResteProjet(): number {
+  getResteProjet(excludeDechargementId?: number): number {
     if (!this.projetActif) return 0;
     
     const quantiteTotale = this.projetActif.quantiteTotale || 0;
     
     // Calculer le total déjà livré à partir de tous les déchargements du projet
     const totalLivre = this.dechargements
-      .filter(d => d.projetId === this.projetActif.id)
+      .filter(d => {
+        const match = d.projetId === this.projetActif.id;
+        // Exclure le déchargement en cours d'édition si spécifié
+        if (excludeDechargementId !== undefined && d.id === excludeDechargementId) {
+          return false;
+        }
+        return match;
+      })
       .reduce((sum, d) => {
         const poidsNet = (d.poidComplet || 0) - (d.poidCamionVide || 0);
         return sum + poidsNet;
@@ -1321,6 +1339,24 @@ export class DechargementComponent implements OnInit {
     return '#ef4444'; // rouge
   }
 
+  // Calculer le reste du projet après l'opération en cours
+  getResteProjetApresOperation(): number {
+    if (!this.dialogDechargement.poidComplet || !this.dialogDechargement.poidCamionVide) {
+      // Si pas de poids saisi, retourner le reste actuel en excluant l'édition en cours
+      const excludeId = this.editMode && this.selectedDechargement ? this.selectedDechargement.id : undefined;
+      return this.getResteProjet(excludeId);
+    }
+    
+    const poidsNetNouveauDechargement = (this.dialogDechargement.poidComplet || 0) - (this.dialogDechargement.poidCamionVide || 0);
+    
+    // En mode édition, exclure le déchargement en cours du calcul du reste
+    const excludeId = this.editMode && this.selectedDechargement ? this.selectedDechargement.id : undefined;
+    const resteActuel = this.getResteProjet(excludeId);
+    
+    // Soustraire le nouveau poids du reste
+    return resteActuel - poidsNetNouveauDechargement;
+  }
+
   // Valider que le poids ne dépasse pas le reste du projet
   validatePoidsDechargement(): boolean {
     if (!this.dialogDechargement.poidComplet || !this.dialogDechargement.poidCamionVide) {
@@ -1329,15 +1365,9 @@ export class DechargementComponent implements OnInit {
 
     const poidsNet = (this.dialogDechargement.poidComplet || 0) - (this.dialogDechargement.poidCamionVide || 0);
     
-    // Vérifier le reste du projet
-    const resteProjet = this.getResteProjet();
-    
-    // En mode édition, on doit retirer le poids actuel du déchargement qu'on modifie
-    let resteDisponible = resteProjet;
-    if (this.editMode && this.selectedDechargement) {
-      const poidsActuelDechargement = (this.selectedDechargement.poidComplet || 0) - (this.selectedDechargement.poidCamionVide || 0);
-      resteDisponible = resteProjet + poidsActuelDechargement;
-    }
+    // En mode édition, exclure le déchargement en cours du calcul du reste
+    const excludeId = this.editMode && this.selectedDechargement ? this.selectedDechargement.id : undefined;
+    const resteDisponible = this.getResteProjet(excludeId);
     
     if (poidsNet > resteDisponible) {
       this.error = `Le poids net (${poidsNet}) dépasse le reste disponible du projet (${resteDisponible})`;
@@ -1359,28 +1389,45 @@ export class DechargementComponent implements OnInit {
   }
 
   // Calculer le total déjà livré pour un client
-  getTotalLivreClient(clientId: number): number {
+  getTotalLivreClient(clientId: number, excludeDechargementId?: number): number {
     if (!this.projetActif) return 0;
     
-    return this.dechargements
-      .filter(d => d.clientId === clientId && d.projetId === this.projetActif.id)
-      .reduce((sum, d) => {
-        const poidsNet = (d.poidComplet || 0) - (d.poidCamionVide || 0);
-        return sum + poidsNet;
-      }, 0);
+    const dechargementsFiltres = this.dechargements.filter(d => {
+      // Filtrer par clientId et projetId
+      const match = d.clientId === clientId && d.projetId === this.projetActif.id;
+      // Exclure le déchargement en cours d'édition si spécifié
+      if (excludeDechargementId !== undefined && d.id === excludeDechargementId) {
+        return false;
+      }
+      return match;
+    });
+    
+    if (excludeDechargementId !== undefined) {
+      console.log(`  📦 Déchargements trouvés pour client ${clientId} (excluant ID ${excludeDechargementId}):`, dechargementsFiltres.length);
+    }
+    
+    return dechargementsFiltres.reduce((sum, d) => {
+      const poidsNet = (d.poidComplet || 0) - (d.poidCamionVide || 0);
+      return sum + poidsNet;
+    }, 0);
   }
 
   // Calculer le reste pour un client
-  getResteClient(clientId: number): number {
+  getResteClient(clientId: number, excludeDechargementId?: number): number {
     const quantiteAutorisee = this.getQuantiteAutorisee(clientId);
-    const totalLivre = this.getTotalLivreClient(clientId);
+    const totalLivre = this.getTotalLivreClient(clientId, excludeDechargementId);
     return quantiteAutorisee - totalLivre;
   }
 
   // Vérifier si un client a dépassé sa quantité autorisée
+  // Cette méthode est utilisée pour l'affichage dans le tableau (background rouge)
   isClientEnDepassement(clientId: number | undefined): boolean {
     if (!clientId) return false;
-    const reste = this.getResteClient(clientId);
+    
+    // En mode édition, exclure le déchargement en cours du calcul
+    const excludeId = this.editMode && this.selectedDechargement ? this.selectedDechargement.id : undefined;
+    const reste = this.getResteClient(clientId, excludeId);
+    
     return reste < 0;
   }
 
@@ -1388,24 +1435,43 @@ export class DechargementComponent implements OnInit {
     // Réinitialiser l'erreur
     this.error = '';
     
-    // Vérifier immédiatement si le client dépasse sa quantité autorisée (PREMIÈRE VÉRIFICATION)
+    // Vérifier immédiatement si le client dépasse sa quantité autorisée
     const poidsNet = (this.dialogDechargement.poidComplet || 0) - (this.dialogDechargement.poidCamionVide || 0);
     
     if (this.dialogDechargement.clientId) {
-      const resteClient = this.getResteClient(this.dialogDechargement.clientId);
-      
-      // En mode édition, ajouter le poids actuel du déchargement au reste
-      let resteDisponibleClient = resteClient;
-      if (this.editMode && this.selectedDechargement && this.selectedDechargement.clientId === this.dialogDechargement.clientId) {
-        const poidsActuel = (this.selectedDechargement.poidComplet || 0) - (this.selectedDechargement.poidCamionVide || 0);
-        resteDisponibleClient = resteClient + poidsActuel;
+      // En mode édition, exclure le déchargement en cours du calcul du reste
+      // MAIS SEULEMENT si c'est le MÊME client
+      let excludeId: number | undefined = undefined;
+      if (this.editMode && this.selectedDechargement) {
+        // Exclure seulement si le client n'a pas changé
+        if (this.selectedDechargement.clientId === this.dialogDechargement.clientId) {
+          excludeId = this.selectedDechargement.id;
+          console.log('🔍 Mode édition - même client, exclusion du déchargement ID:', excludeId);
+        } else {
+          console.log('⚠️ Mode édition - changement de client détecté');
+        }
       }
+      
+      const quantiteAutorisee = this.getQuantiteAutorisee(this.dialogDechargement.clientId);
+      const totalLivre = this.getTotalLivreClient(this.dialogDechargement.clientId, excludeId);
+      const resteDisponibleClient = this.getResteClient(this.dialogDechargement.clientId, excludeId);
+      
+      console.log('📊 Vérification dépassement client:');
+      console.log('  - Client ID:', this.dialogDechargement.clientId);
+      console.log('  - Quantité autorisée:', quantiteAutorisee);
+      console.log('  - Total déjà livré:', totalLivre);
+      console.log('  - Reste disponible:', resteDisponibleClient);
+      console.log('  - Poids net du nouveau déchargement:', poidsNet);
+      console.log('  - Déchargement exclu (ID):', excludeId || 'Aucun');
       
       if (poidsNet > resteDisponibleClient) {
         const depassement = poidsNet - resteDisponibleClient;
+        console.log('❌ DÉPASSEMENT détecté:', depassement);
         this.depassementQuantite = depassement;
         this.showDepassementModal = true;
         return; // Afficher la modal immédiatement
+      } else {
+        console.log('✅ Pas de dépassement - Sauvegarde autorisée');
       }
     }
 
@@ -1439,6 +1505,13 @@ export class DechargementComponent implements OnInit {
     }
     // Préparer les données pour l'envoi
     const dechargementToSave = { ...this.dialogDechargement } as DechargementDTO;
+    
+    // ✅ Assurer qu'un seul champ (client OU dépôt) est rempli
+    if (dechargementToSave.clientId) {
+      dechargementToSave.depotId = null as any;
+    } else if (dechargementToSave.depotId) {
+      dechargementToSave.clientId = null as any;
+    }
     
     // Ajouter les secondes si nécessaire
     if (dechargementToSave.dateDechargement && dechargementToSave.dateDechargement.length === 16) {
@@ -1495,6 +1568,69 @@ export class DechargementComponent implements OnInit {
         error: (err) => {
           console.error('Erreur mise à jour:', err);
           this.error = 'Erreur lors de la mise à jour du déchargement';
+        }
+      });
+    } else {
+      // ========== MODE CRÉATION ==========
+      console.log('➕ Création d\'un nouveau déchargement');
+      console.log('🔍 SocieteP du déchargement:', this.dialogDechargement.societeP);
+      console.log('🔍 Données à envoyer:', dechargementToSave);
+      
+      this.dechargementService.createDechargement(dechargementToSave).subscribe({
+        next: (createdDechargement: any) => {
+          console.log('✅ Déchargement créé avec succès:', createdDechargement);
+          console.log('🔍 Données reçues - numBonLivraison:', createdDechargement.numBonLivraison, 'numTicket:', createdDechargement.numTicket);
+          
+          // 🔥 Assurer que le déchargement créé a bien les champs nécessaires pour la synchro
+          // Si l'API ne retourne pas tous les champs, utiliser ceux du formulaire
+          const dechargementComplet = {
+            ...createdDechargement,
+            numBonLivraison: createdDechargement.numBonLivraison || dechargementToSave.numBonLivraison,
+            numTicket: createdDechargement.numTicket || dechargementToSave.numTicket,
+            chargementId: createdDechargement.chargementId || dechargementToSave.chargementId
+          };
+          
+          console.log('🔍 Déchargement complet pour synchro:', dechargementComplet);
+          
+          // 🔥 Vérifier si le chargement associé a une societeP
+          const chargementAssocie = this.chargements.find(c => c.id === dechargementComplet.chargementId);
+          console.log('🔍 Chargement associé:', chargementAssocie);
+          
+          // Si le chargement n'a pas de societeP mais le déchargement en a une, mettre à jour le chargement
+          if (chargementAssocie && this.dialogDechargement.societeP && !chargementAssocie.societeP) {
+            console.log('📝 Le chargement n\'a pas de société, mise à jour avec:', this.dialogDechargement.societeP);
+            
+            const chargementToUpdate = {
+              ...chargementAssocie,
+              societeP: this.dialogDechargement.societeP
+            };
+            
+            this.chargementService.updateChargement(chargementAssocie.id!, chargementToUpdate).subscribe({
+              next: () => {
+                console.log('✅ Société du chargement mise à jour avec succès');
+                // Synchroniser avec le voyage
+                this.syncVoyageFromDechargement(dechargementComplet, undefined, undefined, this.dialogDechargement.societeP);
+                this.closeEditDialog();
+              },
+              error: (err) => {
+                console.error('❌ Erreur mise à jour du chargement:', err);
+                // Même si la mise à jour du chargement échoue, synchroniser quand même
+                this.syncVoyageFromDechargement(dechargementComplet, undefined, undefined, this.dialogDechargement.societeP);
+                this.closeEditDialog();
+              }
+            });
+          } else {
+            // Le chargement a déjà une societeP ou pas de chargement associé
+            console.log('ℹ️ Le chargement a déjà une société ou pas de chargement associé');
+            const currentSocieteP = chargementAssocie?.societeP || this.dialogDechargement.societeP;
+            console.log('🔄 Synchronisation du voyage avec societeP:', currentSocieteP);
+            this.syncVoyageFromDechargement(dechargementComplet, undefined, undefined, currentSocieteP);
+            this.closeEditDialog();
+          }
+        },
+        error: (err) => {
+          console.error('❌ Erreur création déchargement:', err);
+          this.error = 'Erreur lors de la création du déchargement';
         }
       });
     }

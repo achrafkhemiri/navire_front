@@ -72,6 +72,12 @@
           </div>
           <div class="depot-details">
             <h2 class="depot-title">{{ selectedDepot.nom }}</h2>
+            <div class="client-meta">
+              <span class="meta-item">
+                <i class="bi bi-box-seam"></i>
+                Quantité autorisée: <strong>{{ getQuantiteAutorisee(selectedDepot.id) | number:'1.0-2' }} kg</strong>
+              </span>
+            </div>
           </div>
         </div>
         
@@ -223,7 +229,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let voyage of paginatedVoyages" class="table-row">
+            <tr *ngFor="let voyage of paginatedVoyages; let i = index" class="table-row">
               <td>
                 <span class="date-badge">
                   <i class="bi bi-calendar-event"></i>
@@ -246,12 +252,14 @@
               </td>
               <td>
                 <span class="reste-badge" [ngClass]="{
-                  'positive': (voyage.reste || 0) > 0,
-                  'zero': (voyage.reste || 0) === 0,
-                  'negative': (voyage.reste || 0) < 0
+                  'positive': getResteCumule(voyage, i) > 0,
+                  'zero': getResteCumule(voyage, i) === 0,
+                  'negative': getResteCumule(voyage, i) < 0
                 }">
-                  {{ voyage.reste | number:'1.0-2' }}
+                  {{ getResteCumule(voyage, i) | number:'1.0-2' }}
                 </span>
+                <i *ngIf="getResteCumule(voyage, i) < 0" class="bi bi-exclamation-triangle text-danger ms-1" 
+                   title="Dépassement détecté"></i>
               </td>
             </tr>
             <tr *ngIf="paginatedVoyages.length === 0" class="no-data-row">
